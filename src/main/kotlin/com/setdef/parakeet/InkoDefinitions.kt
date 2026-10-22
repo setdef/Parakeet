@@ -30,6 +30,19 @@ class InkoSymbols(definitions: List<InkoDefinition>) {
     private val modules: Map<String, InkoDefinition> =
         definitions.filter { it.kind == InkoDefinitionKind.MODULE }.associateBy { it.module }
     private val moduleByFile: Map<Path, String> = modules.values.associate { it.file to it.module }
+    private val byOwner: Map<String, List<InkoDefinition>> = definitions.filter { it.owner != null }.groupBy { it.owner!! }
+    private val byModule: Map<String, List<InkoDefinition>> = definitions.groupBy { it.module }
+
+    val moduleNames: Set<String> get() = modules.keys
+
+    /** Members (methods, fields, constructors) of the type or trait named [owner]. */
+    fun ownedBy(owner: String, vararg kinds: InkoDefinitionKind): List<InkoDefinition> =
+        byOwner[owner].orEmpty().filter { kinds.isEmpty() || it.kind in kinds }
+
+    /** Top-level definitions in [module] (types, traits, constants, module methods). */
+    fun topLevelIn(module: String): List<InkoDefinition> = byModule[module].orEmpty().filter {
+        it.kind in setOf(InkoDefinitionKind.TYPE, InkoDefinitionKind.TRAIT, InkoDefinitionKind.CONSTANT, InkoDefinitionKind.MODULE_METHOD)
+    }
 
     val names: Set<String> get() = byName.keys
 

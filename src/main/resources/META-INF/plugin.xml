@@ -42,6 +42,8 @@
         <lang.psiStructureViewFactory language="Inko" implementationClass="com.setdef.parakeet.InkoStructureViewFactory"/>
         <breadcrumbsInfoProvider implementation="com.setdef.parakeet.InkoBreadcrumbsProvider"/>
         <lang.foldingBuilder language="Inko" implementationClass="com.setdef.parakeet.InkoFoldingBuilder"/>
+        <completion.contributor language="Inko" implementationClass="com.setdef.parakeet.InkoCompletionContributor"/>
+        <typedHandler implementation="com.setdef.parakeet.InkoCompletionAutoPopup"/>
 
         <projectService serviceInterface="com.setdef.parakeet.InkoCli" serviceImplementation="com.setdef.parakeet.InkoProjectCli"/>
 

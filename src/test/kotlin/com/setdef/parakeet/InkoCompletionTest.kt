@@ -1,0 +1,105 @@
+package com.setdef.parakeet
+
+import com.intellij.codeInsight.CodeInsightSettings
+import com.intellij.codeInsight.lookup.LookupElementPresentation
+
+/** Completion, with `inko doc` output supplied by a fake. */
+class InkoCompletionTest : InkoTestCase(onDisk = true) {
+    private var autocomplete = true
+
+    override fun setUp() {
+        super.setUp()
+        // Always show the list, even for a single match, so tests can inspect it.
+        autocomplete = CodeInsightSettings.getInstance().AUTOCOMPLETE_ON_CODE_COMPLETION
+        CodeInsightSettings.getInstance().AUTOCOMPLETE_ON_CODE_COMPLETION = false
+        myFixture.addFileToProject("inko.pkg", "")
+        myFixture.addFileToProject("src/app/util.inko", "type pub Helper {\n  fn pub static new -> Helper {\n    Helper()\n  }\n\n  fn pub value -> Int {\n    42\n  }\n}\n\nfn pub helper -> Int {\n  1\n}\n")
+        useFakeInko(FakeInkoDoc.cli { mirror ->
+            val util = mirror.resolve("src/app/util.inko")
+            listOf(
+                FakeInkoDoc.module(
+                    "app.util", util,
+                    methods = listOf(FakeInkoDoc.member("helper", util, 11, 1, signature = "fn pub helper -> Int")),
+                    types = listOf(FakeInkoDoc.type(
+                        "Helper", 1,
+                        staticMethods = listOf(FakeInkoDoc.member("new", util, 2, signature = "fn pub static new -> Helper")),
+                        instanceMethods = listOf(FakeInkoDoc.member("value", util, 6, signature = "fn pub value -> Int")),
+                    )),
+                ),
+                FakeInkoDoc.module("app.other", mirror.resolve("src/app/other.inko")),
+            )
+        })
+    }
+
+    override fun tearDown() {
+        try {
+            CodeInsightSettings.getInstance().AUTOCOMPLETE_ON_CODE_COMPLETION = autocomplete
+        } finally {
+            super.tearDown()
+        }
+    }
+
+    private fun complete(text: String): List<String> {
+        myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/main.inko", text.replace("<caret>", "")).virtualFile)
+        myFixture.editor.caretModel.moveToOffset(text.indexOf("<caret>"))
+        myFixture.completeBasic()
+        return myFixture.lookupElementStrings.orEmpty()
+    }
+
+    fun testModulePathsInImports() {
+        assertEquals(listOf("app.other", "app.util"), complete("import app.<caret>\n").sorted())
+    }
+
+    fun testSymbolsInsideImportParentheses() {
+        assertEquals(listOf("Helper", "helper", "self"), complete("import app.util (<caret>)\n").sorted())
+    }
+
+    fun testStaticMembersOfAType() {
+        assertEquals(listOf("new"), complete("import app.util (Helper)\n\nfn a {\n  Helper.<caret>\n}\n"))
+    }
+
+    fun testInstanceMethodsOfTypesInScope() {
+        assertEquals(listOf("value"), complete("import app.util (Helper)\n\nfn a(h: Helper) {\n  h.va<caret>\n}\n"))
+    }
+
+    fun testModuleMembersThroughAnAlias() {
+        assertEquals(listOf("Helper", "helper"), complete("import app.util\n\nfn a {\n  util.<caret>\n}\n").sorted())
+    }
+
+    fun testFieldsFromTheFileItself() {
+        assertEquals(listOf("@count", "@name"), complete("type A {\n  let @count: Int\n  let @name: String\n\n  fn b {\n    @<caret>\n  }\n}\n").sorted())
+    }
+
+    fun testKeywordsAndNamesInScope() {
+        val items = complete("import app.util (helper)\n\ntype Local {}\n\nfn a {\n  <caret>\n}\n")
+        assertTrue(items.toString(), items.containsAll(listOf("let", "match", "Local", "helper", "a")))
+    }
+
+    fun testShowsWhereAndTheSignature() {
+        complete("import app.util (Helper)\n\nfn a {\n  Helper.<caret>\n}\n")
+        val presentation = LookupElementPresentation.renderElement(myFixture.lookupElements!!.single())
+        assertEquals(" -> Helper", presentation.tailText)
+        assertEquals("app.util.Helper", presentation.typeText)
+    }
+
+    fun testSelectingAnItemInsertsIt() {
+        complete("import app.util (Helper)\n\nfn a(h: Helper) {\n  h.v<caret>\n}\n")
+        myFixture.finishLookup('\n')
+        assertTrue(myFixture.editor.document.text, myFixture.editor.document.text.contains("  h.value\n"))
+    }
+
+    fun testWorksWithoutInko() {
+        useFakeInko(FakeInkoCli(available = false))
+        assertTrue(complete("fn a {\n  ma<caret>\n}\n").contains("match"))
+    }
+
+    fun testContexts() {
+        assertEquals(InkoCompletionContext.ImportPath("std.st"), InkoCompletionContext.of("import std.st"))
+        assertEquals(InkoCompletionContext.ImportedSymbol("std.stdio", "Std"), InkoCompletionContext.of("import std.stdio (\n  Stdout,\n  Std"))
+        assertEquals(InkoCompletionContext.Field("@co"), InkoCompletionContext.of("  @co"))
+        assertEquals(InkoCompletionContext.Field("@"), InkoCompletionContext.of("  @"))
+        assertEquals(InkoCompletionContext.Bare("emp"), InkoCompletionContext.of("let x = emp"))
+        val member = InkoCompletionContext.of("foo.bar") as InkoCompletionContext.Member
+        assertEquals("foo" to "bar", member.receiver to member.prefix)
+    }
+}

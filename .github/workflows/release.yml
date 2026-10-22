@@ -1,11 +1,12 @@
 # Releases a version when its tag (e.g. v0.4.0, matching `version` in
-# gradle.properties) is pushed: runs the full build, then signs the plugin,
-# publishes it to the JetBrains Marketplace, and attaches it to a GitHub
-# Release.
+# gradle.properties) is pushed: runs the full build, then signs the plugin and
+# creates a GitHub Release with the signed zip and updatePlugins.xml (the
+# custom plugin repository file IDEs check for updates). Publishes to the
+# JetBrains Marketplace too, if PUBLISH_TOKEN is set.
 #
-# Needs these repository secrets (see README.md, "Releasing"):
-#   CERTIFICATE_CHAIN, PRIVATE_KEY, PRIVATE_KEY_PASSWORD  (plugin signing)
-#   PUBLISH_TOKEN                                         (Marketplace)
+# Repository secrets (see README.md, "Releasing"):
+#   CERTIFICATE_CHAIN, PRIVATE_KEY, PRIVATE_KEY_PASSWORD  (plugin signing; required)
+#   PUBLISH_TOKEN                                         (Marketplace; optional)
 name: Release
 
 on:
@@ -56,7 +57,7 @@ jobs:
           cache-disabled: true
       - name: Check secrets and version
         run: |
-          for secret in CERTIFICATE_CHAIN PRIVATE_KEY PRIVATE_KEY_PASSWORD PUBLISH_TOKEN; do
+          for secret in CERTIFICATE_CHAIN PRIVATE_KEY PRIVATE_KEY_PASSWORD; do
             if [[ -z "${!secret}" ]]; then
               echo "::error::The $secret secret isn't set; see README.md, \"Releasing\"."
               exit 1
@@ -67,9 +68,14 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME doesn't match version $version in gradle.properties."
             exit 1
           fi
-      - name: Sign and publish to the JetBrains Marketplace
-        run: ./gradlew publishPlugin
+      - name: Sign the plugin and write updatePlugins.xml
+        run: ./gradlew signPlugin updatePluginsXml
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" build/distributions/*-signed.zip --title "$GITHUB_REF_NAME" --generate-notes
+        run: |
+          gh release create "$GITHUB_REF_NAME" build/distributions/*-signed.zip build/distributions/updatePlugins.xml \
+            --title "$GITHUB_REF_NAME" --generate-notes
+      - name: Publish to the JetBrains Marketplace
+        if: env.PUBLISH_TOKEN != ''
+        run: ./gradlew publishPlugin

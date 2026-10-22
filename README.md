@@ -61,11 +61,25 @@ compiler, so it always agrees with your installed Inko version.
   ivm-installed version or another executable for a project, use
   *Settings → Languages & Frameworks → Inko*.
 
-## Installing from disk
+## Installing
 
-1. Build the plugin: `./gradlew buildPlugin`
-2. In your IDE, open *Settings → Plugins → ⚙️ → Install Plugin from Disk…*
-3. Choose `build/distributions/parakeet-<version>.zip` and restart if asked.
+Parakeet is published on GitHub Releases, with a plugin repository your IDE can
+check for updates:
+
+1. In your IDE, open *Settings → Plugins*, click ⚙️, and choose *Manage Plugin
+   Repositories…*
+2. Click **+**, enter
+   `https://github.com/setdef/Parakeet/releases/latest/download/updatePlugins.xml`,
+   and click **OK**.
+3. In the **Marketplace** tab, search for **Parakeet for Inko**, and install it.
+
+The IDE then offers updates like any other plugin.
+
+Alternatively, download `parakeet-<version>-signed.zip` from
+[Releases](https://github.com/setdef/Parakeet/releases) and use *Settings →
+Plugins → ⚙️ → Install Plugin from Disk…* (without automatic updates). To try a
+local build, run `./gradlew buildPlugin` and install
+`build/distributions/parakeet-<version>.zip` the same way.
 
 ## Development
 
@@ -104,30 +118,36 @@ Dependabot proposes weekly updates to Gradle dependencies and GitHub Actions.
 
 Pushing a tag like `v0.4.0` (matching `version` in `gradle.properties`) runs
 [`release.yml`](.github/workflows/release.yml): the full build above, then it
-signs the plugin, publishes it to the JetBrains Marketplace, and attaches the
-signed zip to a GitHub Release.
+signs the plugin and creates a GitHub Release with the signed zip and
+`updatePlugins.xml` (the plugin repository file IDEs check for updates). If a
+`PUBLISH_TOKEN` secret exists, it also publishes to the JetBrains Marketplace.
 
 One-time setup:
 
-1. **Upload the first version by hand.** The Marketplace only accepts automated
-   uploads for plugins that already exist there, so upload
-   `build/distributions/parakeet-<version>.zip` at
-   [plugins.jetbrains.com](https://plugins.jetbrains.com/plugin/add) once.
-2. **Create a signing certificate**
-   ([JetBrains' guide](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html)):
+1. **Create a signing certificate**
+   ([JetBrains' guide](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html)),
+   kept outside the repository:
 
    ```shell
    openssl genpkey -aes-256-cbc -algorithm RSA -out private_encrypted.pem -pkeyopt rsa_keygen_bits:4096
    openssl rsa -in private_encrypted.pem -out private.pem
    openssl req -key private.pem -new -x509 -days 3650 -out chain.crt
+   rm private.pem
    ```
 
-3. **Add repository secrets** (*Settings → Secrets and variables → Actions*):
-   `CERTIFICATE_CHAIN` (contents of `chain.crt`), `PRIVATE_KEY` (contents of
-   `private_encrypted.pem`), `PRIVATE_KEY_PASSWORD`, and `PUBLISH_TOKEN` (a
-   [Marketplace token](https://plugins.jetbrains.com/author/me/tokens)).
+2. **Add repository secrets** (*Settings → Secrets and variables → Actions*, or
+   `gh secret set`): `CERTIFICATE_CHAIN` (contents of `chain.crt`),
+   `PRIVATE_KEY` (contents of `private_encrypted.pem`), and
+   `PRIVATE_KEY_PASSWORD`.
 
-Without the secrets, a release fails at its first step and publishes nothing.
+Without the signing secrets, a release fails at its first step and publishes
+nothing.
+
+To also publish to the JetBrains Marketplace later, upload the first version by
+hand at [plugins.jetbrains.com](https://plugins.jetbrains.com/plugin/add) (it
+only accepts automated uploads for plugins that already exist), then add a
+`PUBLISH_TOKEN` secret (a
+[Marketplace token](https://plugins.jetbrains.com/author/me/tokens)).
 
 ## Icon
 

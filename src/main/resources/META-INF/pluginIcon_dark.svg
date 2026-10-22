@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <!-- Parakeet for Inko: an original flat parakeet on a branch (dark theme). -->
+  <path d="M6 34h28" stroke="#B08968" stroke-width="3" stroke-linecap="round"/>
+  <path d="M24 27 31 37h-5.5L21 29z" fill="#EA580C"/>
+  <ellipse cx="20.5" cy="22.5" rx="8.5" ry="9.5" fill="#FBBF24"/>
+  <ellipse cx="23" cy="23" rx="4.5" ry="6.5" fill="#F59E0B"/>
+  <circle cx="15.5" cy="12.5" r="7" fill="#FDE68A"/>
+  <path d="M9 11.5c-2.6.2-4.2 1.9-3.6 4.3l3.7-1.2z" fill="#A1A1AA"/>
+  <circle cx="13.6" cy="10.8" r="1.7" fill="#18181B"/>
+  <path d="M18.5 31v3M22.5 31v3" stroke="#A1A1AA" stroke-width="1.6" stroke-linecap="round"/>
+</svg>

@@ -2,7 +2,7 @@ package com.setdef.parakeet
 
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
-import org.jetbrains.plugins.textmate.TextMateFileType
+import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
 import org.jetbrains.plugins.textmate.TextMateService
 
 class InkoBundleTest : BasePlatformTestCase() {
@@ -17,9 +17,27 @@ class InkoBundleTest : BasePlatformTestCase() {
         assertEquals("source.inko", descriptor!!.rootScopeName.toString())
     }
 
-    fun testInkoFilesUseTextMateFileType() {
+    fun testInkoFilesUseInkoFileType() {
         val file = myFixture.configureByText("main.inko", "fn main {}\n")
-        assertEquals(TextMateFileType.INSTANCE, file.virtualFile.fileType)
+        assertEquals(InkoFileType.INSTANCE, file.virtualFile.fileType)
+    }
+
+    fun testHighlightingUsesTheTextMateGrammar() {
+        val file = myFixture.configureByText("main.inko", "fn main {}\n")
+        val highlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(InkoLanguage, project, file.virtualFile)
+        assertTrue(highlighter.javaClass.name, highlighter.javaClass.name.contains("TextMate"))
+    }
+
+    fun testTypingAClosingQuoteStepsOverIt() {
+        myFixture.configureByText("main.inko", "let a = <caret>\n")
+        myFixture.type("'hi'")
+        assertEquals("let a = 'hi'\n", myFixture.editor.document.text)
+    }
+
+    fun testQuoteAutoClosing() {
+        myFixture.configureByText("main.inko", "let a = <caret>\n")
+        myFixture.type("'")
+        assertEquals("let a = ''\n", myFixture.editor.document.text)
     }
 
     fun testLineCommentToggling() {

@@ -11,34 +11,53 @@ report problems with this plugin to the Inko project; open an issue here instead
 
 I use three words for how code comes to exist. Code I wrote, I typed by hand, with nothing generated. Code I wrought, an AI agent generated while I iterated with it, and I reviewed every change before committing it, so I own every diff. Code I requested, an agent built with little or no review from me, the way a dark factory runs without lights.
 
-**Versions 0.1.0 and 0.2.0 are requested.**
+**Versions 0.1.0 through 0.3.0 are requested.**
 
 ## Features
 
-- Syntax highlighting for `.inko` files
-- Line comment toggling (`#`)
-- Bracket matching, auto-closing pairs, and surrounding pairs
+- An **Inko** file type for `.inko` files, with its own icon
+- Syntax highlighting, from the TextMate grammar in
+  [inko-lang/vscode](https://github.com/inko-lang/vscode)
+- Line comment toggling (`#`), bracket matching, and auto-closing brackets and quotes
 - Compiler errors and warnings as you type, from `inko check`
-- *Code → Reformat Code* (⌥⌘L / Ctrl+Alt+L) with `inko fmt`
+- *Code → Reformat Code* (⌥⌘L / Ctrl+Alt+L) with `inko fmt`. To format on save,
+  turn on *Settings → Tools → Actions on Save → Reformat code*.
+- **Go to definition** (⌘-click / Ctrl-click, ⌘B / Ctrl+B) for types, traits,
+  constants, functions, methods, fields, and modules, including the standard
+  library and dependencies
+- **Run and test from the gutter**: ▶ next to `fn async main`, next to
+  `fn pub tests` in test files, and next to each `t.test('…')`
+- **Run configurations** for `inko run`, `inko test`, `inko build`, and
+  `inko check`, with clickable `file.inko:line` links in the output
+- **New Project wizard** (*File → New → Project → Inko*) using `inko init`,
+  optionally as a library or with a GitHub Actions workflow
+- **Per-project toolchain** in *Settings → Languages & Frameworks → Inko*:
+  auto-detect, ivm's default, any version ivm has installed, or a custom
+  executable
 
-Highlighting, comments, and brackets come from the TextMate grammar and language
-configuration in [inko-lang/vscode](https://github.com/inko-lang/vscode), loaded
-through the IDE's built-in TextMate support.
+### How it works
 
-Errors are checked against your unsaved text: the plugin mirrors the project into a
-temporary directory (symlinking every source file) with your unsaved text in place
-of the file, then runs `inko check` there, so imports in both directions and
-dependencies resolve.
+The plugin understands Inko through the `inko` command rather than its own
+compiler, so it always agrees with your installed Inko version.
 
-To format on save, turn on *Settings → Tools → Actions on Save → Reformat code*.
+- **Errors** are checked against your unsaved text: the plugin mirrors the
+  project into a temporary directory (symlinking every source file) with your
+  unsaved text in place of the file, then runs `inko check` there, so imports in
+  both directions and dependencies resolve.
+- **Go to definition** uses the definitions `inko doc --private --dependencies`
+  reports, rebuilt in the background when you save. Locations are exact, but the
+  plugin doesn't know types, so a method call like `x.to_string` offers every
+  `to_string` it can't rule out, preferring types mentioned in the file. Local
+  variables don't resolve.
 
 ## Requirements
 
 - A JetBrains IDE, version 2025.2 or newer
 - The bundled **TextMate Bundles** plugin enabled (it is by default)
-- The `inko` executable, for errors and formatting. The plugin looks on `PATH`,
-  then in [ivm](https://github.com/inko-lang/ivm)'s install directory. To use a
-  different one, set it in *Settings → Languages & Frameworks → Inko*.
+- The `inko` executable. By default the plugin uses `inko` on `PATH`, then
+  [ivm](https://github.com/inko-lang/ivm)'s default version. To pick an
+  ivm-installed version or another executable for a project, use
+  *Settings → Languages & Frameworks → Inko*.
 
 ## Installing from disk
 
@@ -61,6 +80,12 @@ The files in `bundles/inko/` are copied unchanged from inko-lang/vscode
 (v0.7.0, commit `46243e5`). To update them, copy `package.json`,
 `language-configuration.json`, and `syntaxes/inko.tmLanguage.json` from a newer
 release.
+
+## Icon
+
+Parakeet's icons (a flat parakeet on a branch) are original to this plugin and
+not derived from Inko's logo, which is licensed CC BY-NC-SA 4.0 and isn't used
+here.
 
 ## License
 

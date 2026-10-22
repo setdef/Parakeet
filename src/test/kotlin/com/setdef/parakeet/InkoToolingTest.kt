@@ -17,7 +17,7 @@ class InkoToolingTest : BasePlatformTestCase() {
     override fun setUp() {
         super.setUp()
         TextMateService.getInstance().ensureInitialized()
-        assertNotNull("inko must be installed to run these tests", InkoExecutable.detect())
+        assertNotNull("inko must be installed to run these tests", InkoExecutable.find(project))
     }
 
     private fun problems(): List<HighlightInfo> =

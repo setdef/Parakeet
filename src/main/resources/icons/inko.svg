@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Parakeet for Inko file icon: a simplified version of the plugin icon. -->
+  <path d="M9.5 10.5 13 15h-2.5L8 11.5z" fill="#C2410C"/>
+  <ellipse cx="8.5" cy="9.5" rx="4" ry="4.5" fill="#F59E0B"/>
+  <circle cx="6.3" cy="5" r="3.3" fill="#FCD34D"/>
+  <path d="M3.2 4.6C1.9 4.7 1.2 5.6 1.5 6.8l1.9-.6z" fill="#3F3F46"/>
+  <circle cx="5.4" cy="4.2" r="0.9" fill="#18181B"/>
+</svg>

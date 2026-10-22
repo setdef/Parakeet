@@ -10,9 +10,13 @@
             <li>Bracket matching, auto-closing pairs, and surrounding pairs</li>
             <li>Compiler errors and warnings as you type, from <code>inko check</code></li>
             <li>Reformat Code (and format on save) with <code>inko fmt</code></li>
+            <li>Go to definition, using the definitions <code>inko doc</code> reports</li>
+            <li>Run and test from the gutter, with run configurations for <code>inko run</code>, <code>test</code>, <code>build</code>, and <code>check</code></li>
+            <li>New Project wizard using <code>inko init</code></li>
+            <li>Per-project toolchain: <code>inko</code> on PATH, ivm's default, or any ivm-installed version</li>
         </ul>
         <p>Requires the <code>inko</code> executable, found on <code>PATH</code>, in ivm's install
-        directory, or configured in <i>Settings | Languages &amp; Frameworks | Inko</i>.</p>
+        directory, or chosen per project in <i>Settings | Languages &amp; Frameworks | Inko</i>.</p>
         <p>Uses the TextMate grammar and language configuration from
         <a href="https://github.com/inko-lang/vscode">inko-lang/vscode</a> (MPL-2.0).
         This plugin is not affiliated with or endorsed by the Inko project.</p>
@@ -23,10 +27,35 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <textmate.bundleProvider implementation="com.setdef.parakeet.InkoBundleProvider"/>
-        <externalAnnotator language="textmate" implementationClass="com.setdef.parakeet.InkoCheckAnnotator"/>
+
+        <fileType name="Inko" implementationClass="com.setdef.parakeet.InkoFileType" fieldName="INSTANCE"
+                  language="Inko" extensions="inko"/>
+        <lang.parserDefinition language="Inko" implementationClass="com.setdef.parakeet.InkoParserDefinition"/>
+        <lang.syntaxHighlighterFactory language="Inko" implementationClass="com.setdef.parakeet.InkoSyntaxHighlighterFactory"/>
+        <!-- TextMate tokens need TextMate's editor highlighter (its own token storage). -->
+        <editorHighlighterProvider filetype="Inko"
+                                   implementationClass="org.jetbrains.plugins.textmate.language.syntax.highlighting.TextMateEditorHighlighterProvider"/>
+        <lang.commenter language="Inko" implementationClass="com.setdef.parakeet.InkoCommenter"/>
+        <lang.braceMatcher language="Inko" implementationClass="com.setdef.parakeet.InkoBraceMatcher"/>
+        <lang.quoteHandler language="Inko" implementationClass="com.setdef.parakeet.InkoQuoteHandler"/>
+
+        <externalAnnotator language="Inko" implementationClass="com.setdef.parakeet.InkoCheckAnnotator"/>
         <formattingService implementation="com.setdef.parakeet.InkoFormattingService"/>
+
+        <configurationType implementation="com.setdef.parakeet.InkoRunConfigurationType"/>
+        <runConfigurationProducer implementation="com.setdef.parakeet.InkoRunConfigurationProducer"/>
+        <runLineMarkerContributor language="Inko" implementationClass="com.setdef.parakeet.InkoRunLineMarkerContributor"/>
+
+        <newProjectWizard.generator implementation="com.setdef.parakeet.InkoNewProjectWizard"/>
+        <directoryProjectGenerator implementation="com.setdef.parakeet.InkoDirectoryProjectGenerator"/>
+
         <notificationGroup id="Parakeet for Inko" displayType="BALLOON"/>
-        <applicationConfigurable parentId="language" id="com.setdef.parakeet.settings" displayName="Inko"
-                                 instance="com.setdef.parakeet.InkoConfigurable"/>
+        <projectConfigurable parentId="language" id="com.setdef.parakeet.settings" displayName="Inko"
+                             instance="com.setdef.parakeet.InkoConfigurable"/>
     </extensions>
+
+    <projectListeners>
+        <listener class="com.setdef.parakeet.InkoDocIndexFileListener" topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
+        <listener class="com.setdef.parakeet.InkoDocIndexWarmer" topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
+    </projectListeners>
 </idea-plugin>

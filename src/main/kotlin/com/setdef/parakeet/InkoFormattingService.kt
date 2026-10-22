@@ -21,7 +21,7 @@ class InkoFormattingService : AsyncDocumentFormattingService() {
     override fun getName(): String = "inko fmt"
 
     override fun createFormattingTask(request: AsyncFormattingRequest): FormattingTask? {
-        val inko = InkoExecutable.find() ?: return null
+        val inko = InkoExecutable.find(request.context.project) ?: return null
         val command = GeneralCommandLine(inko.toString(), "fmt", "-")
             .withWorkDirectory(request.ioFile?.parentFile)
             .withCharset(StandardCharsets.UTF_8)

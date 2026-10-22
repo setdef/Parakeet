@@ -62,6 +62,11 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         }
         assertEquals("util.inko:Helper", targetAt("Helper)"))
         assertEquals("string.inko:String", targetAt("String"))
+
+        val original = myFixture.file.findElementAt(text.indexOf("String"))!!
+        val target = InkoResolver.resolve(original.parent as InkoName).single()
+        val html = (InkoDocumentationTargetProvider().documentationTarget(target, original) as InkoDocumentationTarget).html()
+        assertTrue(html, html.contains("String</code>") && html.contains("std.string") && html.contains("UTF-8"))
     }
 
     fun testRunsAProgram() {

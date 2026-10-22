@@ -7,7 +7,11 @@ import java.nio.file.Path
 
 enum class InkoDefinitionKind { MODULE, TYPE, TRAIT, CONSTANT, MODULE_METHOD, STATIC_METHOD, INSTANCE_METHOD, CONSTRUCTOR, FIELD }
 
-/** A definition reported by `inko doc`. [owner] is the type or trait it belongs to, if any. */
+/**
+ * A definition reported by `inko doc`. [owner] is the type or trait it belongs
+ * to, if any; [signature] is its declaration (e.g. `fn pub value -> Int`), and
+ * [documentation] its doc comment, in Markdown.
+ */
 data class InkoDefinition(
     val kind: InkoDefinitionKind,
     val name: String,
@@ -16,6 +20,8 @@ data class InkoDefinition(
     val file: Path,
     val line: Int,
     val column: Int,
+    val signature: String? = null,
+    val documentation: String = "",
 )
 
 /** Every definition in a project (and its dependencies and the standard library), by name and module. */
@@ -31,6 +37,9 @@ class InkoSymbols(definitions: List<InkoDefinition>) {
     fun module(name: String): InkoDefinition? = modules[name]
 
     fun moduleOf(file: Path): String? = moduleByFile[file]
+
+    /** Definitions whose name is written in [file], for finding a definition from its own declaration. */
+    fun definedIn(file: Path, name: String): List<InkoDefinition> = named(name).filter { it.file == file }
 }
 
 /** Reads one module's JSON from `inko doc`; [toReal] maps paths out of the mirror it ran in. */
@@ -39,7 +48,9 @@ object InkoDocParser {
         val root = JsonParser.parseString(json).takeIf { it.isJsonObject }?.asJsonObject ?: return emptyList()
         val module = root.string("name") ?: return emptyList()
         val moduleFile = toReal(Path.of(root.string("file") ?: return emptyList()))
-        val result = mutableListOf(InkoDefinition(InkoDefinitionKind.MODULE, module, module, null, moduleFile, 1, 1))
+        val result = mutableListOf(
+            InkoDefinition(InkoDefinitionKind.MODULE, module, module, null, moduleFile, 1, 1, "import $module", root.string("documentation").orEmpty()),
+        )
 
         fun add(kind: InkoDefinitionKind, obj: JsonObject, owner: String?) {
             val name = obj.string("name") ?: return
@@ -48,7 +59,7 @@ object InkoDocParser {
             val file = obj.string("file")?.let { toReal(Path.of(it)) } ?: moduleFile
             val line = location.getAsJsonObject("lines")?.get("start")?.asInt ?: 1
             val column = location.getAsJsonObject("columns")?.get("start")?.asInt ?: 1
-            result += InkoDefinition(kind, name, module, owner, file, line, column)
+            result += InkoDefinition(kind, name, module, owner, file, line, column, obj.string("type"), obj.string("documentation").orEmpty())
         }
 
         root.objects("constants").forEach { add(InkoDefinitionKind.CONSTANT, it, null) }

@@ -78,13 +78,18 @@ class InkoResolver private constructor(
         symbols.named(name, Kind.MODULE_METHOD).filter { it.module == module }.ifEmpty { imported(name) }
 
     companion object {
-        fun resolve(name: InkoName): List<PsiElement> {
+        fun resolve(name: InkoName): List<PsiElement> = resolveDefinitions(name).map { it.second }
+
+        /** What [name] refers to: each definition, with the element where its name is written. */
+        fun resolveDefinitions(name: InkoName): List<Pair<InkoDefinition, PsiElement>> {
             val file = name.containingFile ?: return emptyList()
             val path = Inko.pathOf(file.virtualFile) ?: return emptyList()
             val symbols = InkoDocIndex.getInstance(name.project).symbols(Inko.projectRoot(path)) ?: return emptyList()
             val imports = InkoImports.parse(file.text)
             val resolver = InkoResolver(symbols, symbols.moduleOf(path) ?: Inko.moduleName(path), imports, file)
-            return resolver.definitions(InkoNameContext.of(name, imports)).distinct().mapNotNull { toPsi(file, it) }
+            return resolver.definitions(InkoNameContext.of(name, imports)).distinct().mapNotNull { definition ->
+                toPsi(file, definition)?.let { definition to it }
+            }
         }
 
         /** The element to navigate to: where the definition's name is defined, or its file for modules. */

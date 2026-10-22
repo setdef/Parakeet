@@ -41,11 +41,6 @@ class InkoResolverTest : InkoTestCase(onDisk = true) {
         |}
         |""".trimMargin()
 
-    private fun location(line: Int, column: Int) = """{"lines": {"start": $line, "end": $line}, "columns": {"start": $column, "end": $column}}"""
-
-    private fun member(name: String, file: Path, line: Int, column: Int = 3) =
-        """{"name": "$name", "file": "$file", "location": ${location(line, column)}}"""
-
     override fun setUp() {
         super.setUp()
         val root = Path.of(myFixture.tempDirPath)
@@ -55,30 +50,27 @@ class InkoResolverTest : InkoTestCase(onDisk = true) {
         Files.writeString(std, "# A string.\nimport std.cmp (Equal)\n\ntype builtin String {}\n")
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(std)
 
-        useFakeInko(FakeInkoCli { call ->
-            assertEquals(listOf("doc", "--private", "--dependencies"), call.args)
-            val mirror = call.workingDirectory!!
+        useFakeInko(FakeInkoDoc.cli { mirror ->
             val utilFile = mirror.resolve("src/app/util.inko")
-            val docs = Files.createDirectories(mirror.resolve("build/docs"))
-            Files.writeString(docs.resolve("app_util.json"), """
-                {"name": "app.util", "file": "$utilFile", "constants": [],
-                 "methods": [${member("helper", utilFile, 13, 1)}],
-                 "types": [{"name": "Helper", "location": ${location(1, 1)}, "constructors": [],
-                            "fields": [{"name": "count", "location": ${location(2, 3)}}],
-                            "static_methods": [${member("new", utilFile, 4)}],
-                            "instance_methods": [${member("value", utilFile, 8)}]}],
-                 "traits": []}
-            """)
-            Files.writeString(docs.resolve("std_string.json"), """
-                {"name": "std.string", "file": "$std", "constants": [], "methods": [],
-                 "types": [{"name": "String", "location": ${location(1, 1)}, "constructors": [], "fields": [],
-                            "static_methods": [], "instance_methods": []},
-                           {"name": "Unmentioned", "location": ${location(1, 1)}, "constructors": [], "fields": [],
-                            "static_methods": [], "instance_methods": [${member("value", std, 1)}]}],
-                 "traits": []}
-            """)
-            Files.writeString(docs.resolve("\$meta.json"), """{"readme": ""}""")
-            FakeInkoCli.ok()
+            listOf(
+                FakeInkoDoc.module(
+                    "app.util", utilFile,
+                    methods = listOf(FakeInkoDoc.member("helper", utilFile, 13, 1)),
+                    types = listOf(FakeInkoDoc.type(
+                        "Helper", 1,
+                        fields = listOf(FakeInkoDoc.member("count", utilFile, 2)),
+                        staticMethods = listOf(FakeInkoDoc.member("new", utilFile, 4)),
+                        instanceMethods = listOf(FakeInkoDoc.member("value", utilFile, 8)),
+                    )),
+                ),
+                FakeInkoDoc.module(
+                    "std.string", std,
+                    types = listOf(
+                        FakeInkoDoc.type("String", 1),
+                        FakeInkoDoc.type("Unmentioned", 1, instanceMethods = listOf(FakeInkoDoc.member("value", std, 1))),
+                    ),
+                ),
+            )
         })
     }
 

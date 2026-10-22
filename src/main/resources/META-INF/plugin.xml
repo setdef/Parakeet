@@ -44,6 +44,7 @@
 
         <externalAnnotator language="Inko" implementationClass="com.setdef.parakeet.InkoCheckAnnotator"/>
         <formattingService implementation="com.setdef.parakeet.InkoFormattingService"/>
+        <platform.backend.documentation.psiTargetProvider implementation="com.setdef.parakeet.InkoDocumentationTargetProvider"/>
 
         <configurationType implementation="com.setdef.parakeet.InkoRunConfigurationType"/>
         <runConfigurationProducer implementation="com.setdef.parakeet.InkoRunConfigurationProducer"/>

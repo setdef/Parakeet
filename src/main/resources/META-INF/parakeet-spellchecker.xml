@@ -1,0 +1,6 @@
+<!-- Loaded only when the IDE has spell checking (com.intellij.modules.spellchecker). -->
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <spellchecker.support language="Inko" implementationClass="com.setdef.parakeet.InkoSpellcheckingStrategy"/>
+    </extensions>
+</idea-plugin>

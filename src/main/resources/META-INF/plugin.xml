@@ -24,6 +24,7 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>org.jetbrains.plugins.textmate</depends>
+    <depends optional="true" config-file="parakeet-spellchecker.xml">com.intellij.modules.spellchecker</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <textmate.bundleProvider implementation="com.setdef.parakeet.InkoBundleProvider"/>

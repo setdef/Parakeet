@@ -17,8 +17,12 @@ dependencies {
     intellijPlatform {
         intellijIdea("2026.2.3")
         bundledPlugin("org.jetbrains.plugins.textmate")
+        // Optional at runtime (see parakeet-spellchecker.xml).
+        bundledModule("intellij.spellchecker")
         testFramework(TestFrameworkType.Platform)
-        testBundledPlugins("com.intellij.modules.ultimate")
+        // Grazie provides the spell-checking inspection in 2026.x.
+        testBundledPlugins("com.intellij.modules.ultimate", "tanvd.grazi")
+        testBundledModules("intellij.spellchecker")
     }
 }
 

@@ -31,6 +31,8 @@ class InkoSymbols(definitions: List<InkoDefinition>) {
         definitions.filter { it.kind == InkoDefinitionKind.MODULE }.associateBy { it.module }
     private val moduleByFile: Map<Path, String> = modules.values.associate { it.file to it.module }
 
+    val names: Set<String> get() = byName.keys
+
     fun named(name: String, vararg kinds: InkoDefinitionKind): List<InkoDefinition> =
         byName[name].orEmpty().filter { kinds.isEmpty() || it.kind in kinds }
 

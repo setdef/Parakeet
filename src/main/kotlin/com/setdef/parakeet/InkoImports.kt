@@ -21,6 +21,8 @@ class InkoImport(
 
 /** The `import` statements of an Inko file, and what names they bring into scope. */
 class InkoImports(private val imports: List<InkoImport>) {
+    val statements: List<InkoImport> get() = imports
+
     /** The import statement containing [offset], if any. */
     fun at(offset: Int): InkoImport? = imports.firstOrNull { it.range.contains(offset) }
 

@@ -22,7 +22,9 @@ import java.nio.file.Path
 class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     override fun setUp() {
         super.setUp()
-        assertTrue("inko must be installed to run integration tests", InkoCli.getInstance(project).isAvailable)
+        val cli = InkoCli.getInstance(project)
+        assertTrue("inko must be installed to run integration tests", cli.isAvailable)
+        println("Testing against ${cli.run(listOf("--version"), null)?.stdout?.trim()} at ${cli.commandLine(emptyList(), null)?.exePath}")
     }
 
     private fun open(path: String, text: String) {

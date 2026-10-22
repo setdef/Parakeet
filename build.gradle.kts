@@ -29,6 +29,15 @@ intellijPlatform {
             untilBuild = provider { null }
         }
     }
+    // For release.yml; locally these are unset and signing/publishing are skipped.
+    signing {
+        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("PRIVATE_KEY")
+        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    }
+    publishing {
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+    }
     pluginVerification {
         ides {
             // Oldest supported (since-build 252) and the version we build against.

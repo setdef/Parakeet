@@ -84,6 +84,51 @@ The files in `bundles/inko/` are copied unchanged from inko-lang/vscode
 `language-configuration.json`, and `syntaxes/inko.tmLanguage.json` from a newer
 release.
 
+## CI and releases
+
+GitHub Actions runs [`build.yml`](.github/workflows/build.yml) on every push to
+`main` and every pull request:
+
+- **Build and unit tests** (Linux): builds the plugin zip (uploaded as an
+  artifact) and runs the unit tests, which use a fake `inko`.
+- **Plugin Verifier** (Linux): checks compatibility with the oldest and newest
+  supported IDEs.
+- **Integration tests** on Linux and macOS, each against the newest Inko release
+  and the oldest supported one (0.20.0), installed with ivm by
+  [`ci/install-inko.sh`](ci/install-inko.sh). ivm builds Inko from source, so
+  installed versions are cached.
+
+Dependabot proposes weekly updates to Gradle dependencies and GitHub Actions.
+
+### Releasing
+
+Pushing a tag like `v0.4.0` (matching `version` in `gradle.properties`) runs
+[`release.yml`](.github/workflows/release.yml): the full build above, then it
+signs the plugin, publishes it to the JetBrains Marketplace, and attaches the
+signed zip to a GitHub Release.
+
+One-time setup:
+
+1. **Upload the first version by hand.** The Marketplace only accepts automated
+   uploads for plugins that already exist there, so upload
+   `build/distributions/parakeet-<version>.zip` at
+   [plugins.jetbrains.com](https://plugins.jetbrains.com/plugin/add) once.
+2. **Create a signing certificate**
+   ([JetBrains' guide](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html)):
+
+   ```shell
+   openssl genpkey -aes-256-cbc -algorithm RSA -out private_encrypted.pem -pkeyopt rsa_keygen_bits:4096
+   openssl rsa -in private_encrypted.pem -out private.pem
+   openssl req -key private.pem -new -x509 -days 3650 -out chain.crt
+   ```
+
+3. **Add repository secrets** (*Settings → Secrets and variables → Actions*):
+   `CERTIFICATE_CHAIN` (contents of `chain.crt`), `PRIVATE_KEY` (contents of
+   `private_encrypted.pem`), `PRIVATE_KEY_PASSWORD`, and `PUBLISH_TOKEN` (a
+   [Marketplace token](https://plugins.jetbrains.com/author/me/tokens)).
+
+Without the secrets, a release fails at its first step and publishes nothing.
+
 ## Icon
 
 Parakeet's icons (a flat parakeet on a branch) are original to this plugin and

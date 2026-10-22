@@ -11,22 +11,34 @@ report problems with this plugin to the Inko project; open an issue here instead
 
 I use three words for how code comes to exist. Code I wrote, I typed by hand, with nothing generated. Code I wrought, an AI agent generated while I iterated with it, and I reviewed every change before committing it, so I own every diff. Code I requested, an agent built with little or no review from me, the way a dark factory runs without lights.
 
-**Version 0.1.0 is requested.**
+**Versions 0.1.0 and 0.2.0 are requested.**
 
 ## Features
 
 - Syntax highlighting for `.inko` files
 - Line comment toggling (`#`)
 - Bracket matching, auto-closing pairs, and surrounding pairs
+- Compiler errors and warnings as you type, from `inko check`
+- *Code → Reformat Code* (⌥⌘L / Ctrl+Alt+L) with `inko fmt`
 
-These come from the TextMate grammar and language configuration in
-[inko-lang/vscode](https://github.com/inko-lang/vscode), loaded through the
-IDE's built-in TextMate support.
+Highlighting, comments, and brackets come from the TextMate grammar and language
+configuration in [inko-lang/vscode](https://github.com/inko-lang/vscode), loaded
+through the IDE's built-in TextMate support.
+
+Errors are checked against your unsaved text: the plugin mirrors the project into a
+temporary directory (symlinking every source file) with your unsaved text in place
+of the file, then runs `inko check` there, so imports in both directions and
+dependencies resolve.
+
+To format on save, turn on *Settings → Tools → Actions on Save → Reformat code*.
 
 ## Requirements
 
 - A JetBrains IDE, version 2025.2 or newer
 - The bundled **TextMate Bundles** plugin enabled (it is by default)
+- The `inko` executable, for errors and formatting. The plugin looks on `PATH`,
+  then in [ivm](https://github.com/inko-lang/ivm)'s install directory. To use a
+  different one, set it in *Settings → Languages & Frameworks → Inko*.
 
 ## Installing from disk
 
@@ -41,7 +53,7 @@ Tools are managed with [mise](https://mise.jdx.dev) (`mise install`).
 | Command | What it does |
 |---|---|
 | `./gradlew runIde` | Launch a sandbox IDE with the plugin loaded |
-| `./gradlew test` | Run the headless IDE tests |
+| `./gradlew test` | Run the headless IDE tests (needs `inko` installed) |
 | `./gradlew verifyPlugin` | Check compatibility with the oldest and newest supported IDEs |
 | `./gradlew buildPlugin` | Build the installable zip |
 

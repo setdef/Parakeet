@@ -37,6 +37,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Live templates**: `fn`, `fnp`, `type`, `typep`, `trait`, `impl`, `match`,
   `main`, `tests`, and `test`
 - **TODO highlighting** and **spell checking** in comments
+- **Test runner**: results per test file and test, failures with expected and
+  actual values, and jumping to (or rerunning) a single test
 - **Run and test from the gutter**: ▶ next to `fn async main`, next to
   `fn pub tests` in test files, and next to each `t.test('…')`
 - **Run configurations** for `inko run`, `inko test`, `inko build`, and
@@ -64,6 +66,10 @@ compiler, so it always agrees with your installed Inko version.
   plugin doesn't know types, so a method call like `x.to_string` offers every
   `to_string` it can't rule out, preferring types mentioned in the file. Local
   variables don't resolve.
+- **Tests** run the way `inko test` does (from the project root), but through
+  a program Parakeet generates that reports each test to the IDE. It's built in
+  a mirror of the project in the IDE's system directory (with its own build
+  cache), so nothing is added to your project.
 - **The Structure view, breadcrumbs, and folding** come from the file's own
   tokens, so they follow unsaved edits and work without `inko`.
 

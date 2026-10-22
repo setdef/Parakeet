@@ -21,6 +21,9 @@ dependencies {
         bundledPlugin("org.jetbrains.plugins.textmate")
         // Optional at runtime (see parakeet-spellchecker.xml).
         bundledModule("intellij.spellchecker")
+        // The IDE's test runner (part of the platform in 2025.2, the bundled Test Runner plugin in 2026.x).
+        bundledModule("intellij.platform.testRunner")
+        bundledModule("intellij.platform.smRunner")
         testFramework(TestFrameworkType.Platform)
         // Grazie provides the spell-checking inspection in 2026.x.
         testBundledPlugins("com.intellij.modules.ultimate", "tanvd.grazi")
@@ -65,7 +68,7 @@ intellijPlatform {
 // The custom plugin repository file attached to each GitHub Release. IDEs that add
 // https://github.com/<repository>/releases/latest/download/updatePlugins.xml under
 // Settings | Plugins | Manage Plugin Repositories can install the plugin and get updates.
-val updatePluginsXml by tasks.registering {
+tasks.register("updatePluginsXml") {
     group = "intellij platform"
     description = "Writes updatePlugins.xml, describing the signed zip on this version's GitHub Release."
     val pluginXml = tasks.patchPluginXml.flatMap { it.outputFile }

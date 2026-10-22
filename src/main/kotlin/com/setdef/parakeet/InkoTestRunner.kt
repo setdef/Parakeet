@@ -1,0 +1,177 @@
+package com.setdef.parakeet
+
+import com.intellij.execution.DefaultExecutionResult
+import com.intellij.execution.ExecutionException
+import com.intellij.execution.ExecutionResult
+import com.intellij.execution.Executor
+import com.intellij.execution.Location
+import com.intellij.execution.PsiLocation
+import com.intellij.execution.configurations.CommandLineState
+import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.execution.process.KillableColoredProcessHandler
+import com.intellij.execution.process.ProcessHandler
+import com.intellij.execution.process.ProcessTerminatedListener
+import com.intellij.execution.runners.ExecutionEnvironment
+import com.intellij.execution.runners.ProgramRunner
+import com.intellij.execution.testframework.sm.SMTestRunnerConnectionUtil
+import com.intellij.execution.testframework.sm.runner.SMTRunnerConsoleProperties
+import com.intellij.execution.testframework.sm.runner.SMTestLocator
+import com.intellij.execution.ui.ConsoleView
+import com.intellij.openapi.application.PathManager
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.psi.PsiManager
+import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.util.execution.ParametersListUtil
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.extension
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.name
+
+/** Test modules as `inko test` finds them: `test/**/test_*.inko`, named relative to `test/`. */
+object InkoTestModules {
+    fun find(root: Path): List<String> {
+        val tests = root.resolve("test").takeIf(Files::isDirectory) ?: return emptyList()
+        return Files.walk(tests).use { paths ->
+            paths.filter { it.isRegularFile() && it.extension == Inko.EXTENSION && it.name.startsWith("test_") }
+                .map { tests.relativize(it).joinToString(".").removeSuffix(".${Inko.EXTENSION}") }
+                .sorted()
+                .toList()
+        }
+    }
+}
+
+/**
+ * The Inko program Parakeet runs tests with: like the one `inko test`
+ * generates, but reporting each test to the IDE (see TestRunner.inko).
+ */
+object InkoTestProgram {
+    private val TEMPLATE: String by lazy {
+        InkoTestProgram::class.java.getResource("/parakeet/TestRunner.inko")!!.readText()
+    }
+
+    // Newer standard libraries add `skipped` to the Reporter trait; older ones reject it.
+    private const val SKIPPED = """
+  fn pub mut skipped(test: Test) {
+    let id = started(test)
+
+    message("testIgnored nodeId='${'$'}{id}'")
+    message("testFinished nodeId='${'$'}{id}'")
+  }
+"""
+
+    fun source(modules: List<String>, mirror: Path, root: Path, reportsSkipped: Boolean): String = TEMPLATE
+        .replace("{{IMPORTS}}", modules.withIndex().joinToString("\n") { (i, module) -> "import $module (self as tests$i)" })
+        .replace("{{CALLS}}", modules.indices.joinToString("\n") { i -> "    tests$i.tests(tests)" } + "\n")
+        .replace("{{SKIPPED}}", if (reportsSkipped) SKIPPED else "")
+        .replace("{{MIRROR}}", inkoString(mirror.toString()))
+        .replace("{{ROOT}}", inkoString(root.toString()))
+
+    /** Escapes text for inside an Inko single-quoted string. */
+    private fun inkoString(text: String) = text.replace("\\", "\\\\").replace("'", "\\'").replace("$", "\\$")
+
+    /** Whether the standard library at [std] (the directory holding `std/`) has `skipped` in its Reporter trait. */
+    fun reportsSkipped(std: Path?): Boolean {
+        val test = std?.resolve("std/test.inko")?.takeIf(Files::isRegularFile) ?: return false
+        val reporter = Regex("""trait pub Reporter \{.*?\n}""", RegexOption.DOT_MATCHES_ALL).find(Files.readString(test))?.value ?: return false
+        return reporter.contains("fn pub mut skipped(")
+    }
+}
+
+/** Where a project's test runs build, in the IDE's system directory (never the project). */
+object InkoTestRuns {
+    fun directoryFor(root: Path): Path =
+        PathManager.getSystemDir().resolve("parakeet").resolve("tests").resolve("${root.name}-${Integer.toHexString(root.toString().hashCode())}")
+
+    /** The standard library directory: from `inko print std`, or (for older versions) beside the executable. */
+    fun standardLibrary(cli: InkoCli): Path? {
+        cli.run(listOf("print", "std"), null, timeoutMs = 10_000)?.takeIf { it.succeeded }?.stdout?.trim()
+            ?.takeIf { it.isNotEmpty() }?.let { return Path.of(it) }
+        val executable = cli.commandLine(emptyList(), null)?.exePath?.let(Path::of)?.takeIf(Files::exists) ?: return null
+        return executable.toRealPath().parent?.parent?.resolve("lib/inko/std")?.takeIf(Files::isDirectory)
+    }
+}
+
+/**
+ * Runs a project's tests and shows them in the IDE's test runner: builds the
+ * test program in a persistent mirror (so nothing is written to the project),
+ * then runs it from the project root, where tests expect to run.
+ */
+class InkoTestRunState(environment: ExecutionEnvironment, private val configuration: InkoRunConfiguration, private val root: Path) :
+    CommandLineState(environment) {
+
+    fun commandLine(): GeneralCommandLine {
+        val project = environment.project
+        val cli = InkoCli.getInstance(project)
+        val inko = cli.commandLine(emptyList(), null)?.exePath
+            ?: throw ExecutionException("No inko executable found. Choose one in Settings | Languages & Frameworks | Inko.")
+        val modules = InkoTestModules.find(root)
+        if (modules.isEmpty()) throw ExecutionException("No test files (test/**/test_*.inko) in $root.")
+
+        val mirror = InkoMirror.persistent(root, InkoTestRuns.directoryFor(root))
+        val program = mirror.directory.resolve(".parakeet").resolve("tests.inko")
+        Files.createDirectories(program.parent)
+        Files.writeString(program, InkoTestProgram.source(modules, mirror.directory, root, InkoTestProgram.reportsSkipped(InkoTestRuns.standardLibrary(cli))))
+
+        val options = configuration.options
+        // A test file filter must name the file as the compiled tests know it: in the mirror.
+        val filter = options.target?.takeIf { it.isNotBlank() }?.let { target ->
+            Path.of(target).takeIf { it.isAbsolute && it.startsWith(root) && Files.isRegularFile(it) }?.let { mirror.toMirror(it).toString() } ?: target
+        }
+        val script = """mirror="${'$'}1"; root="${'$'}2"; shift 2; cd "${'$'}mirror" && "${'$'}0" build --include test .parakeet/tests.inko && cd "${'$'}root" && exec "${'$'}mirror/build/debug/tests" "${'$'}@""""
+        return GeneralCommandLine(listOf("/bin/sh", "-c", script, inko, mirror.directory.toString(), root.toString()) +
+            listOfNotNull(filter) + ParametersListUtil.parse(options.arguments.orEmpty()))
+            .withWorkDirectory(root.toFile())
+            .withEnvironment(options.environment)
+            .withParentEnvironmentType(
+                if (options.passParentEnvironment) GeneralCommandLine.ParentEnvironmentType.CONSOLE
+                else GeneralCommandLine.ParentEnvironmentType.NONE,
+            )
+    }
+
+    override fun startProcess(): ProcessHandler {
+        val handler = KillableColoredProcessHandler(commandLine())
+        ProcessTerminatedListener.attach(handler)
+        return handler
+    }
+
+    override fun execute(executor: Executor, runner: ProgramRunner<*>): ExecutionResult {
+        val handler = startProcess()
+        val console = SMTestRunnerConnectionUtil.createAndAttachConsole("Inko", handler, InkoTestConsoleProperties(configuration, executor)) as ConsoleView
+        console.addMessageFilter(InkoFileLinkFilter(environment.project, root))
+        return DefaultExecutionResult(console, handler)
+    }
+}
+
+class InkoTestConsoleProperties(configuration: InkoRunConfiguration, executor: Executor) :
+    SMTRunnerConsoleProperties(configuration, "Inko", executor) {
+    init {
+        isIdBasedTestTree = true
+    }
+
+    override fun getTestLocator(): SMTestLocator = InkoTestLocator
+}
+
+/** Finds the source of `inko://path` (a test file) and `inko://path:line` (a test) locations. */
+object InkoTestLocator : SMTestLocator {
+    private val WITH_LINE = Regex("""^(.*):(\d+)$""")
+
+    override fun getLocation(protocol: String, path: String, project: Project, scope: GlobalSearchScope): List<Location<*>> {
+        if (protocol != "inko") return emptyList()
+        val match = WITH_LINE.find(path)
+        val file = LocalFileSystem.getInstance().findFileByPath(match?.groupValues?.get(1) ?: path) ?: return emptyList()
+        val psiFile = PsiManager.getInstance(project).findFile(file) ?: return emptyList()
+        val line = match?.groupValues?.get(2)?.toInt() ?: return listOf(PsiLocation(psiFile))
+        val document = psiFile.viewProvider.document ?: return listOf(PsiLocation(psiFile))
+        val lineIndex = (line - 1).coerceIn(0, maxOf(document.lineCount - 1, 0))
+        val start = document.getLineStartOffset(lineIndex)
+        val end = document.getLineEndOffset(lineIndex)
+        // The `test` in `t.test('…')`, so running a test from the tree runs just that test.
+        val leaf = (start until end).asSequence().mapNotNull(psiFile::findElementAt)
+            .firstOrNull { InkoRunTargets.forMarker(it) != null }
+            ?: psiFile.findElementAt(start)
+            ?: psiFile
+        return listOf(PsiLocation(leaf))
+    }
+}

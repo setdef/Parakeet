@@ -12,6 +12,7 @@ import com.intellij.execution.runners.ExecutionEnvironmentBuilder
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.psi.PsiElement
+import com.intellij.psi.search.GlobalSearchScope
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -84,6 +85,42 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         handler.startNotify()
         assertTrue("inko run timed out", handler.waitFor(120_000))
         assertTrue(output.stdout + output.stderr, output.stdout.contains("hello from inko"))
+    }
+
+    fun testRunsTestsInTheTestRunner() {
+        myFixture.addFileToProject("src/math.inko", "fn pub add(a: Int, b: Int) -> Int {\n  a + b\n}\n")
+        val source = "import math (add)\nimport std.test (Tests)\n\nfn pub tests(t: mut Tests) {\n" +
+            "  t.test('adds numbers', fn (t) { t.equal(add(1, 1), 2) })\n" +
+            "  t.test(\"it's [odd]\", fn (t) { t.equal(add(2, 2), 5) })\n}\n"
+        val file = myFixture.addFileToProject("test/test_math.inko", source)
+        val before = Files.walk(Path.of(myFixture.tempDirPath)).use { it.toList().toSet() }
+
+        val configuration = InkoRunConfigurationType.getInstance().configurationFactories[0].createTemplateConfiguration(project) as InkoRunConfiguration
+        configuration.options.command = InkoCommand.TEST.cli
+        configuration.options.workingDirectory = myFixture.tempDirPath
+        val environment = ExecutionEnvironmentBuilder.create(DefaultRunExecutor.getRunExecutorInstance(), configuration).build()
+        val state = configuration.getState(environment.executor, environment) as InkoTestRunState
+        val result = state.execute(environment.executor, environment.runner)
+        val console = result.executionConsole as com.intellij.execution.testframework.sm.runner.ui.SMTRunnerConsoleView
+        try {
+            result.processHandler!!.startNotify()
+            assertTrue("tests timed out", result.processHandler!!.waitFor(180_000))
+            com.intellij.util.ui.UIUtil.dispatchAllInvocationEvents()
+
+            val tests = console.resultsViewer.testsRootNode.allTests.filter { it.isLeaf }
+            assertEquals(setOf("adds numbers", "it's [odd]"), tests.map { it.name }.toSet())
+            assertTrue(tests.single { it.name == "adds numbers" }.isPassed)
+            val failed = tests.single { it.name == "it's [odd]" }
+            assertTrue(failed.isDefect)
+            assertTrue(failed.errorMessage, failed.errorMessage.orEmpty().startsWith(file.virtualFile.path + ":6"))
+            // The tree links to the real test file.
+            assertEquals("test_math.inko", console.resultsViewer.testsRootNode.children.single().name)
+            assertEquals(file.virtualFile, failed.getLocation(project, GlobalSearchScope.allScope(project))!!.virtualFile)
+        } finally {
+            com.intellij.openapi.util.Disposer.dispose(console)
+        }
+        // The project itself gained no files.
+        assertEquals(before, Files.walk(Path.of(myFixture.tempDirPath)).use { it.toList().toSet() })
     }
 
     fun testCreatesAProjectWithInkoInit() {

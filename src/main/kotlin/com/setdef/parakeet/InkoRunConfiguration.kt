@@ -80,13 +80,19 @@ class InkoRunConfiguration(project: Project, factory: ConfigurationFactory, name
         }
     }
 
-    override fun getState(executor: Executor, environment: ExecutionEnvironment): RunProfileState = InkoRunState(environment, this)
+    override fun getState(executor: Executor, environment: ExecutionEnvironment): RunProfileState {
+        val root = projectRoot()
+        return if (command == InkoCommand.TEST && root != null) InkoTestRunState(environment, this, root) else InkoRunState(environment, this)
+    }
+
+    /** The project directory: the working directory if set, else the project root of the target file. */
+    fun projectRoot(): Path? = options.workingDirectory?.takeIf { it.isNotBlank() }?.let(Path::of)
+        ?: options.target?.takeIf { it.isNotBlank() }?.let(Path::of)?.takeIf { it.isAbsolute && Files.exists(it) }?.let(Inko::projectRoot)
+        ?: project.basePath?.let(Path::of)
 }
 
 class InkoRunState(environment: ExecutionEnvironment, private val configuration: InkoRunConfiguration) : CommandLineState(environment) {
-    private val workingDirectory: Path? = configuration.options.workingDirectory?.takeIf { it.isNotBlank() }?.let(Path::of)
-        ?: configuration.options.target?.takeIf { it.isNotBlank() }?.let(Path::of)?.takeIf { it.isAbsolute && Files.exists(it) }?.let(Inko::projectRoot)
-        ?: environment.project.basePath?.let(Path::of)
+    private val workingDirectory: Path? = configuration.projectRoot()
 
     init {
         addConsoleFilters(InkoFileLinkFilter(environment.project, workingDirectory))

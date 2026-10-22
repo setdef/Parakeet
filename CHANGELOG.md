@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Test results in the IDE's test runner: each test file and test with pass/fail, failures with expected and actual values (Click to see difference), jumping to a test's source, and running a single test from the tree. Tests build in a mirror of the project in the IDE's system directory, so nothing is added to the project.
+
 ## [0.4.0] - 2026-10-22
 
 ### Added

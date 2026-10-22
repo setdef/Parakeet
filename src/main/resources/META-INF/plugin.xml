@@ -1,0 +1,23 @@
+<idea-plugin>
+    <id>com.setdef.parakeet</id>
+    <name>Parakeet for Inko</name>
+    <vendor email="kerrick@setdef.com" url="https://setdef.com">setdef</vendor>
+    <description><![CDATA[
+        <p>Parakeet is unofficial, community-made support for the <a href="https://inko-lang.org">Inko</a> programming language.</p>
+        <ul>
+            <li>Syntax highlighting for <code>.inko</code> files</li>
+            <li>Line comment toggling (<code>#</code>)</li>
+            <li>Bracket matching, auto-closing pairs, and surrounding pairs</li>
+        </ul>
+        <p>Uses the TextMate grammar and language configuration from
+        <a href="https://github.com/inko-lang/vscode">inko-lang/vscode</a> (MPL-2.0).
+        This plugin is not affiliated with or endorsed by the Inko project.</p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>org.jetbrains.plugins.textmate</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <textmate.bundleProvider implementation="com.setdef.parakeet.InkoBundleProvider"/>
+    </extensions>
+</idea-plugin>

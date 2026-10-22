@@ -5,26 +5,18 @@ import com.intellij.execution.PsiLocation
 import com.intellij.execution.actions.ConfigurationContext
 import com.intellij.execution.actions.RunConfigurationProducer
 import com.intellij.execution.executors.DefaultRunExecutor
-import com.intellij.execution.process.CapturingProcessAdapter
-import com.intellij.execution.process.ProcessOutput
 import com.intellij.execution.runners.ExecutionEnvironmentBuilder
 import com.intellij.execution.filters.OpenFileHyperlinkInfo
 import com.intellij.psi.PsiElement
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
-import com.intellij.testFramework.fixtures.TempDirTestFixture
-import com.intellij.testFramework.fixtures.impl.TempDirTestFixtureImpl
 import java.nio.file.Files
 import java.nio.file.Path
 
-/** Run configurations, gutter markers, and console links (needs `inko` installed). */
-class InkoRunTest : BasePlatformTestCase() {
-    override fun createTempDirTestFixture(): TempDirTestFixture = TempDirTestFixtureImpl()
-
+/** Gutter markers, run configurations from context, and console links. */
+class InkoRunTargetsTest : InkoTestCase(onDisk = true) {
     private val root: Path get() = Path.of(myFixture.tempDirPath)
 
     private fun leafAt(path: String, text: String, marker: String): PsiElement {
-        val file = myFixture.addFileToProject(path, text)
-        myFixture.configureFromExistingVirtualFile(file.virtualFile)
+        myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject(path, text).virtualFile)
         return myFixture.file.findElementAt(text.indexOf(marker))!!
     }
 
@@ -35,7 +27,8 @@ class InkoRunTest : BasePlatformTestCase() {
         return producer.createConfigurationFromContext(context)?.configuration as? InkoRunConfiguration
     }
 
-    private val mainSource = "import std.stdio (Stdout)\n\ntype async Main {\n  fn async main {\n    Stdout.new.print('hello from inko')\n  }\n}\n"
+    private val mainSource = "type async Main {\n  fn async main {}\n}\n"
+    private val testSource = "import std.test (Tests)\n\nfn pub tests(t: mut Tests) {\n  t.test('adds numbers', fn (t) { t.equal(1 + 1, 2) })\n}\n"
 
     fun testMainHasRunMarkerAndRunConfiguration() {
         val leaf = leafAt("src/hello.inko", mainSource, "main {")
@@ -45,20 +38,6 @@ class InkoRunTest : BasePlatformTestCase() {
         assertEquals(root.resolve("src/hello.inko").toString(), configuration.options.target)
         assertEquals("Run hello.inko", configuration.name)
     }
-
-    fun testRunningTheConfigurationRunsTheProgram() {
-        val configuration = configurationFor(leafAt("src/hello.inko", mainSource, "main {"))!!
-        val environment = ExecutionEnvironmentBuilder.create(DefaultRunExecutor.getRunExecutorInstance(), configuration).build()
-        val state = configuration.getState(environment.executor, environment) as InkoRunState
-        val handler = state.execute(environment.executor, environment.runner).processHandler
-        val output = ProcessOutput()
-        handler.addProcessListener(CapturingProcessAdapter(output))
-        handler.startNotify()
-        assertTrue("inko run timed out", handler.waitFor(120_000))
-        assertTrue(output.stdout + output.stderr, output.stdout.contains("hello from inko"))
-    }
-
-    private val testSource = "import std.test (Tests)\n\nfn pub tests(t: mut Tests) {\n  t.test('adds numbers', fn (t) { t.equal(1 + 1, 2) })\n}\n"
 
     fun testTestFunctionRunsTheFilesTests() {
         myFixture.addFileToProject("src/app.inko", "")
@@ -82,15 +61,25 @@ class InkoRunTest : BasePlatformTestCase() {
         assertNull(configurationFor(leaf))
     }
 
+    fun testRunStateBuildsTheInkoCommandLine() {
+        useFakeInko(FakeInkoCli())
+        val configuration = configurationFor(leafAt("src/hello.inko", mainSource, "main {"))!!
+        configuration.options.arguments = "--flag \"two words\""
+        configuration.options.environment = mutableMapOf("GREETING" to "hi")
+        val environment = ExecutionEnvironmentBuilder.create(DefaultRunExecutor.getRunExecutorInstance(), configuration).build()
+        val command = (configuration.getState(environment.executor, environment) as InkoRunState).commandLine()
+        assertEquals(listOf("fake-inko", "run", root.resolve("src/hello.inko").toString(), "--flag", "two words"), command.getCommandLineList(null))
+        assertEquals(root.toFile(), command.workDirectory)
+        assertEquals("hi", command.environment["GREETING"])
+    }
+
     fun testConsoleLinksPathsWithSpaces() {
         val dir = Files.createDirectories(root.resolve("with space/src"))
         val file = Files.writeString(dir.resolve("a.inko"), "\n\nfn a {}\n")
         val line = "  $file:3 in a\n"
-        val result = InkoFileLinkFilter(project, root).applyFilter(line, line.length)!!
-        val item = result.resultItems.single()
+        val item = InkoFileLinkFilter(project, root).applyFilter(line, line.length)!!.resultItems.single()
         assertEquals("$file:3", line.substring(item.highlightStartOffset, item.highlightEndOffset))
-        val info = item.hyperlinkInfo as OpenFileHyperlinkInfo
-        assertEquals(2, info.descriptor!!.offset) // Line 3 of "\n\nfn a {}" starts at offset 2.
+        assertEquals(2, (item.hyperlinkInfo as OpenFileHyperlinkInfo).descriptor!!.offset) // Line 3 starts at offset 2.
     }
 
     fun testConsoleLinksRelativeCompilerErrors() {

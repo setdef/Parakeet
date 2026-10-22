@@ -2,12 +2,7 @@ package com.setdef.parakeet
 
 import com.google.gson.JsonParseException
 import com.google.gson.JsonParser
-import com.intellij.execution.configurations.GeneralCommandLine
-import com.intellij.execution.process.CapturingProcessHandler
-import com.intellij.openapi.progress.EmptyProgressIndicator
-import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
-import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
 data class InkoDiagnostic(
@@ -18,32 +13,29 @@ data class InkoDiagnostic(
     val columnStart: Int,
     val columnEnd: Int,
     val message: String,
-)
+) {
+    val isWarning: Boolean get() = level == "warning"
+}
 
 /** Runs `inko check` against the (possibly unsaved) text of a file. */
 object InkoCheck {
-    private const val TIMEOUT_MS = 30_000
-
     /**
      * Checks [text] as the contents of [file] inside an [InkoMirror] of its
      * project. Every import resolves within the mirror, so modules that import
      * [file] see the unsaved text too, and diagnostics land on the mirrored copy.
      */
-    fun run(project: Project?, file: Path, text: String): List<InkoDiagnostic> {
-        val inko = InkoExecutable.find(project) ?: return emptyList()
+    fun run(project: Project, file: Path, text: String): List<InkoDiagnostic> {
+        val cli = InkoCli.getInstance(project)
+        if (!cli.isAvailable) return emptyList()
         InkoMirror.create(Inko.projectRoot(file), file, text).use { mirror ->
             val copy = mirror.toMirror(file)
-            val command = GeneralCommandLine(inko.toString(), "check", "--format", "json", copy.toString())
-                .withWorkDirectory(mirror.directory.toFile())
-                .withCharset(StandardCharsets.UTF_8)
-            val indicator = ProgressManager.getInstance().progressIndicator ?: EmptyProgressIndicator()
-            val output = CapturingProcessHandler(command).runProcessWithProgressIndicator(indicator, TIMEOUT_MS)
-            if (output.isCancelled || output.isTimeout) return emptyList()
-
-            return parse(output.stderr).filter { Path.of(it.file) == copy }
+            val result = cli.run(listOf("check", "--format", "json", copy.toString()), mirror.directory) ?: return emptyList()
+            if (result.interrupted) return emptyList()
+            return parse(result.stderr).filter { Path.of(it.file) == copy }
         }
     }
 
+    /** Parses `inko check --format json` output; anything else yields no diagnostics. */
     fun parse(json: String): List<InkoDiagnostic> {
         val array = try {
             JsonParser.parseString(json.trim())

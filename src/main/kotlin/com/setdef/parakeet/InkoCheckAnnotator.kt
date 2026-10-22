@@ -27,23 +27,15 @@ class InkoCheckAnnotator : ExternalAnnotator<InkoCheckAnnotator.Input, List<Inko
     override fun apply(file: PsiFile, diagnostics: List<InkoDiagnostic>, holder: AnnotationHolder) {
         val document = file.viewProvider.document ?: return
         for (diagnostic in diagnostics) {
-            val severity = if (diagnostic.level == "warning") HighlightSeverity.WARNING else HighlightSeverity.ERROR
-            holder.newAnnotation(severity, diagnostic.message)
-                .range(rangeOf(document, diagnostic))
-                .create()
+            val severity = if (diagnostic.isWarning) HighlightSeverity.WARNING else HighlightSeverity.ERROR
+            holder.newAnnotation(severity, diagnostic.message).range(rangeOf(document, diagnostic)).create()
         }
     }
 
-    // The compiler reports 1-based lines and 1-based, inclusive columns.
+    // The compiler's end column is inclusive.
     private fun rangeOf(document: Document, diagnostic: InkoDiagnostic): TextRange {
-        fun offset(line: Int, column: Int): Int {
-            val lineIndex = (line - 1).coerceIn(0, maxOf(document.lineCount - 1, 0))
-            val lineStart = document.getLineStartOffset(lineIndex)
-            val lineEnd = document.getLineEndOffset(lineIndex)
-            return (lineStart + column).coerceIn(lineStart, lineEnd)
-        }
-        val start = offset(diagnostic.lineStart, diagnostic.columnStart - 1)
-        val end = offset(diagnostic.lineEnd, diagnostic.columnEnd)
+        val start = Inko.offsetOf(document, diagnostic.lineStart, diagnostic.columnStart)
+        val end = Inko.offsetOf(document, diagnostic.lineEnd, diagnostic.columnEnd + 1)
         return if (end > start) TextRange(start, end) else TextRange(start, minOf(start + 1, document.textLength))
     }
 }

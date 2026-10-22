@@ -1,7 +1,6 @@
 package com.setdef.parakeet
 
 import com.intellij.openapi.util.io.NioFiles
-import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.extension
@@ -23,56 +22,38 @@ class InkoMirror private constructor(val root: Path, val directory: Path) : Auto
     }
 
     companion object {
-        private const val MANIFEST = "inko.pkg"
-        private val SOURCE_DIRECTORIES = listOf("src", "test")
-
         /** Mirrors [root], replacing [file] (if given) with [text]. */
         fun create(root: Path, file: Path? = null, text: String? = null): InkoMirror {
             val mirror = InkoMirror(root, Files.createTempDirectory("parakeet").toRealPath())
             try {
-                for (name in SOURCE_DIRECTORIES) {
-                    val dir = root.resolve(name)
-                    if (!Files.isDirectory(dir)) continue
+                for (dir in Inko.SOURCE_DIRECTORIES.map(root::resolve).filter(Files::isDirectory)) {
                     Files.walk(dir).use { paths ->
-                        paths.filter { it.isRegularFile() && it.extension == Inko.EXTENSION }.forEach { source ->
-                            val link = mirror.toMirror(source)
-                            Files.createDirectories(link.parent)
-                            linkOrCopy(source, link)
-                        }
+                        paths.filter { it.isRegularFile() && it.extension == Inko.EXTENSION }.forEach(mirror::link)
                     }
                 }
                 // inko only treats test/ as part of a project when there's a src/ beside it.
                 Files.createDirectories(mirror.directory.resolve("src"))
-                root.resolve(MANIFEST).takeIf(Files::isRegularFile)?.let { linkOrCopy(it, mirror.directory.resolve(MANIFEST)) }
-                root.resolve("dep").takeIf(Files::isDirectory)?.let { linkOrCopy(it, mirror.directory.resolve("dep")) }
-                if (file != null && text != null) {
-                    val copy = mirror.toMirror(file)
-                    Files.createDirectories(copy.parent)
-                    Files.deleteIfExists(copy)
-                    Files.writeString(copy, text)
-                }
+                root.resolve(Inko.MANIFEST).takeIf(Files::isRegularFile)?.let(mirror::link)
+                root.resolve("dep").takeIf(Files::isDirectory)?.let(mirror::link)
+                if (file != null && text != null) mirror.replace(file, text)
                 return mirror
             } catch (e: Exception) {
                 mirror.close()
                 throw e
             }
         }
+    }
 
-        // Symlinks can require extra privileges on Windows, so fall back to copying.
-        private fun linkOrCopy(source: Path, link: Path) {
-            try {
-                Files.createSymbolicLink(link, source)
-            } catch (_: IOException) {
-                copyRecursively(source, link)
-            } catch (_: UnsupportedOperationException) {
-                copyRecursively(source, link)
-            }
-        }
+    private fun link(source: Path) {
+        val link = toMirror(source)
+        Files.createDirectories(link.parent)
+        Files.createSymbolicLink(link, source)
+    }
 
-        private fun copyRecursively(source: Path, target: Path) {
-            Files.walk(source).use { paths ->
-                paths.forEach { Files.copy(it, target.resolve(source.relativize(it).toString())) }
-            }
-        }
+    private fun replace(file: Path, text: String) {
+        val copy = toMirror(file)
+        Files.createDirectories(copy.parent)
+        Files.deleteIfExists(copy)
+        Files.writeString(copy, text)
     }
 }

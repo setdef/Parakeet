@@ -38,6 +38,11 @@ intellijPlatform {
     }
 }
 
+// `./gradlew test -PunitOnly` skips tests that need a real `inko` installed.
+tasks.test {
+    if (providers.gradleProperty("unitOnly").isPresent) exclude("**/*IntegrationTest*")
+}
+
 // TextMate bundles must be plain files on disk, so ship them beside the plugin's jars.
 tasks.prepareSandbox {
     from(layout.projectDirectory.dir("bundles")) {

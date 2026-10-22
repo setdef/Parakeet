@@ -1,49 +1,14 @@
 package com.setdef.parakeet
 
 import com.intellij.codeInsight.editorActions.QuoteHandler
-import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.editor.highlighter.HighlighterIterator
-import com.intellij.openapi.util.TextRange
 import com.intellij.lang.BracePair
 import com.intellij.lang.Commenter
 import com.intellij.lang.PairedBraceMatcher
-import com.intellij.openapi.editor.colors.TextAttributesKey
-import com.intellij.openapi.editor.DefaultLanguageHighlighterColors as Colors
-import com.intellij.openapi.fileTypes.SyntaxHighlighter
-import com.intellij.openapi.fileTypes.SyntaxHighlighterBase
-import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.highlighter.HighlighterIterator
+import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.intellij.psi.tree.IElementType
-import org.jetbrains.plugins.textmate.TextMateService
-import org.jetbrains.plugins.textmate.language.syntax.highlighting.TextMateSyntaxHighlighterFactory
-
-/** Highlights with the Inko TextMate grammar, falling back to [InkoLexer] tokens. */
-class InkoSyntaxHighlighterFactory : SyntaxHighlighterFactory() {
-    override fun getSyntaxHighlighter(project: Project?, virtualFile: VirtualFile?): SyntaxHighlighter {
-        if (virtualFile == null || TextMateService.getInstance().getLanguageDescriptorByFileName(virtualFile.name) == null) {
-            return InkoFallbackHighlighter()
-        }
-        return TextMateSyntaxHighlighterFactory().getSyntaxHighlighter(project, virtualFile)
-    }
-}
-
-class InkoFallbackHighlighter : SyntaxHighlighterBase() {
-    override fun getHighlightingLexer() = InkoLexer()
-
-    override fun getTokenHighlights(tokenType: IElementType): Array<TextAttributesKey> = pack(
-        when (tokenType) {
-            InkoTokens.KEYWORD -> Colors.KEYWORD
-            InkoTokens.STRING -> Colors.STRING
-            InkoTokens.NUMBER -> Colors.NUMBER
-            InkoTokens.COMMENT -> Colors.LINE_COMMENT
-            InkoTokens.CONSTANT -> Colors.CLASS_NAME
-            InkoTokens.FIELD -> Colors.INSTANCE_FIELD
-            else -> null
-        },
-    )
-}
 
 class InkoCommenter : Commenter {
     override fun getLineCommentPrefix() = "# "

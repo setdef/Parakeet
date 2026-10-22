@@ -1,11 +1,10 @@
 package com.setdef.parakeet
 
 import com.intellij.openapi.actionSystem.IdeActions
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
 import org.jetbrains.plugins.textmate.TextMateService
 
-class InkoBundleTest : BasePlatformTestCase() {
+class InkoBundleTest : InkoTestCase() {
     override fun setUp() {
         super.setUp()
         TextMateService.getInstance().ensureInitialized()

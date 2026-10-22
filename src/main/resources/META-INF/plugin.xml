@@ -31,13 +31,16 @@
         <fileType name="Inko" implementationClass="com.setdef.parakeet.InkoFileType" fieldName="INSTANCE"
                   language="Inko" extensions="inko"/>
         <lang.parserDefinition language="Inko" implementationClass="com.setdef.parakeet.InkoParserDefinition"/>
-        <lang.syntaxHighlighterFactory language="Inko" implementationClass="com.setdef.parakeet.InkoSyntaxHighlighterFactory"/>
-        <!-- TextMate tokens need TextMate's editor highlighter (its own token storage). -->
+        <!-- Colors come from the Inko TextMate grammar; its tokens need TextMate's editor highlighter too. -->
+        <lang.syntaxHighlighterFactory language="Inko"
+                                       implementationClass="org.jetbrains.plugins.textmate.language.syntax.highlighting.TextMateSyntaxHighlighterFactory"/>
         <editorHighlighterProvider filetype="Inko"
                                    implementationClass="org.jetbrains.plugins.textmate.language.syntax.highlighting.TextMateEditorHighlighterProvider"/>
         <lang.commenter language="Inko" implementationClass="com.setdef.parakeet.InkoCommenter"/>
         <lang.braceMatcher language="Inko" implementationClass="com.setdef.parakeet.InkoBraceMatcher"/>
         <lang.quoteHandler language="Inko" implementationClass="com.setdef.parakeet.InkoQuoteHandler"/>
+
+        <projectService serviceInterface="com.setdef.parakeet.InkoCli" serviceImplementation="com.setdef.parakeet.InkoProjectCli"/>
 
         <externalAnnotator language="Inko" implementationClass="com.setdef.parakeet.InkoCheckAnnotator"/>
         <formattingService implementation="com.setdef.parakeet.InkoFormattingService"/>

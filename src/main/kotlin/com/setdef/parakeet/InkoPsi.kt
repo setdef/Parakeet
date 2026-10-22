@@ -15,6 +15,7 @@ import com.intellij.psi.PsiReference
 import com.intellij.psi.tree.IElementType
 import com.intellij.psi.tree.IFileElementType
 import com.intellij.psi.tree.TokenSet
+import com.intellij.psi.util.PsiTreeUtil
 
 class InkoFile(viewProvider: FileViewProvider) : PsiFileBase(viewProvider, InkoLanguage) {
     override fun getFileType(): FileType = InkoFileType.INSTANCE
@@ -24,7 +25,19 @@ class InkoFile(viewProvider: FileViewProvider) : PsiFileBase(viewProvider, InkoL
 /** A name (identifier, constant, or `@field`) that may refer to a definition. */
 class InkoName(node: ASTNode) : ASTWrapperPsiElement(node) {
     override fun getReference(): PsiReference? = InkoReference(this)
+
+    val tokenType: IElementType? get() = node.firstChildNode?.elementType
 }
+
+// Navigating the flat token stream, skipping whitespace.
+
+fun PsiElement.previousToken(): PsiElement? = PsiTreeUtil.prevVisibleLeaf(this)
+
+fun PsiElement.nextToken(): PsiElement? = PsiTreeUtil.nextVisibleLeaf(this)
+
+fun PsiElement?.isToken(type: IElementType): Boolean = this?.node?.elementType == type
+
+fun PsiElement?.isKeyword(vararg words: String): Boolean = isToken(InkoTokens.KEYWORD) && this!!.text in words
 
 object InkoElementTypes {
     @JvmField val FILE = IFileElementType(InkoLanguage)

@@ -74,7 +74,8 @@ Tools are managed with [mise](https://mise.jdx.dev) (`mise install`).
 | Command | What it does |
 |---|---|
 | `./gradlew runIde` | Launch a sandbox IDE with the plugin loaded |
-| `./gradlew test` | Run the headless IDE tests (needs `inko` installed) |
+| `./gradlew test` | Run all headless IDE tests, including integration tests against your installed `inko` |
+| `./gradlew test -PunitOnly` | Run only the unit tests, which use a fake `inko` and need nothing installed |
 | `./gradlew verifyPlugin` | Check compatibility with the oldest and newest supported IDEs |
 | `./gradlew buildPlugin` | Build the installable zip |
 

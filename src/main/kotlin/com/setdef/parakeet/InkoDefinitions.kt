@@ -1,0 +1,77 @@
+package com.setdef.parakeet
+
+import com.google.gson.JsonArray
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
+import java.nio.file.Path
+
+enum class InkoDefinitionKind { MODULE, TYPE, TRAIT, CONSTANT, MODULE_METHOD, STATIC_METHOD, INSTANCE_METHOD, CONSTRUCTOR, FIELD }
+
+/** A definition reported by `inko doc`. [owner] is the type or trait it belongs to, if any. */
+data class InkoDefinition(
+    val kind: InkoDefinitionKind,
+    val name: String,
+    val module: String,
+    val owner: String?,
+    val file: Path,
+    val line: Int,
+    val column: Int,
+)
+
+/** Every definition in a project (and its dependencies and the standard library), by name and module. */
+class InkoSymbols(definitions: List<InkoDefinition>) {
+    private val byName: Map<String, List<InkoDefinition>> = definitions.groupBy { it.name }
+    private val modules: Map<String, InkoDefinition> =
+        definitions.filter { it.kind == InkoDefinitionKind.MODULE }.associateBy { it.module }
+    private val moduleByFile: Map<Path, String> = modules.values.associate { it.file to it.module }
+
+    fun named(name: String, vararg kinds: InkoDefinitionKind): List<InkoDefinition> =
+        byName[name].orEmpty().filter { kinds.isEmpty() || it.kind in kinds }
+
+    fun module(name: String): InkoDefinition? = modules[name]
+
+    fun moduleOf(file: Path): String? = moduleByFile[file]
+}
+
+/** Reads one module's JSON from `inko doc`; [toReal] maps paths out of the mirror it ran in. */
+object InkoDocParser {
+    fun parse(json: String, toReal: (Path) -> Path = { it }): List<InkoDefinition> {
+        val root = JsonParser.parseString(json).takeIf { it.isJsonObject }?.asJsonObject ?: return emptyList()
+        val module = root.string("name") ?: return emptyList()
+        val moduleFile = toReal(Path.of(root.string("file") ?: return emptyList()))
+        val result = mutableListOf(InkoDefinition(InkoDefinitionKind.MODULE, module, module, null, moduleFile, 1, 1))
+
+        fun add(kind: InkoDefinitionKind, obj: JsonObject, owner: String?) {
+            val name = obj.string("name") ?: return
+            val location = obj.getAsJsonObject("location") ?: return
+            // Methods carry their own file: default trait methods live in the trait's module.
+            val file = obj.string("file")?.let { toReal(Path.of(it)) } ?: moduleFile
+            val line = location.getAsJsonObject("lines")?.get("start")?.asInt ?: 1
+            val column = location.getAsJsonObject("columns")?.get("start")?.asInt ?: 1
+            result += InkoDefinition(kind, name, module, owner, file, line, column)
+        }
+
+        root.objects("constants").forEach { add(InkoDefinitionKind.CONSTANT, it, null) }
+        root.objects("methods").forEach { add(InkoDefinitionKind.MODULE_METHOD, it, null) }
+        for (type in root.objects("types")) {
+            add(InkoDefinitionKind.TYPE, type, null)
+            val owner = type.string("name")
+            type.objects("constructors").forEach { add(InkoDefinitionKind.CONSTRUCTOR, it, owner) }
+            type.objects("fields").forEach { add(InkoDefinitionKind.FIELD, it, owner) }
+            type.objects("static_methods").forEach { add(InkoDefinitionKind.STATIC_METHOD, it, owner) }
+            type.objects("instance_methods").forEach { add(InkoDefinitionKind.INSTANCE_METHOD, it, owner) }
+        }
+        for (trait in root.objects("traits")) {
+            add(InkoDefinitionKind.TRAIT, trait, null)
+            val owner = trait.string("name")
+            trait.objects("required_methods").forEach { add(InkoDefinitionKind.INSTANCE_METHOD, it, owner) }
+            trait.objects("default_methods").forEach { add(InkoDefinitionKind.INSTANCE_METHOD, it, owner) }
+        }
+        return result
+    }
+
+    private fun JsonObject.string(key: String): String? = get(key)?.takeIf { it.isJsonPrimitive }?.asString
+
+    private fun JsonObject.objects(key: String): List<JsonObject> =
+        (get(key) as? JsonArray)?.mapNotNull { it.takeIf { e -> e.isJsonObject }?.asJsonObject }.orEmpty()
+}

@@ -11,7 +11,7 @@ report problems with this plugin to the Inko project; open an issue here instead
 
 I use three words for how code comes to exist. Code I wrote, I typed by hand, with nothing generated. Code I wrought, an AI agent generated while I iterated with it, and I reviewed every change before committing it, so I own every diff. Code I requested, an agent built with little or no review from me, the way a dark factory runs without lights.
 
-**Versions 0.1.0 through 0.3.0 are requested.**
+**Versions 0.1.0 through 0.3.1 are requested.**
 
 ## Features
 
@@ -30,7 +30,9 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Run configurations** for `inko run`, `inko test`, `inko build`, and
   `inko check`, with clickable `file.inko:line` links in the output
 - **New Project wizard** (*File → New → Project → Inko*) using `inko init`,
-  optionally as a library or with a GitHub Actions workflow
+  optionally as a library or with a GitHub Actions workflow. The main module
+  gets a valid module name (e.g. `from_intellij` for a project named
+  "From IntelliJ"), which you can change.
 - **Per-project toolchain** in *Settings → Languages & Frameworks → Inko*:
   auto-detect, ivm's default, any version ivm has installed, or a custom
   executable

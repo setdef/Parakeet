@@ -11,7 +11,7 @@ report problems with this plugin to the Inko project; open an issue here instead
 
 I use three words for how code comes to exist. Code I wrote, I typed by hand, with nothing generated. Code I wrought, an AI agent generated while I iterated with it, and I reviewed every change before committing it, so I own every diff. Code I requested, an agent built with little or no review from me, the way a dark factory runs without lights.
 
-**Versions 0.1.0 through 0.4.0 are requested.**
+**Versions 0.1.0 through 0.5.0 are requested.**
 
 ## Features
 

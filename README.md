@@ -49,7 +49,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   "From IntelliJ"), which you can change.
 - **Per-project toolchain** in *Settings → Languages & Frameworks → Inko*:
   auto-detect, ivm's default, any version ivm has installed, or a custom
-  executable
+  executable. With ivm installed, you can also install and remove Inko versions
+  there, and a banner offers to install Inko when it's missing.
 
 ### How it works
 

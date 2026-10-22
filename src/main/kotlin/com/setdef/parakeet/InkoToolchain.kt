@@ -82,6 +82,10 @@ object Ivm {
 
     fun binDirectory(): Path? = dataDirectory()?.resolve("bin")
 
+    /** The `ivm` executable: on PATH, or where `cargo install ivm` puts it. */
+    fun executable(): Path? = PathEnvironmentVariableUtil.findInPath("ivm")?.toPath()
+        ?: System.getProperty("user.home")?.let { Path.of(it, ".cargo", "bin", "ivm") }?.takeIf(Files::isExecutable)
+
     private fun installedDirectory(): Path? = dataDirectory()?.resolve("installed")
 
     fun executableOf(version: String): Path? =

@@ -1,6 +1,7 @@
 package com.setdef.parakeet
 
 import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.testFramework.fixtures.TempDirTestFixture
@@ -9,8 +10,8 @@ import com.intellij.testFramework.replaceService
 import java.nio.file.Path
 import java.util.concurrent.CopyOnWriteArrayList
 
-/** Stands in for the `inko` command, answering each call with [respond]. */
-class FakeInkoCli(private val available: Boolean = true, private val respond: (Call) -> InkoCliResult = { ok() }) : InkoCli {
+/** Stands in for the `inko` (or `ivm`) command, answering each call with [respond]. */
+class FakeInkoCli(private val available: Boolean = true, private val respond: (Call) -> InkoCliResult = { ok() }) : IvmCli {
     data class Call(val args: List<String>, val workingDirectory: Path?, val stdin: String?)
 
     val calls: MutableList<Call> = CopyOnWriteArrayList()
@@ -47,6 +48,11 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
 
     protected fun useFakeInko(fake: FakeInkoCli): FakeInkoCli {
         project.replaceService(InkoCli::class.java, fake, testRootDisposable)
+        return fake
+    }
+
+    protected fun useFakeIvm(fake: FakeInkoCli): FakeInkoCli {
+        ApplicationManager.getApplication().replaceService(IvmCli::class.java, fake, testRootDisposable)
         return fake
     }
 }

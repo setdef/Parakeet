@@ -5,6 +5,8 @@
 ### Added
 
 - Test results in the IDE's test runner: each test file and test with pass/fail, failures with expected and actual values (Click to see difference), jumping to a test's source, and running a single test from the tree. Tests build in a mirror of the project in the IDE's system directory, so nothing is added to the project.
+- A banner on Inko files when Parakeet can't find `inko` (or the project's ivm version isn't installed), offering to install it with ivm or choose a toolchain.
+- Install and remove ivm versions from Settings | Languages & Frameworks | Inko.
 
 ## [0.4.0] - 2026-10-22
 

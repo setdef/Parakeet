@@ -1,9 +1,11 @@
+import org.jetbrains.changelog.Changelog
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.intellij.platform")
+    id("org.jetbrains.changelog")
 }
 
 kotlin {
@@ -28,6 +30,15 @@ dependencies {
 
 intellijPlatform {
     pluginConfiguration {
+        // The Marketplace's "What's New" for this version, from CHANGELOG.md.
+        changeNotes = provider {
+            with(changelog) {
+                renderItem(
+                    (getOrNull(project.version.toString()) ?: getUnreleased()).withHeader(false).withEmptySections(false),
+                    Changelog.OutputType.HTML,
+                )
+            }
+        }
         ideaVersion {
             sinceBuild = "252"
             untilBuild = provider { null }

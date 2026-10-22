@@ -10,7 +10,9 @@
             <li>Bracket matching, auto-closing pairs, and surrounding pairs</li>
             <li>Compiler errors and warnings as you type, from <code>inko check</code></li>
             <li>Reformat Code (and format on save) with <code>inko fmt</code></li>
-            <li>Go to definition, using the definitions <code>inko doc</code> reports</li>
+            <li>Go to definition, quick documentation, Go to Class/Symbol, and completion, using the definitions <code>inko doc</code> reports</li>
+            <li>Structure view, breadcrumbs, and code folding</li>
+            <li>Live templates, TODO highlighting, and spell checking</li>
             <li>Run and test from the gutter, with run configurations for <code>inko run</code>, <code>test</code>, <code>build</code>, and <code>check</code></li>
             <li>New Project wizard using <code>inko init</code></li>
             <li>Per-project toolchain: <code>inko</code> on PATH, ivm's default, or any ivm-installed version</li>

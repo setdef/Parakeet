@@ -11,7 +11,7 @@ report problems with this plugin to the Inko project; open an issue here instead
 
 I use three words for how code comes to exist. Code I wrote, I typed by hand, with nothing generated. Code I wrought, an AI agent generated while I iterated with it, and I reviewed every change before committing it, so I own every diff. Code I requested, an agent built with little or no review from me, the way a dark factory runs without lights.
 
-**Versions 0.1.0 through 0.3.1 are requested.**
+**Versions 0.1.0 through 0.4.0 are requested.**
 
 ## Features
 
@@ -25,6 +25,18 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Go to definition** (⌘-click / Ctrl-click, ⌘B / Ctrl+B) for types, traits,
   constants, functions, methods, fields, and modules, including the standard
   library and dependencies
+- **Quick documentation** (F1, or hover): a definition's signature, where
+  it's defined, and its doc comment
+- **Go to Class / Go to Symbol** (⌘O / ⌥⌘O) and Search Everywhere for Inko
+  types, traits, methods, and constants
+- **Structure view**, breadcrumbs, and sticky lines for each file's
+  declarations
+- **Code folding** for blocks, comment runs, and imports
+- **Completion** for keywords, names in scope, imports, members after `.`, and
+  fields after `@`
+- **Live templates**: `fn`, `fnp`, `type`, `typep`, `trait`, `impl`, `match`,
+  `main`, `tests`, and `test`
+- **TODO highlighting** and **spell checking** in comments
 - **Run and test from the gutter**: ▶ next to `fn async main`, next to
   `fn pub tests` in test files, and next to each `t.test('…')`
 - **Run configurations** for `inko run`, `inko test`, `inko build`, and
@@ -46,11 +58,14 @@ compiler, so it always agrees with your installed Inko version.
   project into a temporary directory (symlinking every source file) with your
   unsaved text in place of the file, then runs `inko check` there, so imports in
   both directions and dependencies resolve.
-- **Go to definition** uses the definitions `inko doc --private --dependencies`
+- **Go to definition, quick documentation, Go to Class/Symbol, and
+  completion** use the definitions `inko doc --private --dependencies`
   reports, rebuilt in the background when you save. Locations are exact, but the
   plugin doesn't know types, so a method call like `x.to_string` offers every
   `to_string` it can't rule out, preferring types mentioned in the file. Local
   variables don't resolve.
+- **The Structure view, breadcrumbs, and folding** come from the file's own
+  tokens, so they follow unsaved edits and work without `inko`.
 
 ## Requirements
 

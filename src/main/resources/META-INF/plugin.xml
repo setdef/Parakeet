@@ -46,6 +46,8 @@
         <typedHandler implementation="com.setdef.parakeet.InkoCompletionAutoPopup"/>
         <liveTemplateContext contextId="INKO" implementation="com.setdef.parakeet.InkoTemplateContextType"/>
         <defaultLiveTemplates file="/liveTemplates/Inko.xml"/>
+        <indexPatternBuilder implementation="com.setdef.parakeet.InkoIndexPatternBuilder"/>
+        <todoIndexer filetype="Inko" implementationClass="com.setdef.parakeet.InkoTodoIndexer"/>
 
         <projectService serviceInterface="com.setdef.parakeet.InkoCli" serviceImplementation="com.setdef.parakeet.InkoProjectCli"/>
 

@@ -1,0 +1,42 @@
+<templateSet group="Inko">
+  <template name="fn" value="fn $NAME$ {&#10;  $END$&#10;}" description="Method" toReformat="false" toShortenFQNames="false">
+    <variable name="NAME" expression="" defaultValue="&quot;name&quot;" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="fnp" value="fn pub $NAME$ {&#10;  $END$&#10;}" description="Public method" toReformat="false" toShortenFQNames="false">
+    <variable name="NAME" expression="" defaultValue="&quot;name&quot;" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="type" value="type $NAME$ {&#10;  $END$&#10;}" description="Type" toReformat="false" toShortenFQNames="false">
+    <variable name="NAME" expression="" defaultValue="&quot;Name&quot;" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="typep" value="type pub $NAME$ {&#10;  $END$&#10;}" description="Public type" toReformat="false" toShortenFQNames="false">
+    <variable name="NAME" expression="" defaultValue="&quot;Name&quot;" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="trait" value="trait pub $NAME$ {&#10;  $END$&#10;}" description="Public trait" toReformat="false" toShortenFQNames="false">
+    <variable name="NAME" expression="" defaultValue="&quot;Name&quot;" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="impl" value="impl $TRAIT$ for $TYPE$ {&#10;  $END$&#10;}" description="Trait implementation" toReformat="false" toShortenFQNames="false">
+    <variable name="TRAIT" expression="" defaultValue="&quot;Trait&quot;" alwaysStopAt="true"/>
+    <variable name="TYPE" expression="" defaultValue="&quot;Type&quot;" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="match" value="match $VALUE$ {&#10;  case $PATTERN$ -&gt; $END$&#10;}" description="Pattern match" toReformat="false" toShortenFQNames="false">
+    <variable name="VALUE" expression="" defaultValue="&quot;value&quot;" alwaysStopAt="true"/>
+    <variable name="PATTERN" expression="" defaultValue="&quot;_&quot;" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="main" value="type async Main {&#10;  fn async main {&#10;    $END$&#10;  }&#10;}" description="Program entry point" toReformat="false" toShortenFQNames="false">
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="tests" value="fn pub tests(t: mut Tests) {&#10;  $END$&#10;}" description="Test file entry point (needs: import std.test (Tests))" toReformat="false" toShortenFQNames="false">
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="test" value="t.test('$NAME$', fn (t) {&#10;  $END$&#10;})" description="Test" toReformat="false" toShortenFQNames="false">
+    <variable name="NAME" expression="" defaultValue="&quot;does something&quot;" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+</templateSet>

@@ -44,6 +44,8 @@
         <lang.foldingBuilder language="Inko" implementationClass="com.setdef.parakeet.InkoFoldingBuilder"/>
         <completion.contributor language="Inko" implementationClass="com.setdef.parakeet.InkoCompletionContributor"/>
         <typedHandler implementation="com.setdef.parakeet.InkoCompletionAutoPopup"/>
+        <liveTemplateContext contextId="INKO" implementation="com.setdef.parakeet.InkoTemplateContextType"/>
+        <defaultLiveTemplates file="/liveTemplates/Inko.xml"/>
 
         <projectService serviceInterface="com.setdef.parakeet.InkoCli" serviceImplementation="com.setdef.parakeet.InkoProjectCli"/>
 

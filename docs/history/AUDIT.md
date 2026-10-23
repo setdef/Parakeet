@@ -508,6 +508,13 @@ and guards get no body, and it doesn't give `fn extern` a body, since
 
 ### 1.13 Statement boundaries disagree with the parser in three cases (Low)
 
+**Status: confirmed and fixed in <commit:1.13>.** `InkoStatementBoundariesTest`
+failed before the fix (4 of 5 tests; the fifth checks that binary
+operators, `!=` and `throw` still continue a line). The lexer reads `-`
+before a digit as part of the number, as Inko's does, a line starting with
+`!` (not `!=`) starts a new statement, and a bare `return` at the end of a
+line no longer takes the next line as its value.
+
 **What Parakeet assumes.** A line continues the previous statement when any
 of these hold (`P/InkoTokenStream.kt:146-153`):
 

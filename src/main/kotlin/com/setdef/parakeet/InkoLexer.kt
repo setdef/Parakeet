@@ -134,7 +134,9 @@ class InkoLexer : LexerBase() {
                 i = stop
                 if (opensCode) InkoTokens.STRING_MIDDLE else InkoTokens.STRING_END.also { interpolations.removeLast() }
             }
-            c.isDigit() -> {
+            // A `-` right before a digit is part of the number, as in Inko's lexer (ast/src/lexer.rs, `minus`).
+            c.isDigit() || (c == '-' && i + 1 < end && buffer[i + 1].isDigit()) -> {
+                if (c == '-') i++
                 i++
                 while (i < end && (buffer[i].isLetterOrDigit() || buffer[i] == '_' ||
                         (buffer[i] == '.' && i + 1 < end && buffer[i + 1].isDigit()))) i++

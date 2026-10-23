@@ -187,9 +187,12 @@ class InkoTokenStream(val text: CharSequence) {
     fun continues(index: Int): Boolean {
         val previous = tokens[index - 1]
         val current = tokens[index]
-        return current.type == InkoTokens.DOT || current.isOperator() || current.isKeyword("and", "or", "as", "else") ||
+        // `!x` starts a new `Not` expression (ast/src/parser.rs, `not_expression`); `!=` continues a binary one.
+        val startsNot = current.isOperator("!") && tokens.getOrNull(index + 1)?.let { it.isOperator("=") && it.start == current.end } != true
+        // A bare `return` only takes a value on its own line (`return_expression`); `throw` and the rest take one from any line.
+        return current.type == InkoTokens.DOT || (current.isOperator() && !startsNot) || current.isKeyword("and", "or", "as", "else") ||
             previous.type == InkoTokens.DOT || previous.type == InkoTokens.COMMA || previous.isOperator() ||
-            previous.isKeyword("and", "or", "as", "let", "return", "throw", "try", "recover", "ref", "mut", "move") ||
+            previous.isKeyword("and", "or", "as", "let", "throw", "try", "recover", "ref", "mut", "move") ||
             previous.type == InkoTokens.LPAREN || previous.type == InkoTokens.LBRACKET
     }
 }

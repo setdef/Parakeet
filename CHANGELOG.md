@@ -15,7 +15,7 @@
 - Complete Current Statement (⇧⌘⏎ / Ctrl+Shift+Enter): closes brackets and adds a body after `if`, `while`, `fn`, `type`, and the like.
 - Safe Delete (⌘⌫ / Alt+Delete): warns about usages, then deletes the whole declaration with its comments.
 - Call Hierarchy (⌃⌥H / Ctrl+Alt+H): a method's callers and callees.
-- "N usages" above declarations, in the IDE's shared Usages code vision.
+- "N usages" above declarations (up to "99+ usages"), in the IDE's shared Usages code vision.
 - External Documentation (⇧F1) opens standard library definitions on docs.inko-lang.org for the project's Inko version.
 - File | New | Inko File: a module, a test file, or a program with `Main`.
 - Run configurations have Release build (`--release`), Target (`--target`, listing `inko targets`), and Statically link C libraries (`--static`), for the commands that accept them, including test runs.

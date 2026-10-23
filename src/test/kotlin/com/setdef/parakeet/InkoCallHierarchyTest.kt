@@ -107,4 +107,11 @@ class InkoCallHierarchyTest : InkoTestCase(onDisk = true) {
         com.intellij.openapi.util.Disposer.register(testRootDisposable, browser as com.intellij.openapi.Disposable)
         assertTrue(browser is InkoCallHierarchyBrowser)
     }
+
+    fun testUsageCountsStopAtNinetyNinePlus() {
+        val calls = (1..120).joinToString("\n") { "  helper" }
+        myFixture.addFileToProject("src/many.inko", "import app.util (helper)\n\nfn many {\n$calls\n}\n")
+        val util = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/app/util.inko"))!!
+        assertEquals("99+ usages", InkoUsagesCodeVisionProvider().getHint(declaration("src/app/util.inko", "helper"), util))
+    }
 }

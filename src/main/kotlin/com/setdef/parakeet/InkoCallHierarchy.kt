@@ -21,6 +21,7 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.ui.PopupHandler
+import com.intellij.util.Processor
 import javax.swing.JTree
 import com.setdef.parakeet.InkoDefinitionKind as Kind
 
@@ -143,12 +144,19 @@ class InkoUsagesCodeVisionProvider : ReferencesCodeVisionProvider() {
 
     override fun acceptsElement(element: PsiElement): Boolean = element is InkoDeclaration && !element.isLocal
 
+    // Counting stops at LIMIT ("99+ usages"), so common names (`new`, `to_string`) don't resolve every occurrence.
     override fun getHint(element: PsiElement, file: PsiFile): String? {
-        val count = ReferencesSearch.search(element).findAll().size
-        return when (count) {
-            0 -> "no usages"
-            1 -> "1 usage"
+        var count = 0
+        ReferencesSearch.search(element).forEach(Processor { ++count < LIMIT })
+        return when {
+            count >= LIMIT -> "${LIMIT - 1}+ usages"
+            count == 0 -> "no usages"
+            count == 1 -> "1 usage"
             else -> "$count usages"
         }
+    }
+
+    private companion object {
+        const val LIMIT = 100
     }
 }

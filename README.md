@@ -16,7 +16,7 @@ for you to review and submit.
 
 I use three words for how code comes to exist. Code I wrote, I typed by hand, with nothing generated. Code I wrought, an AI agent generated while I iterated with it, and I reviewed every change before committing it, so I own every diff. Code I requested, an agent built with little or no review from me, the way a dark factory runs without lights.
 
-**Versions 0.1.0 through 0.9.0 are requested.**
+**Versions 0.1.0 through 0.10.0 are requested.**
 
 ## Features
 
@@ -66,9 +66,12 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Code folding** for blocks, comment runs, and imports
 - **Optimize Imports** (⌃⌥O / Ctrl+Alt+O): removes unused imports and sorts
   the rest
-- **Refactorings**: Introduce Variable (⌥⌘V / Ctrl+Alt+V), Inline Variable
-  (⌥⌘N / Ctrl+Alt+N), Safe Delete (⌘⌫ / Alt+Delete), and moving files or
-  directories and renaming directories (which updates their modules' imports)
+- **Refactorings**: Change Signature (⌘F6 / Ctrl+F6), Extract Method (⌥⌘M /
+  Ctrl+Alt+M), Inline Method and Inline Variable (⌥⌘N / Ctrl+Alt+N),
+  Introduce Variable (⌥⌘V / Ctrl+Alt+V), Introduce Parameter (⌥⌘P /
+  Ctrl+Alt+P), Introduce Constant (⌥⌘C / Ctrl+Alt+C), Safe Delete (⌘⌫ /
+  Alt+Delete), and moving files or directories and renaming directories
+  (which updates their modules' imports)
 - **Type Hierarchy** (⌃H / Ctrl+H) for traits and the types implementing
   them, and **Call Hierarchy** (⌃⌥H / Ctrl+Alt+H) for callers and callees
 - **Usage counts** ("N usages") above declarations
@@ -149,6 +152,14 @@ compiler, so it always agrees with your installed Inko version.
   inlining parenthesizes values whose operators would otherwise bind
   differently (Inko's binary operators share one precedence, and `and`/`or`
   bind tighter).
+- **Change Signature, Introduce Parameter, Extract Method, and Inline
+  Method** rewrite calls from their tokens, following Inko's rules: no default
+  arguments (so new parameters need a value for calls to pass), named
+  arguments after positional ones, no empty parentheses, parameters that can't
+  be reassigned, and owned values that move unless borrowed. They update the
+  calls Find Usages finds, so calls on values of unknown type show in the
+  preview to exclude. Without types, Extract Method leaves placeholders for
+  types it can't work out, and `inko check` points out any left behind.
 - **Quick fixes** act on the diagnostic IDs `inko check` reports
   (`invalid-symbol`, `unused-symbol`, `unused-result`, `missing-field`,
   `invalid-implementation`, `missing-trait`, `unreachable`); auto-import finds
@@ -236,7 +247,7 @@ Dependabot proposes weekly updates to Gradle dependencies and GitHub Actions.
 
 ### Releasing
 
-Pushing a tag like `v0.9.0` (matching `version` in `gradle.properties`) runs
+Pushing a tag like `v0.10.0` (matching `version` in `gradle.properties`) runs
 [`release.yml`](.github/workflows/release.yml): the full build above, then it
 signs the plugin and creates a GitHub Release with the signed zip and
 `updatePlugins.xml` (the plugin repository file IDEs check for updates). If a

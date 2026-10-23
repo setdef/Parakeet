@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-23
+
+### Added
+
+- Change Signature (⌘F6 / Ctrl+F6) for methods, from the method or a call: rename it, change its return type, and add, remove, reorder, rename, or retype parameters. Calls follow: arguments move with their parameters (positional or named; anything after a named argument stays named, as Inko requires), new parameters get the value you enter (Inko has no default arguments), and empty parentheses are dropped. Like RubyMine and PyCharm, calls whose receiver type isn't known open in the preview so you can exclude them. Removed parameters still in use, clashing names, and calls that can't be mapped are reported first. Trait methods and methods implementing them aren't supported.
+- Introduce Parameter (⌥⌘P / Ctrl+Alt+P): an expression in a method becomes its last parameter, and every call passes the expression instead, importing what it names in other modules. Expressions using locals, fields, or `self` are refused, and a name private to the module is reported, since importing it wouldn't compile.
+- Introduce Constant (⌥⌘C / Ctrl+Alt+C): `let NAME = …` after the module's constants or imports, replacing the expression (optionally everywhere in the file), for the values Inko constants can hold.
+- Extract Method (⌥⌘M / Ctrl+Alt+M): statements or an expression become a method of the same kind, right after the original, with variables flowing in as parameters and out as results (several as a tuple). Types come from what's written or obvious; others are placeholders to Tab through after naming the method in place. Owned values are passed as `mut` borrows so the caller can keep using them. Code that returns, throws, uses `try`, or breaks out of an outer loop is refused.
+- Inline Method (⌥⌘N / Ctrl+Alt+N) on a method or a call: replaces calls with the body, keeping or removing the method and its imports. Arguments that would be evaluated more than once are bound to a `let`, clashing locals are renamed, and the result is parenthesized where Inko's operators would regroup it. Recursive, `fn async`, and trait methods, and bodies using `return`, `throw`, or `try`, aren't inlined.
+
+### Fixed
+
+- A bare call inside a type, like `helper` in an instance method, now resolves to the type's own method first (a static one in static methods), as Inko does, so go to definition, Find Usages, and Rename find it.
+- Introduce Variable no longer offers part of an operator chain as an expression: `60 - 60` in `total - 60 - 60` is part of `(total - 60) - 60`, so replacing it changed what the code computed.
+
 ## [0.9.0] - 2026-10-22
 
 ### Added

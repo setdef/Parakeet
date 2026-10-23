@@ -17,7 +17,7 @@
             <li>Parameter info, parameter-name hints, trait gutter icons, Go to Implementation and Super Method, and Implement/Override Methods</li>
             <li>Go to Test and Create Test</li>
             <li>Optimize Imports, removing unused imports and sorting the rest</li>
-            <li>Introduce and Inline Variable, Safe Delete, and moving files and renaming directories with their imports updated</li>
+            <li>Change Signature, Extract Method, Inline Method and Variable, Introduce Variable, Parameter, and Constant, Safe Delete, and moving files and renaming directories with their imports updated</li>
             <li>Type and Call Hierarchies, and usage counts</li>
             <li>Surround With, Unwrap/Remove, Move Statement, Complete Current Statement, Extend Selection, and Copy Reference</li>
             <li>New Inko File templates, and standard library docs on docs.inko-lang.org (Shift+F1)</li>

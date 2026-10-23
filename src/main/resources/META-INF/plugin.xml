@@ -78,6 +78,14 @@
                                               isEnabledByDefault="true" group="PARAMETERS_GROUP"
                                               providerId="parakeet.inko.parameters" bundle="messages.ParakeetBundle"
                                               nameKey="inlay.parameters.name" descriptionKey="inlay.parameters.description"/>
+        <fileType name="Inko Package Manifest" implementationClass="com.setdef.parakeet.InkoManifestFileType" fieldName="INSTANCE"
+                  language="InkoManifest" fileNames="inko.pkg"/>
+        <lang.parserDefinition language="InkoManifest" implementationClass="com.setdef.parakeet.InkoManifestParserDefinition"/>
+        <lang.syntaxHighlighterFactory language="InkoManifest" implementationClass="com.setdef.parakeet.InkoManifestHighlighterFactory"/>
+        <lang.commenter language="InkoManifest" implementationClass="com.setdef.parakeet.InkoManifestCommenter"/>
+        <annotator language="InkoManifest" implementationClass="com.setdef.parakeet.InkoManifestAnnotator"/>
+        <editorFloatingToolbarProvider implementation="com.setdef.parakeet.InkoManifestFloatingToolbarProvider"/>
+        <editorNotificationProvider implementation="com.setdef.parakeet.InkoDependenciesBanner"/>
         <additionalLibraryRootsProvider implementation="com.setdef.parakeet.InkoLibraryRootsProvider"/>
         <lang.findUsagesProvider language="Inko" implementationClass="com.setdef.parakeet.InkoFindUsagesProvider"/>
         <referencesSearch implementation="com.setdef.parakeet.InkoModuleReferencesSearcher"/>
@@ -99,6 +107,25 @@
         <projectConfigurable parentId="language" id="com.setdef.parakeet.settings" displayName="Inko"
                              instance="com.setdef.parakeet.InkoConfigurable"/>
     </extensions>
+
+    <actions>
+        <group id="Parakeet.InkoDependencies" text="Inko Dependencies" popup="true" icon="com.setdef.parakeet.InkoIcons.FILE">
+            <action id="Parakeet.SyncDependencies" class="com.setdef.parakeet.InkoSyncDependenciesAction"
+                    text="Sync Dependencies" description="Download and install inko.pkg's dependencies (inko pkg sync)"
+                    icon="AllIcons.Actions.BuildLoadChanges"/>
+            <action id="Parakeet.UpdateDependencies" class="com.setdef.parakeet.InkoUpdateDependenciesAction"
+                    text="Update Dependencies" description="Update dependencies to their newest compatible versions (inko pkg update), then sync"/>
+            <action id="Parakeet.AddDependency" class="com.setdef.parakeet.InkoAddDependencyAction"
+                    text="Add Dependency…" description="Add a dependency to inko.pkg (inko pkg add), then sync"/>
+            <action id="Parakeet.RemoveDependency" class="com.setdef.parakeet.InkoRemoveDependencyAction"
+                    text="Remove Dependency…" description="Remove a dependency from inko.pkg (inko pkg remove), then sync"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </group>
+        <group id="Parakeet.InkoManifestToolbar">
+            <reference ref="Parakeet.SyncDependencies"/>
+        </group>
+    </actions>
 
     <projectListeners>
         <listener class="com.setdef.parakeet.InkoDocIndexFileListener" topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>

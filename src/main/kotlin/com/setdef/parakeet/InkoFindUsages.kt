@@ -17,6 +17,7 @@ import com.intellij.psi.PsiReference
 import com.intellij.psi.search.UsageSearchContext
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.refactoring.RefactoringActionHandler
 import com.intellij.refactoring.rename.RenameInputValidator
 import com.intellij.refactoring.rename.RenamePsiElementProcessor
 import com.intellij.usages.impl.rules.UsageType
@@ -125,4 +126,6 @@ class InkoRefactoringSupportProvider : RefactoringSupportProvider() {
 
     override fun isMemberInplaceRenameAvailable(element: PsiElement, context: PsiElement?): Boolean =
         element is InkoDeclaration && !element.isLocal
+
+    override fun getIntroduceVariableHandler(): RefactoringActionHandler = InkoIntroduceVariableHandler()
 }

@@ -6,7 +6,6 @@ import com.intellij.psi.PsiManager
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.rename.RenamePsiElementProcessor
 import com.intellij.usageView.UsageInfo
-import com.intellij.usages.impl.rules.UsageType
 import java.nio.file.Files
 
 /** Find Usages and Rename, with `inko doc` output supplied by a fake. */

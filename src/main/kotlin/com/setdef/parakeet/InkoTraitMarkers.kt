@@ -5,7 +5,6 @@ import com.intellij.codeInsight.daemon.RelatedItemLineMarkerProvider
 import com.intellij.codeInsight.navigation.NavigationGutterIconBuilder
 import com.intellij.icons.AllIcons
 import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiFile
 import javax.swing.Icon
 import com.setdef.parakeet.InkoDefinitionKind as Kind
 

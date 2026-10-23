@@ -11,6 +11,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
+import com.intellij.ui.EditorNotifications
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -190,13 +191,14 @@ class InkoDocIndex(private val project: Project, private val scope: CoroutineSco
     }
 }
 
-/** Rebuilds the index when Inko files or manifests change. */
+/** Rebuilds the index when Inko files or manifests change, and re-checks banners when a manifest does. */
 class InkoDocIndexFileListener(private val project: Project) : BulkFileListener {
     override fun after(events: List<VFileEvent>) {
         val index = InkoDocIndex.getInstance(project)
-        events.map { it.path }
-            .filter { it.endsWith(".${Inko.EXTENSION}") || it.endsWith("/${Inko.MANIFEST}") }
+        val paths = events.map { it.path }
+        paths.filter { it.endsWith(".${Inko.EXTENSION}") || it.endsWith("/${Inko.MANIFEST}") }
             .forEach { index.invalidate(Path.of(it)) }
+        if (paths.any { it.endsWith("/${Inko.MANIFEST}") }) EditorNotifications.getInstance(project).updateAllNotifications()
     }
 }
 

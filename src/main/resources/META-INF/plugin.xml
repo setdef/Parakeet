@@ -58,6 +58,7 @@
         <projectService serviceInterface="com.setdef.parakeet.InkoCli" serviceImplementation="com.setdef.parakeet.InkoProjectCli"/>
         <applicationService serviceInterface="com.setdef.parakeet.IvmCli" serviceImplementation="com.setdef.parakeet.IvmProcessCli"/>
         <editorNotificationProvider implementation="com.setdef.parakeet.InkoMissingBanner"/>
+        <editorNotificationProvider implementation="com.setdef.parakeet.InkoRequiredVersionBanner"/>
 
         <externalAnnotator language="Inko" implementationClass="com.setdef.parakeet.InkoCheckAnnotator"/>
         <formattingService implementation="com.setdef.parakeet.InkoFormattingService"/>

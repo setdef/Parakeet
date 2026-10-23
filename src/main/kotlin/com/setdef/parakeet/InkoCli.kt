@@ -11,7 +11,9 @@ import com.intellij.openapi.project.Project
 import com.intellij.util.concurrency.AppExecutorUtil
 import java.io.IOException
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 
 data class InkoCliResult(val exitCode: Int, val stdout: String, val stderr: String, val interrupted: Boolean) {
     val succeeded: Boolean get() = exitCode == 0 && !interrupted
@@ -39,6 +41,10 @@ interface InkoCli {
     ): InkoCliResult?
 
     val isAvailable: Boolean get() = commandLine(emptyList(), null) != null
+
+    /** The version `inko --version` reports (e.g. `0.21.1`), or null when it can't be run. */
+    fun version(): String? =
+        run(listOf("--version"), null, timeoutMs = 10_000)?.takeIf { it.succeeded }?.stdout?.trim()?.removePrefix("inko ")?.takeIf { it.isNotEmpty() }
 
     companion object {
         fun getInstance(project: Project): InkoCli = project.service()
@@ -77,8 +83,17 @@ open class InkoProcessCli(private val executable: () -> Path?) : InkoCli {
         return InkoCliResult(output.exitCode, output.stdout, output.stderr, output.isTimeout || output.isCancelled)
     }
 
+    /** Cached per executable (and its modification time), since banners ask often. */
+    override fun version(): String? {
+        val inko = executable() ?: return null
+        val key = inko to Files.getLastModifiedTime(inko).toMillis()
+        VERSIONS[key]?.let { return it }
+        return super.version()?.also { VERSIONS[key] = it }
+    }
+
     private companion object {
         val LOG = logger<InkoProcessCli>()
+        val VERSIONS = ConcurrentHashMap<Pair<Path, Long>, String>()
     }
 }
 

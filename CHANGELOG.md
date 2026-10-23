@@ -5,9 +5,11 @@
 ### Added
 
 - Inko code style (Settings | Editor | Code Style | Inko), defaulting to two-space indentation like `inko fmt`, and smart indentation when typing: Enter indents inside blocks (including between braces), and closing brackets line up with the line that opened them.
+- A banner when `inko.pkg` requires a newer Inko (`require inko X`) than the project uses, offering to switch to an installed ivm version that's new enough, or to install one.
 
 ### Fixed
 
+- Installing Inko from the missing-inko banner could freeze the IDE while ivm fetched its list of versions.
 - Opening a project logged "Read access is allowed from inside read-action only" from Parakeet's startup indexing.
 - Go to definition, quick documentation, Go to Class/Symbol, and completion no longer go stale while the project doesn't compile, or before a file is saved: definitions in edited or unsaved files are read from source, and a project that doesn't compile still gets the standard library and its dependencies.
 

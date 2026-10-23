@@ -100,6 +100,9 @@ object Ivm {
     /** Sorts version strings like "0.9.0" and "0.10.0" numerically, newest first. */
     fun newestFirst(versions: List<String>): List<String> = versions.sortedWith(VERSION_ORDER.reversed())
 
+    /** Whether [version] is [minimum] or newer, comparing numerically (0.10.0 is newer than 0.9.0). */
+    fun isAtLeast(version: String, minimum: String): Boolean = VERSION_ORDER.compare(version, minimum) >= 0
+
     private val VERSION_ORDER = Comparator<String> { a, b ->
         val left = a.split('.').map { it.toIntOrNull() ?: 0 }
         val right = b.split('.').map { it.toIntOrNull() ?: 0 }

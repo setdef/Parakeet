@@ -12,6 +12,7 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.ui.Messages
 import com.intellij.ui.EditorNotifications
 
 /** The `ivm` command (Inko's version manager), as a seam so tests can fake it. */
@@ -32,6 +33,23 @@ object InkoIvm {
     fun knownVersions(): List<String> {
         val result = IvmCli.getInstance().run(listOf("known"), null, timeoutMs = 30_000)?.takeIf { it.succeeded } ?: return emptyList()
         return Ivm.newestFirst(result.stdout.lines().map { it.trim() }.filter { it.isNotEmpty() })
+    }
+
+    /** [knownVersions] behind a modal progress dialog, for UI actions (it fetches ivm's release list). */
+    fun knownVersionsWithProgress(project: Project?): List<String> =
+        ProgressManager.getInstance().runProcessWithProgressSynchronously<List<String>, RuntimeException>(
+            { knownVersions() }, "Finding Inko versions", true, project,
+        )
+
+    /** Asks before installing (it builds from source), then installs [version] and calls [onSuccess]. */
+    fun confirmAndInstall(project: Project, version: String, onSuccess: () -> Unit = {}) {
+        val answer = Messages.showYesNoDialog(
+            project,
+            "Install Inko $version with ivm?\n\nivm builds Inko from source, which needs Rust and LLVM 18 and can take several minutes.",
+            "Install Inko",
+            Messages.getQuestionIcon(),
+        )
+        if (answer == Messages.YES) install(project, version, onSuccess)
     }
 
     /**

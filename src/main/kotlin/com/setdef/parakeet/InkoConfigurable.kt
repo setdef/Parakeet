@@ -3,7 +3,6 @@ package com.setdef.parakeet
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.BoundConfigurable
-import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.Messages
@@ -78,9 +77,7 @@ class InkoConfigurable(private val project: Project) : BoundConfigurable("Inko")
     }
 
     private fun installVersion() {
-        val known = ProgressManager.getInstance().runProcessWithProgressSynchronously<List<String>, RuntimeException>(
-            { InkoIvm.knownVersions() }, "Finding Inko versions", true, project,
-        )
+        val known = InkoIvm.knownVersionsWithProgress(project)
         val installable = known - Ivm.installedVersions().toSet()
         if (installable.isEmpty()) {
             Messages.showInfoMessage(project, "Every Inko version ivm knows about is already installed.", "Install Inko")

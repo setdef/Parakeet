@@ -55,4 +55,12 @@ object Inko {
         val lineEnd = document.getLineEndOffset(lineIndex)
         return (lineStart + column - 1).coerceIn(lineStart, lineEnd)
     }
+
+    /** The minimum Inko version a project's `inko.pkg` requires (`require inko X`), if any. */
+    fun requiredVersion(root: Path): String? {
+        val manifest = root.resolve(MANIFEST).takeIf(Files::isRegularFile) ?: return null
+        return Files.readAllLines(manifest).firstNotNullOfOrNull { REQUIRE_INKO.find(it)?.groupValues?.get(1) }
+    }
+
+    private val REQUIRE_INKO = Regex("""^\s*require\s+inko\s+(\S+)""")
 }

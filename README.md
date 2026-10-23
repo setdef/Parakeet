@@ -163,7 +163,10 @@ compiler, so it always agrees with your installed Inko version.
 - **Type Hierarchy** uses the trait implementations `inko doc` reports, and the
   traits each trait requires in its signature.
 - **Dependencies need syncing** when `dep/hash` isn't the BLAKE3 hash of
-  `inko.pkg`, which is how `inko` itself decides.
+  `inko.pkg`, which is how `inko` itself decides. Errors, indexing, and test
+  runs never sync (`inko` would otherwise sync, and need the network, in
+  each mirror): they use the project's `dep/` as it is, and a banner says
+  when it's out of date or was never synced.
 - **Introduce and Inline Variable, Introduce Constant, Move Statement, and
   Smart Enter** work from the file's tokens, following Inko's syntax
   reference: statements end at a line break unless the next line continues

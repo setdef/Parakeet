@@ -29,7 +29,8 @@ class InkoMirrorTest : TestCase() {
 
     fun testClosingATemporaryMirrorNeverDeletesTheProject() {
         val directory = InkoMirror.create(root).use { mirror ->
-            assertTrue(Files.isSymbolicLink(mirror.directory.resolve("dep")))
+            // The project's packages are linked into the mirror's own dep/, never copied or moved.
+            assertTrue(Files.isSymbolicLink(mirror.directory.resolve("dep/pkg")))
             mirror.directory
         }
         assertFalse(Files.exists(directory))

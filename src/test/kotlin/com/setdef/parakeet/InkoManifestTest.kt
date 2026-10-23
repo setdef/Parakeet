@@ -6,6 +6,7 @@ import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.toolbar.floating.FloatingToolbarComponent
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.util.Disposer
+import com.intellij.ui.EditorNotificationPanel
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -152,6 +153,26 @@ class InkoManifestTest : InkoTestCase(onDisk = true) {
         Files.createDirectories(root.resolve("dep"))
         Files.writeString(root.resolve("dep/hash"), InkoBlake3.hex(idoc.toByteArray()))
         assertNull(InkoDependenciesBanner().collectNotificationData(project, file))
+    }
+
+    // Checks never sync (they'd need the network), so the banner says what they can see instead.
+    fun testTheBannerSaysWhetherTheProjectWasEverSynced() {
+        Files.writeString(root.resolve("inko.pkg"), idoc)
+        val file = myFixture.addFileToProject("src/main.inko", "fn main {}\n").virtualFile
+        myFixture.configureFromExistingVirtualFile(file)
+        val editor = FileEditorManager.getInstance(project).getSelectedEditor(file)!!
+        fun banner() = (InkoDependenciesBanner().collectNotificationData(project, file)!!.apply(editor) as EditorNotificationPanel).text
+
+        assertEquals(
+            "The dependencies in inko.pkg have never been synced, so errors and navigation can't see them.",
+            banner(),
+        )
+        Files.createDirectories(root.resolve("dep"))
+        Files.writeString(root.resolve("dep/hash"), InkoBlake3.hex("# older\n$idoc".toByteArray()))
+        assertEquals(
+            "inko.pkg changed since the dependencies were last synced; errors and navigation use the synced ones.",
+            banner(),
+        )
     }
 
     private class RecordingToolbar : FloatingToolbarComponent {

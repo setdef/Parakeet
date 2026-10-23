@@ -33,6 +33,7 @@ import com.intellij.ui.EditorNotifications
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
+import java.nio.file.Files
 import java.nio.file.Path
 import java.util.function.Function
 import javax.swing.JComponent
@@ -219,7 +220,12 @@ class InkoDependenciesBanner : EditorNotificationProvider {
         if (!InkoDependencySync.needed(root)) return null
         return Function { editor ->
             EditorNotificationPanel(editor, EditorNotificationPanel.Status.Warning).apply {
-                text = "The dependencies in inko.pkg aren't synced."
+                // Checks and indexing never sync (that needs the network): they use dep/ as it is.
+                text = if (Files.isRegularFile(root.resolve("dep/hash"))) {
+                    "inko.pkg changed since the dependencies were last synced; errors and navigation use the synced ones."
+                } else {
+                    "The dependencies in inko.pkg have never been synced, so errors and navigation can't see them."
+                }
                 icon(AllIcons.Actions.BuildLoadChanges)
                 createActionLabel("Sync dependencies") { InkoDependencies.run(project, root, "Syncing Inko dependencies", listOf("sync")) }
             }

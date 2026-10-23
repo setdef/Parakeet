@@ -76,9 +76,25 @@ class InkoMirror private constructor(val root: Path, val directory: Path, privat
         }
         // inko only treats test/ as part of a project when there's a src/ beside it.
         Files.createDirectories(directory.resolve("src"))
-        root.resolve(Inko.MANIFEST).takeIf(Files::isRegularFile)?.let(::link)
-        root.resolve("dep").takeIf(Files::isDirectory)?.let(::link)
+        val manifest = root.resolve(Inko.MANIFEST).takeIf(Files::isRegularFile)?.also(::link)
+        if (manifest != null) dependencies(manifest)
         if (file != null && text != null) replace(file, text)
+    }
+
+    /**
+     * The project's installed dependencies, as they are. `inko` syncs
+     * (running `git`, maybe over the network) whenever `dep/hash` isn't the
+     * hash of `inko.pkg`, so the mirror gets its own `dep` directory: links to
+     * each package the project has, and a `hash` that matches the manifest.
+     * Packages that were never installed are simply missing; the editor banner
+     * says why (see [InkoDependencySync]).
+     */
+    private fun dependencies(manifest: Path) {
+        val dep = Files.createDirectories(directory.resolve("dep"))
+        root.resolve("dep").takeIf(Files::isDirectory)?.listDirectoryEntries()
+            ?.filter { it.fileName.toString() != "hash" }
+            ?.forEach { Files.createSymbolicLink(dep.resolve(it.fileName.toString()), it) }
+        Files.writeString(dep.resolve("hash"), InkoBlake3.hex(Files.readAllBytes(manifest)))
     }
 
     private fun link(source: Path) {

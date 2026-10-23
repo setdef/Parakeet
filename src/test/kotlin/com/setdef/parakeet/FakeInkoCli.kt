@@ -46,6 +46,13 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
 
     override fun createTempDirTestFixture(): TempDirTestFixture = if (onDisk) TempDirTestFixtureImpl() else super.createTempDirTestFixture()
 
+    /** Makes the (on-disk) test directory part of the project's content, as a real project's files are. */
+    protected fun putTempDirInProjectContent() {
+        val root = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByPath(myFixture.tempDirPath)!!
+        com.intellij.testFramework.PsiTestUtil.addContentRoot(module, root)
+        com.intellij.openapi.util.Disposer.register(testRootDisposable) { com.intellij.testFramework.PsiTestUtil.removeContentEntry(module, root) }
+    }
+
     protected fun useFakeInko(fake: FakeInkoCli): FakeInkoCli {
         project.replaceService(InkoCli::class.java, fake, testRootDisposable)
         return fake

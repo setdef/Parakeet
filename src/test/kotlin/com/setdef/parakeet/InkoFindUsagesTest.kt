@@ -1,12 +1,10 @@
 package com.setdef.parakeet
 
-import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.rename.RenamePsiElementProcessor
-import com.intellij.testFramework.PsiTestUtil
 import com.intellij.usageView.UsageInfo
 import com.intellij.usages.impl.rules.UsageType
 import java.nio.file.Files
@@ -54,9 +52,7 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
         // Like a real project: the files are in the project's content, so project-wide searches see them.
-        val root = LocalFileSystem.getInstance().refreshAndFindFileByPath(myFixture.tempDirPath)!!
-        PsiTestUtil.addContentRoot(module, root)
-        Disposer.register(testRootDisposable) { PsiTestUtil.removeContentEntry(module, root) }
+        putTempDirInProjectContent()
         myFixture.addFileToProject("src/app/util.inko", util)
         myFixture.addFileToProject("src/main.inko", main)
         useFakeInko(FakeInkoDoc.cli { mirror ->

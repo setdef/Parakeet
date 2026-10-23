@@ -48,6 +48,7 @@ class InkoIndexOnStartup : ProjectActivity {
         val roots = smartReadAction(project) { InkoProjectRoots.find(project) }
         val index = InkoDocIndex.getInstance(project)
         roots.forEach { index.symbols(it) }
+        InkoLibraries.getInstance(project).refresh()
     }
 }
 

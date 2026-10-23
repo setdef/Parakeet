@@ -203,6 +203,10 @@ class InkoDocIndexFileListener(private val project: Project) : BulkFileListener 
         paths.filter { it.endsWith(".${Inko.EXTENSION}") || it.endsWith("/${Inko.MANIFEST}") }
             .forEach { index.invalidate(Path.of(it)) }
         if (paths.any { it.endsWith("/${Inko.MANIFEST}") }) EditorNotifications.getInstance(project).updateAllNotifications()
+        // A new project, or dependencies synced or removed: libraries (and exclusions) may change.
+        if (paths.any { it.endsWith("/${Inko.MANIFEST}") || it.endsWith("/dep") }) {
+            ApplicationManager.getApplication().invokeLater({ InkoLibraries.getInstance(project).refresh() }, project.disposed)
+        }
     }
 }
 

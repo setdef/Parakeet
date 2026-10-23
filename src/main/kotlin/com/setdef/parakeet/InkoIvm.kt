@@ -112,6 +112,7 @@ object InkoIvm {
                 if (project.isDisposed) continue
                 DaemonCodeAnalyzer.getInstance(project).settingsChanged()
                 InkoDocIndex.getInstance(project).invalidateAll()
+                InkoLibraries.getInstance(project).refresh()
                 EditorNotifications.getInstance(project).updateAllNotifications()
             }
         }

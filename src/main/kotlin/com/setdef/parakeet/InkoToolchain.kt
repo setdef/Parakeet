@@ -117,6 +117,9 @@ object Ivm {
 class InkoProjectSettings : SimplePersistentStateComponent<InkoProjectSettings.State>(State()) {
     class State : BaseState() {
         var toolchain by string()
+
+        /** Inko projects whose `dep` and `build` Parakeet has excluded (once, so un-excluding sticks). */
+        var excludedRoots by stringSet()
     }
 
     var toolchain: InkoToolchain

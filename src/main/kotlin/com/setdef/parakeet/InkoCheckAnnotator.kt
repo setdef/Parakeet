@@ -6,6 +6,7 @@ import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import java.nio.file.Path
@@ -18,6 +19,8 @@ class InkoCheckAnnotator : ExternalAnnotator<InkoCheckAnnotator.Input, List<Inko
 
     override fun collectInformation(file: PsiFile): Input? {
         val path = Inko.pathOf(file.virtualFile) ?: return null
+        // The standard library and dependencies aren't checked as if they were the project's code.
+        if (ProjectFileIndex.getInstance(file.project).isInLibrary(file.virtualFile)) return null
         val document = file.viewProvider.document ?: return null
         return Input(file.project, path, document.text)
     }

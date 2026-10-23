@@ -78,6 +78,7 @@
                                               isEnabledByDefault="true" group="PARAMETERS_GROUP"
                                               providerId="parakeet.inko.parameters" bundle="messages.ParakeetBundle"
                                               nameKey="inlay.parameters.name" descriptionKey="inlay.parameters.description"/>
+        <additionalLibraryRootsProvider implementation="com.setdef.parakeet.InkoLibraryRootsProvider"/>
         <lang.findUsagesProvider language="Inko" implementationClass="com.setdef.parakeet.InkoFindUsagesProvider"/>
         <referencesSearch implementation="com.setdef.parakeet.InkoModuleReferencesSearcher"/>
         <usageTypeProvider implementation="com.setdef.parakeet.InkoUsageTypeProvider"/>

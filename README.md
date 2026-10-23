@@ -330,6 +330,7 @@ only accepts automated uploads for plugins that already exist), then add a
 Audits and session reports, oldest first:
 
 - [Audit against Inko v0.21.1](docs/history/AUDIT.md)
+- [Guardrails, and trusting the compiler's output](docs/history/SESSION-guardrails-and-compiler-output.md)
 
 ## Icon
 

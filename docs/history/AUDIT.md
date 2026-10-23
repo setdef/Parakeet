@@ -318,6 +318,9 @@ Compiles. Consequences:
 
 ### 1.8 Compiler columns are grapheme clusters, but Parakeet reads them as UTF-16 offsets (Medium)
 
+**Status: confirmed and fixed in 5f27654.** See
+[SESSION-guardrails-and-compiler-output.md](SESSION-guardrails-and-compiler-output.md).
+
 **What Parakeet assumes.** `offset = lineStart + column - 1`
 (`P/Inko.kt:52-57`). This is used for diagnostics
 (`P/InkoCheckAnnotator.kt:42-46`), quick-fix anchors, Inspect Code
@@ -522,6 +525,9 @@ like these.
 
 ### 2.1 Every check and index rebuild may run a full `inko pkg sync` in a throwaway mirror (Medium)
 
+**Status: confirmed and fixed in abe590c.** See
+[SESSION-guardrails-and-compiler-output.md](SESSION-guardrails-and-compiler-output.md).
+
 **What Parakeet assumes.**
 
 - `inko check` and `inko doc` are read-only.
@@ -558,6 +564,9 @@ The same silent failure happens when `inko.pkg` requires a newer Inko
 annotator doesn't explain it.
 
 ### 2.2 One malformed diagnostic drops all of them (Low–Medium)
+
+**Status: confirmed and fixed in bc5b679.** See
+[SESSION-guardrails-and-compiler-output.md](SESSION-guardrails-and-compiler-output.md).
 
 **What Parakeet assumes.** `inko check --format json` output is valid JSON.
 If parsing fails, Parakeet returns no diagnostics (`P/InkoDiagnostics.kt:40-46`).

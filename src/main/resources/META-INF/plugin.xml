@@ -86,6 +86,7 @@
         <localInspection language="Inko" shortName="InkoEmptyParentheses" displayName="Parentheses in a call without arguments"
                          groupName="Inko" enabledByDefault="true" level="WEAK WARNING"
                          implementationClass="com.setdef.parakeet.InkoEmptyParenthesesInspection"/>
+        <codeInsight.template.postfixTemplateProvider language="Inko" implementationClass="com.setdef.parakeet.InkoPostfixTemplateProvider"/>
         <codeInsight.implementMethod language="Inko" implementationClass="com.setdef.parakeet.InkoImplementMethodsHandler"/>
         <codeInsight.overrideMethod language="Inko" implementationClass="com.setdef.parakeet.InkoOverrideMethodsHandler"/>
         <lang.inspectionSuppressor language="Inko" implementationClass="com.setdef.parakeet.InkoInspectionSuppressor"/>

@@ -31,6 +31,24 @@ class InkoIntroduceVariableTest : InkoTestCase() {
         assertNull(select("let x"))
     }
 
+    // Inko's binary operators group left to right with one precedence: `60 - 60` in `a - 60 - 60` is `(a - 60) - 60`.
+    fun testPartOfAnOperatorChainIsntAnExpression() {
+        val text = "fn a(total: Int) -> Int {\n  let x = 60 - 60\n  total - 60 - 60 == 1 - 2\n}\n"
+        val s = stream(text)
+        fun select(part: String, nth: Int = 0): String? {
+            var start = -1
+            repeat(nth + 1) { start = text.indexOf(part, start + 1) }
+            return InkoIntroduceVariable.selected(s, TextRange(start, start + part.length))?.let { text.substring(it.startOffset, it.endOffset) }
+        }
+        assertEquals("60 - 60", select("60 - 60"))
+        assertNull(select("60 - 60", nth = 1))
+        assertNull(select("1 - 2"))
+        assertEquals("total - 60", select("total - 60"))
+        // Only the occurrence after `=` is one; the one in the chain isn't.
+        val first = text.indexOf("60 - 60")
+        assertEquals(listOf(first), InkoIntroduceVariable.occurrences(s, TextRange(first, first + 7)).map { it.startOffset })
+    }
+
     fun testFindsTheSameExpressionInTheMethodOnly() {
         val text = "fn a {\n  foo.bar + foo.bar(1)\n  x.foo.bar\n  foo.bar\n}\n\nfn b {\n  foo.bar\n}\n"
         val s = stream(text)

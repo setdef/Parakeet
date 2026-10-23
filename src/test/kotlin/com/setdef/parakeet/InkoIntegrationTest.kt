@@ -76,7 +76,7 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
 
     fun testIntroducedParametersStillCompile() {
         putTempDirInProjectContent()
-        val util = "let pub LIMIT = 10\n\nfn pub clamp(value: Int) -> Int {\n  if value > LIMIT * 2 { LIMIT * 2 } else { value }\n}\n"
+        val util = "let pub LIMIT = 10\n\nfn pub clamp(value: Int) -> Int {\n  let doubled = LIMIT * 2\n  if value > doubled { LIMIT * 2 } else { value }\n}\n"
         myFixture.addFileToProject("src/app/util.inko", util)
         myFixture.addFileToProject("src/main.inko", "import app.util (clamp)\n\nfn total -> Int {\n  clamp(5) + clamp(value: 7)\n}\n")
         val file = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/app/util.inko"))!!

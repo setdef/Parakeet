@@ -11,7 +11,8 @@ class InkoIntroduceParameterTest : InkoTestCase(onDisk = true) {
         |let pub MAX = 20
         |
         |fn pub clamp(value: Int) -> Int {
-        |  if value > LIMIT * 2 { LIMIT * 2 } else { value.min(MAX + 1) }
+        |  let doubled = LIMIT * 2
+        |  if value > doubled { LIMIT * 2 } else { value.min(MAX + 1) }
         |}
         |
         |type pub Box {
@@ -87,7 +88,7 @@ class InkoIntroduceParameterTest : InkoTestCase(onDisk = true) {
         assertEquals("max", plan.name)
         assertEquals(emptySet<String>(), plan.privateNames)
         InkoIntroduceParameter.processor(project, plan, "ceiling", "Int", replaceAll = true).run()
-        assertTrue(file("src/app/util.inko").text.contains("fn pub clamp(value: Int, ceiling: Int) -> Int {\n  if value > LIMIT * 2 { LIMIT * 2 } else { value.min(ceiling) }\n}"))
+        assertTrue(file("src/app/util.inko").text.contains("fn pub clamp(value: Int, ceiling: Int) -> Int {\n  let doubled = LIMIT * 2\n  if value > doubled { LIMIT * 2 } else { value.min(ceiling) }\n}"))
         // Callers in other modules import what the expression names.
         assertEquals(
             "import app.util (clamp, MAX)\n\nfn run -> Int {\n  clamp(5, MAX + 1) + clamp(value: 7, ceiling: MAX + 1)\n}\n",
@@ -109,11 +110,11 @@ class InkoIntroduceParameterTest : InkoTestCase(onDisk = true) {
         com.intellij.refactoring.BaseRefactoringProcessor.ConflictsInTestsException.withIgnoredConflicts<RuntimeException> {
             InkoIntroduceParameter.processor(project, plan, "limit", "Int", replaceAll = false).run()
         }
-        assertTrue(file("src/app/util.inko").text.contains("  if value > LIMIT * 2 { limit } else { value.min(MAX + 1) }"))
+        assertTrue(file("src/app/util.inko").text.contains("  let doubled = LIMIT * 2\n  if value > doubled { limit } else { value.min(MAX + 1) }"))
     }
 
     fun testRefusesExpressionsCallersCantEvaluate() {
-        assertTrue(plan("value > LIMIT").exceptionOrNull()!!.message!!.contains("`value`"))
+        assertTrue(plan("value > doubled").exceptionOrNull()!!.message!!.contains("`value`"))
         assertTrue(plan("@size", nth = 1).exceptionOrNull()!!.message!!.contains("@size"))
         val selfMessage = plan("self.extra").exceptionOrNull()?.message
         assertTrue(selfMessage.toString(), selfMessage!!.contains("`self`"))

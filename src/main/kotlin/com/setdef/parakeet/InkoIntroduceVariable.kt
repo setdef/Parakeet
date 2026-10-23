@@ -36,7 +36,38 @@ object InkoIntroduceVariable {
         val tail = stream.tokens[last]
         if (head.type == InkoTokens.DOT || head.type == InkoTokens.COMMA || head.isOperator("=") || tail.isOperator() || tail.type == InkoTokens.DOT || tail.type == InkoTokens.COMMA) return null
         if (head.isKeyword("let", "fn", "type", "trait", "impl", "import", "return", "throw", "case")) return null
+        if (!standsAlone(stream, first, last)) return null
         return TextRange(head.start, tail.end)
+    }
+
+    /**
+     * Whether tokens [first]..[last] are a whole expression where they are.
+     * Inko's binary operators share one precedence and group left to right, so
+     * `b - c` in `a - b - c` is part of `(a - b) - c`, not an expression of its
+     * own: one containing an operator can't follow another operator.
+     */
+    fun standsAlone(stream: InkoTokenStream, first: Int, last: Int): Boolean {
+        val tokens = stream.tokens
+        var depth = 0
+        var hasOperator = false
+        for (i in first..last) {
+            val token = tokens[i]
+            if (token.opens) depth++ else if (token.closes) depth--
+            // A leading `-` or `!` is a prefix, not a binary operator.
+            else if (depth == 0 && i > first && (token.isOperator() || token.isKeyword("and", "or", "as"))) hasOperator = true
+        }
+        if (!hasOperator) return true
+        val before = tokens.getOrNull(first - 1) ?: return true
+        if (before.isKeyword("and", "or", "as")) return false
+        if (!before.isOperator()) return true
+        val beforeThat = tokens.getOrNull(first - 2)?.takeIf { it.end == before.start && it.isOperator() }
+        return when {
+            // `=` and `:=` assign; `==`, `!=`, `<=`, and `>=` compare.
+            before.text == "=" -> beforeThat == null || beforeThat.text == ":"
+            // A match arm's `->`.
+            before.text == ">" -> beforeThat?.text == "-"
+            else -> false
+        }
     }
 
     /** The expressions around [offset], innermost first: `foo`, `foo.bar`, `foo.bar(1).baz`. */
@@ -103,6 +134,7 @@ object InkoIntroduceVariable {
                 i + pattern.size <= tokens.size &&
                 pattern.indices.all { tokens[i + it].text == pattern[it] } &&
                 tokens.getOrNull(i - 1)?.type != InkoTokens.DOT &&
+                standsAlone(stream, i, i + pattern.size - 1) &&
                 // Not a call of it: `foo.bar` in `foo.bar(1)` calls `bar` with arguments (in `foo.bar.baz`, it's still `foo.bar`).
                 tokens.getOrNull(i + pattern.size)?.let { next ->
                     !((next.type == InkoTokens.LPAREN || next.type == InkoTokens.LBRACKET) && next.start == tokens[i + pattern.size - 1].end)

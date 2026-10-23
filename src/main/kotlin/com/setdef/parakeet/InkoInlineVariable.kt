@@ -22,7 +22,8 @@ object InkoInlineVariable {
     class Plan(val expression: String, val declaration: TextRange, val uses: List<Pair<TextRange, Boolean>>)
 
     // Operators and keywords that bind loosely: Inko's binary operators all share one precedence (left to right),
-    // `and`/`or` bind tighter than them, and `as` binds like them. Prefixes bind tighter than a following `.call`.
+    // `and`/`or` bind more loosely than them (`a or b == c` is `a or (b == c)`), and `as` binds like them. Treating them
+    // all as loose only ever adds parentheses. Prefixes bind tighter than a following `.call`.
     private fun isLoose(token: InkoToken) = token.isOperator() || token.isKeyword("and", "or", "as")
 
     private fun isPrefix(token: InkoToken) = token.isOperator("!", "-") || token.isKeyword("ref", "mut", "move", "recover", "try", "throw", "return")

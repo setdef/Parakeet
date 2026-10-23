@@ -146,12 +146,14 @@ compiler, so it always agrees with your installed Inko version.
   traits each trait requires in its signature.
 - **Dependencies need syncing** when `dep/hash` isn't the BLAKE3 hash of
   `inko.pkg`, which is how `inko` itself decides.
-- **Introduce and Inline Variable, Move Statement, and Smart Enter** work from
-  the file's tokens, following Inko's syntax reference: statements end at a
-  line break unless the next line continues them (e.g. starts with `.`), and
-  inlining parenthesizes values whose operators would otherwise bind
-  differently (Inko's binary operators share one precedence, and `and`/`or`
-  bind tighter).
+- **Introduce and Inline Variable, Introduce Constant, Move Statement, and
+  Smart Enter** work from the file's tokens, following Inko's syntax
+  reference: statements end at a line break unless the next line continues
+  them (e.g. starts with `.`), and inlining parenthesizes values whose
+  operators would otherwise bind differently (Inko's binary operators share one
+  precedence and group left to right, and `and`/`or` bind more loosely). For
+  the same reason, part of an operator chain (`60 - 60` in `total - 60 - 60`)
+  isn't offered as an expression.
 - **Change Signature, Introduce Parameter, Extract Method, and Inline
   Method** rewrite calls from their tokens, following Inko's rules: no default
   arguments (so new parameters need a value for calls to pass), named

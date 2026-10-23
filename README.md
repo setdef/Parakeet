@@ -120,7 +120,11 @@ compiler, so it always agrees with your installed Inko version.
 - **Find Usages and Rename** search the IDE's word index for each name, then
   keep the occurrences that resolve to the declaration. A method call whose
   receiver type isn't known resolves to every candidate, so it's listed as a
-  possible usage.
+  possible usage. **Call Hierarchy, usage counts, and Safe Delete** build on
+  the same search (usage counts stop at 99+). **Moving files** rewrites the
+  import paths of the modules that move.
+- **Type Hierarchy** uses the trait implementations `inko doc` reports, and the
+  traits each trait requires in its signature.
 - **Dependencies need syncing** when `dep/hash` isn't the BLAKE3 hash of
   `inko.pkg`, which is how `inko` itself decides.
 - **Introduce and Inline Variable, Move Statement, and Smart Enter** work from
@@ -133,11 +137,10 @@ compiler, so it always agrees with your installed Inko version.
   (`invalid-symbol`, `unused-symbol`, `unused-result`); auto-import finds
   candidates in the `inko doc` definitions.
 - **Tests** run the way `inko test` does (from the project root), but through
-  a program Parakeet generates that reports each test to the IDE. It takes one
-  name filter, so rerunning failed tests builds it once and runs it once per
-  failed test. It's built in
+  a program Parakeet generates that reports each test to the IDE. It's built in
   a mirror of the project in the IDE's system directory (with its own build
-  cache), so nothing is added to your project.
+  cache), so nothing is added to your project. It takes one name filter, so
+  rerunning failed tests builds it once and runs it once per failed test.
 - **The Structure view, breadcrumbs, folding, indentation, and usage
   highlighting** come from the file's own tokens, so they follow unsaved edits
   and work without `inko`.
@@ -206,7 +209,7 @@ Dependabot proposes weekly updates to Gradle dependencies and GitHub Actions.
 
 ### Releasing
 
-Pushing a tag like `v0.4.0` (matching `version` in `gradle.properties`) runs
+Pushing a tag like `v0.8.0` (matching `version` in `gradle.properties`) runs
 [`release.yml`](.github/workflows/release.yml): the full build above, then it
 signs the plugin and creates a GitHub Release with the signed zip and
 `updatePlugins.xml` (the plugin repository file IDEs check for updates). If a

@@ -425,6 +425,15 @@ Compiles. Consequences:
 
 ### 1.10 Type Hierarchy can't find required traits from `inko doc` (Medium–Low)
 
+**Status: confirmed and fixed in <commit:1.10>.** `InkoRequiredTraitsTest`
+(with `inko doc`'s real shape, `trait pub Debug` at line 1, column 1)
+failed before the fix, and so did
+`InkoIntegrationTest.testTypeHierarchyShowsRequiredTraitsFromInkoDoc`
+against the real compiler. Since the doc JSON doesn't carry requirements at
+all, the index takes each trait's header from its declaration in source.
+Reading requirements also skips type parameters now, whose bounds
+(`Debug[T: Show]`) aren't requirements.
+
 **What Parakeet assumes.** A trait's supertypes are parsed out of its
 signature after `:` (`P/InkoTypeHierarchy.kt:45-50` and
 `P/InkoTypeHierarchy.kt:54`). The test feeds the fake signature

@@ -1,5 +1,6 @@
 package com.setdef.parakeet
 
+import java.nio.file.Files
 import java.nio.file.Path
 import com.setdef.parakeet.InkoDefinitionKind as Kind
 
@@ -57,6 +58,30 @@ object InkoSourceDefinitions {
             }
         }
         return result
+    }
+
+    /**
+     * [definitions] with each trait's type taken from its declaration. `inko
+     * doc` writes `trait pub Debug`, leaving out what it requires
+     * (compiler/src/docs.rs, `traits`); the declaration has `: ToString`.
+     */
+    fun withTraitHeaders(definitions: List<InkoDefinition>): List<InkoDefinition> {
+        val headers = mutableMapOf<Path, Map<String, String>>()
+        return definitions.map { definition ->
+            if (definition.kind != Kind.TRAIT) return@map definition
+            val byName = headers.getOrPut(definition.file) {
+                val text = runCatching { Files.readString(definition.file) }.getOrNull() ?: return@getOrPut emptyMap()
+                InkoOutline.of(text).roots.filter { it.kind == InkoOutline.Kind.TRAIT }.associate { it.label to header(text, it) }
+            }
+            byName[definition.name]?.let { definition.copy(signature = it) } ?: definition
+        }
+    }
+
+    /** A declaration's text up to its body's `{`, on one line: `trait pub Debug: ToString + Format`. */
+    private fun header(text: CharSequence, node: InkoOutline.Node): String {
+        var end = node.nameOffset
+        while (end < node.range.endOffset && text[end] != '{') end++
+        return text.subSequence(node.range.startOffset, end).toString().replace(Regex("\\s+"), " ").trim()
     }
 
     private fun isStatic(text: CharSequence, node: InkoOutline.Node): Boolean =

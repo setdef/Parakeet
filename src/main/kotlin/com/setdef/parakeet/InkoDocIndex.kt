@@ -152,6 +152,7 @@ class InkoDocIndex(private val project: Project, private val scope: CoroutineSco
             val docs = mirror.directory.resolve("build").resolve("docs").takeIf(Files::isDirectory) ?: return null
             docs.listDirectoryEntries("*.json")
                 .flatMap { InkoDocParser.parse(Files.readString(it), mirror::toReal) }
+                .let(InkoSourceDefinitions::withTraitHeaders)
                 .filter { it.module != STAND_IN }
         }
 

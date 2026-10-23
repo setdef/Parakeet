@@ -44,7 +44,15 @@ object InkoTypeHierarchy {
     /** The traits a trait's signature requires: `Debug: ToString + Format[T]` gives ToString and Format. */
     fun requiredTraitNames(trait: InkoDefinition): List<String> {
         val signature = trait.signature ?: return emptyList()
-        val requirements = signature.substringAfter(':', "").substringBefore('{').trim()
+        // After the name and its type parameters (`Debug[T: Show]: Format`), whose bounds aren't requirements.
+        val afterParameters = signature.substringAfter(trait.name).let { rest ->
+            if (!rest.trimStart().startsWith("[")) rest else {
+                var depth = 0
+                val close = rest.indexOfFirst { c -> if (c == '[') depth++ else if (c == ']') depth--; c == ']' && depth == 0 }
+                if (close < 0) rest else rest.substring(close + 1)
+            }
+        }
+        val requirements = afterParameters.substringAfter(':', "").substringBefore('{').trim()
         if (requirements.isEmpty()) return emptyList()
         return requirements.split('+').map { it.trim().substringBefore('[').trim() }.filter { it.isNotEmpty() && it.first().isUpperCase() }
     }

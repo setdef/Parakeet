@@ -120,7 +120,16 @@ class InkoProjectSettings : SimplePersistentStateComponent<InkoProjectSettings.S
 
         /** Inko projects whose `dep` and `build` Parakeet has excluded (once, so un-excluding sticks). */
         var excludedRoots by stringSet()
+
+        /** The `cuttlebone` executable; empty means `cuttlebone` on PATH. */
+        var cuttlebone by string()
     }
+
+    var cuttlebone: String
+        get() = state.cuttlebone.orEmpty()
+        set(value) {
+            state.cuttlebone = value.trim().ifEmpty { null }
+        }
 
     var toolchain: InkoToolchain
         get() = InkoToolchain.fromId(state.toolchain)

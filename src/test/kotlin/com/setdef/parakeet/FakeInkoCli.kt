@@ -42,6 +42,24 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
     override fun setUp() {
         super.setUp()
         if (!realInko) useFakeInko(FakeInkoCli(available = false))
+        // No Cuttlebone unless a test sets one up: every other test checks Parakeet's own behaviour.
+        useCuttlebone(NO_CUTTLEBONE)
+    }
+
+    override fun tearDown() {
+        try {
+            useCuttlebone(NO_CUTTLEBONE)
+        } catch (e: Throwable) {
+            addSuppressedException(e)
+        } finally {
+            super.tearDown()
+        }
+    }
+
+    /** Uses the `cuttlebone` at [executable] (as the setting would), stopping any server already running. */
+    protected fun useCuttlebone(executable: String) {
+        InkoProjectSettings.getInstance(project).cuttlebone = executable
+        CuttleboneService.getInstance(project).reset()
     }
 
     override fun createTempDirTestFixture(): TempDirTestFixture = if (onDisk) TempDirTestFixtureImpl() else super.createTempDirTestFixture()
@@ -63,3 +81,6 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
         return fake
     }
 }
+
+/** A setting naming no executable, so no Cuttlebone starts. */
+const val NO_CUTTLEBONE = "/nonexistent/cuttlebone"

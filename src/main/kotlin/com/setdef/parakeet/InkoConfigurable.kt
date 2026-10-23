@@ -30,6 +30,7 @@ class InkoConfigurable(private val project: Project) : BoundConfigurable("Inko")
         custom = (current as? InkoToolchain.Custom) ?: InkoToolchain.Custom("")
         var selected: InkoToolchain = if (current is InkoToolchain.Custom) custom else current
         var customPath = custom.path
+        var cuttlebone = settings.cuttlebone
         val selectedIsIvmVersion = object : ComponentPredicate() {
             override fun invoke() = combo.selectedItem is InkoToolchain.IvmVersion
             override fun addListener(listener: (Boolean) -> Unit) {
@@ -67,14 +68,35 @@ class InkoConfigurable(private val project: Project) : BoundConfigurable("Inko")
                     browserLink("Install ivm to manage Inko versions", InkoIvm.IVM_DOCS)
                 }
             }
+            group("Cuttlebone") {
+                row("Executable:") {
+                    textFieldWithBrowseButton(
+                        FileChooserDescriptorFactory.createSingleFileNoJarsDescriptor().withTitle("Select Cuttlebone Executable"),
+                        project,
+                    )
+                        .bindText({ cuttlebone }, { cuttlebone = it })
+                        .align(AlignX.FILL)
+                        .comment(
+                            "Cuttlebone, a language server for Inko, gives the compiler's own types and definitions. " +
+                                "Leave empty to use <code>cuttlebone</code> on PATH. Without it, Parakeet guesses.",
+                        )
+                }
+                row { comment(CuttleboneService.getInstance(project).status?.message ?: "Cuttlebone starts when an Inko file opens.") }
+            }
             onApply {
+                val cuttleboneChanged = cuttlebone.trim() != settings.cuttlebone
+                settings.cuttlebone = cuttlebone
                 settings.toolchain = if (selected is InkoToolchain.Custom) InkoToolchain.Custom(customPath.trim()) else selected
                 DaemonCodeAnalyzer.getInstance(project).settingsChanged()
                 InkoDocIndex.getInstance(project).invalidateAll()
                 InkoIvm.toolchainsChanged()
+                // Cuttlebone checks with the toolchain's inko, so a new toolchain restarts it too.
+                if (cuttleboneChanged || toolchainChanged(current)) CuttleboneService.getInstance(project).settingsChanged()
             }
         }
     }
+
+    private fun toolchainChanged(before: InkoToolchain): Boolean = settings.toolchain != before
 
     private fun installVersion() {
         val known = InkoIvm.knownVersionsWithProgress(project)

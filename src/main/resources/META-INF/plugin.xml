@@ -41,6 +41,7 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.lsp</depends>
     <depends>org.jetbrains.plugins.textmate</depends>
     <depends optional="true" config-file="parakeet-spellchecker.xml">com.intellij.modules.spellchecker</depends>
 
@@ -75,6 +76,8 @@
         <applicationService serviceInterface="com.setdef.parakeet.IvmCli" serviceImplementation="com.setdef.parakeet.IvmProcessCli"/>
         <editorNotificationProvider implementation="com.setdef.parakeet.InkoMissingBanner"/>
         <editorNotificationProvider implementation="com.setdef.parakeet.InkoRequiredVersionBanner"/>
+
+        <platform.lsp.serverSupportProvider implementation="com.setdef.parakeet.CuttleboneSupportProvider"/>
 
         <externalAnnotator language="Inko" implementationClass="com.setdef.parakeet.InkoCheckAnnotator"/>
 

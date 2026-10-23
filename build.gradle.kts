@@ -43,7 +43,8 @@ intellijPlatform {
             }
         }
         ideaVersion {
-            sinceBuild = "252"
+            // 253 (2025.3) is the first release where every IntelliJ-based IDE has the LSP API (com.intellij.modules.lsp).
+            sinceBuild = "253"
             untilBuild = provider { null }
         }
     }
@@ -58,8 +59,7 @@ intellijPlatform {
     }
     pluginVerification {
         ides {
-            // Oldest supported (since-build 252) and the version we build against.
-            create(IntelliJPlatformType.IntellijIdeaCommunity, "2025.2.6.3")
+            // The version we build against.
             create(IntelliJPlatformType.IntellijIdea, "2026.2.3")
         }
     }

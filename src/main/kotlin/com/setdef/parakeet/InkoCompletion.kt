@@ -13,6 +13,7 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
+import org.eclipse.lsp4j.CompletionItemKind
 import java.nio.file.Files
 import com.setdef.parakeet.InkoDefinitionKind as Kind
 
@@ -117,6 +118,7 @@ private class InkoCompletions(private val file: PsiFile) {
     }
 
     private fun member(context: InkoCompletionContext.Member): List<LookupElement> {
+        compiledMembers()?.let { return it }
         val symbols = symbols ?: return emptyList()
         if (context.receiverType == InkoTokens.IDENTIFIER) {
             imports.moduleAliasedAs(context.receiver)?.let { module -> return symbols.topLevelIn(module).map(::definition) }
@@ -135,6 +137,29 @@ private class InkoCompletions(private val file: PsiFile) {
             imports.symbolNames + Regex("""\b[A-Z]\w*""").findAll(file.text).map { it.value }
         val preferred = inScope.toSet().flatMap { symbols.ownedBy(it, Kind.INSTANCE_METHOD) }
         return preferred.ifEmpty { symbols.names.flatMap { symbols.named(it, Kind.INSTANCE_METHOD) } }.map(::definition)
+    }
+
+    /**
+     * The members Cuttlebone lists after the `.` at the caret, when it has a
+     * fresh answer. It's asked about the real buffer (it inserts its own
+     * placeholder), and the list is complete, so it's filtered here by prefix.
+     */
+    private fun compiledMembers(): List<LookupElement>? {
+        val items = CuttleboneQueries.getInstance(file.project).completion(file, offset)?.value ?: return null
+        return items.map { item ->
+            val signature = item.detail
+            LookupElementBuilder.create(item.label)
+                .withIcon(memberIcon(item.kind))
+                .withTypeText(item.labelDetails?.description, true)
+                .withTailText(signature?.substringAfter(" ${item.label}", "")?.takeIf { it.isNotBlank() }, true)
+        }
+    }
+
+    private fun memberIcon(kind: CompletionItemKind?) = when (kind) {
+        CompletionItemKind.Field -> AllIcons.Nodes.Field
+        CompletionItemKind.Constant -> AllIcons.Nodes.Constant
+        CompletionItemKind.Class -> AllIcons.Nodes.Class
+        else -> AllIcons.Nodes.Method
     }
 
     /** The receiver's type, when it's `self` or a local with a known type. */

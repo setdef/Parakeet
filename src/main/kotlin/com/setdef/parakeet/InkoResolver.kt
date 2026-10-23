@@ -145,16 +145,52 @@ class InkoResolver private constructor(
             return PsiTreeUtil.getParentOfType(leaf, InkoName::class.java, false) ?: leaf
         }
 
-        /** What [name] refers to: each definition, with the element where its name is written. */
+        /**
+         * What [name] refers to: each definition, with the element where its name
+         * is written. Cuttlebone's answer when it has a fresh one, else the heuristic.
+         */
         fun resolveDefinitions(name: InkoName): List<Pair<InkoDefinition, PsiElement>> {
             val file = name.containingFile ?: return emptyList()
             val path = Inko.pathOf(file.virtualFile) ?: return emptyList()
             val symbols = InkoDocIndex.getInstance(name.project).symbols(Inko.projectRoot(path)) ?: return emptyList()
             val imports = InkoImports.parse(file.text)
+            val context = InkoNameContext.of(name, imports)
+            compiled(name, file, context, symbols)?.let { return listOf(it) }
             val resolver = InkoResolver(symbols, symbols.moduleOf(path) ?: Inko.moduleName(path), imports, file, name.textRange.startOffset)
-            return resolver.definitions(InkoNameContext.of(name, imports)).distinct().mapNotNull { definition ->
+            return resolver.definitions(context).distinct().mapNotNull { definition ->
                 toPsi(file, definition)?.let { definition to it }
             }
+        }
+
+        /**
+         * The definition Cuttlebone's `textDocument/definition` gives for [name], as
+         * Parakeet's own definition there, for the names the heuristic guesses at
+         * (members, calls, constants, fields). Null when there's no fresh answer,
+         * it's empty, or it points somewhere Parakeet doesn't know a definition.
+         */
+        private fun compiled(name: InkoName, file: PsiFile, context: InkoNameContext, symbols: InkoSymbols): Pair<InkoDefinition, PsiElement>? {
+            if (!isGuessed(context)) return null
+            val queries = CuttleboneQueries.getInstance(name.project)
+            val location = queries.definition(file, name.textRange.startOffset)?.value?.firstOrNull() ?: return null
+            val target = queries.target(location) ?: return null
+            return definitionAt(target, symbols)?.let { it to target }
+        }
+
+        /** The kinds of names whose targets the heuristic guesses at, which Cuttlebone is asked about. */
+        fun isGuessed(context: InkoNameContext): Boolean = when (context) {
+            is InkoNameContext.InstanceMember, is InkoNameContext.StaticMember, is InkoNameContext.Identifier,
+            is InkoNameContext.Constant, is InkoNameContext.Field -> true
+            else -> false
+        }
+
+        /** Parakeet's definition whose name is written at [target] (a declaration's name, or a module's file). */
+        fun definitionAt(target: PsiElement, symbols: InkoSymbols): InkoDefinition? {
+            val targetFile = target.containingFile ?: return null
+            val path = Inko.pathOf(targetFile.virtualFile) ?: return null
+            if (target is PsiFile) return symbols.moduleOf(path)?.let(symbols::module)
+            val name = target.text.removePrefix("@").removeSuffix("=")
+            return (symbols.definedIn(path, name) + symbols.definedIn(path, "$name="))
+                .firstOrNull { toPsi(targetFile, it) == target }
         }
 
         /** The element to navigate to: where the definition's name is defined, or its file for modules. */

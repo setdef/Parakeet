@@ -18,7 +18,30 @@ import com.setdef.parakeet.InkoDefinitionKind as Kind
 class InkoExpressionTypeProvider : ExpressionTypeProvider<PsiElement>() {
     override fun getInformationHint(element: PsiElement): String {
         val expression = element as? InkoExpression ?: return UNKNOWN
-        return InkoExpressionTypes.of(expression.containingFile, expression.textRange)?.let(StringUtil::escapeXmlEntities) ?: UNKNOWN
+        val type = compiledType(expression) ?: InkoExpressionTypes.of(expression.containingFile, expression.textRange)
+        return type?.let(StringUtil::escapeXmlEntities) ?: UNKNOWN
+    }
+
+    /**
+     * The compiler's type for exactly this expression, from Cuttlebone's hover.
+     * Hover gives the innermost expression at a position, so it's asked at the
+     * expression's start and at its last token's, and only an answer whose range
+     * is this expression's counts.
+     */
+    private fun compiledType(expression: InkoExpression): String? {
+        val file = expression.containingFile as? InkoFile ?: return null
+        val document = file.viewProvider.document ?: return null
+        val range = expression.textRange
+        val last = InkoTokenStream(file.text).tokens.lastOrNull { it.end <= range.endOffset && it.start >= range.startOffset }?.start
+        val queries = CuttleboneQueries.getInstance(file.project)
+        for (offset in listOfNotNull(range.startOffset, last).distinct()) {
+            val hover = queries.hover(file, offset)?.value ?: continue
+            val hovered = hover.range ?: continue
+            val start = CuttleboneQueries.offset(document, hovered.start)
+            val end = CuttleboneQueries.offset(document, hovered.end)
+            if (start == range.startOffset && end == range.endOffset) return InkoHover.type(hover)
+        }
+        return null
     }
 
     override fun getErrorHint(): String = "No Inko expression at the caret"

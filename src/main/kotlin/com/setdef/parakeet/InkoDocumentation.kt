@@ -21,7 +21,9 @@ import com.setdef.parakeet.InkoDefinitionKind as Kind
 class InkoDocumentationTargetProvider : PsiDocumentationTargetProvider {
     override fun documentationTarget(element: PsiElement, originalElement: PsiElement?): DocumentationTarget? {
         val definition = definitionFor(element, originalElement) ?: return null
-        return InkoDocumentationTarget(element, definition)
+        // On the declaration itself there's no use to give a type for.
+        val original = originalElement?.takeIf { it.containingFile is InkoFile && !(it.containingFile == element.containingFile && element.textRange.contains(it.textRange)) }
+        return InkoDocumentationTarget(element, definition, original)
     }
 
     /**
@@ -48,11 +50,17 @@ class InkoDocumentationTargetProvider : PsiDocumentationTargetProvider {
     }
 }
 
-class InkoDocumentationTarget(private val element: PsiElement, private val definition: InkoDefinition) : DocumentationTarget {
+/** [original] is where the caret (or mouse) was, if not on the definition itself: its inferred type is shown too. */
+class InkoDocumentationTarget(
+    private val element: PsiElement,
+    private val definition: InkoDefinition,
+    private val original: PsiElement? = null,
+) : DocumentationTarget {
     override fun createPointer(): Pointer<out DocumentationTarget> {
         val pointer = SmartPointerManager.createPointer(element)
+        val originalPointer = original?.let { SmartPointerManager.createPointer(it) }
         val definition = definition
-        return Pointer { pointer.element?.let { InkoDocumentationTarget(it, definition) } }
+        return Pointer { pointer.element?.let { InkoDocumentationTarget(it, definition, originalPointer?.element) } }
     }
 
     override fun computePresentation(): TargetPresentation =
@@ -68,7 +76,7 @@ class InkoDocumentationTarget(private val element: PsiElement, private val defin
     }
 
     fun html(): String = buildString {
-        append(header())
+        append(header(inferredType()))
         if (definition.documentation.isNotBlank()) {
             append(DocumentationMarkup.CONTENT_START)
             append(DocMarkdownToHtmlConverter.convert(element.project, definition.documentation))
@@ -76,14 +84,30 @@ class InkoDocumentationTarget(private val element: PsiElement, private val defin
         }
     }
 
-    /** The declaration, with where it's defined: `fn pub value -> Int` in `app.util.Helper`. */
-    private fun header(): String {
+    /**
+     * The compiler's type for the expression at [original] (from Cuttlebone's
+     * hover), e.g. `Result[ref Int, OutOfBounds]` for a call: what this use
+     * gives, with type arguments filled in, which the signature can't say.
+     */
+    fun inferredType(): String? {
+        val original = original ?: return null
+        val file = original.containingFile as? InkoFile ?: return null
+        val hover = CuttleboneQueries.getInstance(file.project).hover(file, original.textRange.startOffset)?.value ?: return null
+        return InkoHover.type(hover)
+    }
+
+    /** The declaration, with where it's defined: `fn pub value -> Int` in `app.util.Helper`, and [type], this use's type. */
+    private fun header(type: String? = null): String {
         val signature = StringUtil.escapeXmlEntities(definition.signature ?: definition.name)
         val location = StringUtil.escapeXmlEntities(listOfNotNull(definition.module, definition.owner).joinToString("."))
+        val typeSection = type?.let {
+            DocumentationMarkup.SECTION_HEADER_START + "Type here" + DocumentationMarkup.SECTION_SEPARATOR +
+                "<code>${StringUtil.escapeXmlEntities(it)}</code>" + DocumentationMarkup.SECTION_END
+        }.orEmpty()
         return DocumentationMarkup.DEFINITION_START + "<code>$signature</code>" + DocumentationMarkup.DEFINITION_END +
             DocumentationMarkup.SECTIONS_START + DocumentationMarkup.SECTION_HEADER_START + "Defined in" +
             DocumentationMarkup.SECTION_SEPARATOR + "<code>$location</code>" + DocumentationMarkup.SECTION_END +
-            DocumentationMarkup.SECTIONS_END
+            typeSection + DocumentationMarkup.SECTIONS_END
     }
 }
 
@@ -111,5 +135,14 @@ object InkoStdDocs {
             Kind.FIELD -> definition.owner?.let { "$module$it/#field.${definition.name}" }
             Kind.CONSTRUCTOR -> definition.owner?.let { "$module$it/#constructor.${definition.name}" }
         }
+    }
+}
+
+/** Cuttlebone's hover: the type at a position, as a code block. */
+object InkoHover {
+    fun type(hover: org.eclipse.lsp4j.Hover): String? {
+        val contents = hover.contents ?: return null
+        val text = if (contents.isRight) contents.right.value else contents.left.joinToString("\n") { if (it.isLeft) it.left else it.right.value }
+        return text.trim().removePrefix("```inko").removePrefix("```").removeSuffix("```").trim().takeIf { it.isNotEmpty() }
     }
 }

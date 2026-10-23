@@ -5,7 +5,7 @@ import com.intellij.codeInsight.hints.declarative.InlayHintsCollector
 import com.intellij.codeInsight.hints.declarative.InlayHintsProvider
 import com.intellij.codeInsight.hints.declarative.InlayTreeSink
 import com.intellij.codeInsight.hints.declarative.InlineInlayPosition
-import com.intellij.codeInsight.hints.declarative.SharedBypassCollector
+import com.intellij.codeInsight.hints.declarative.OwnBypassCollector
 import com.intellij.openapi.editor.Editor
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
@@ -21,17 +21,37 @@ class InkoParameterHintsProvider : InlayHintsProvider {
     override fun createCollector(file: PsiFile, editor: Editor): InlayHintsCollector? =
         if (file is InkoFile) Collector() else null
 
-    private class Collector : SharedBypassCollector {
-        override fun collectFromElement(element: PsiElement, sink: InlayTreeSink) {
-            if (!element.isToken(InkoTokens.LPAREN)) return
-            for ((offset, name) in InkoParameterHints.at(element)) {
-                sink.addPresentation(InlineInlayPosition(offset, false, 0), null, null, HintFormat.default) { text("$name:", null) }
+    private class Collector : OwnBypassCollector {
+        override fun collectHintsForFile(file: PsiFile, sink: InlayTreeSink) {
+            val parens = PsiTreeUtil.collectElements(file) { it.isToken(InkoTokens.LPAREN) }
+            InkoParameterHints.prefetch(file, parens.toList())
+            for (paren in parens) {
+                for ((offset, name) in InkoParameterHints.at(paren)) {
+                    sink.addPresentation(InlineInlayPosition(offset, false, 0), null, null, HintFormat.default) { text("$name:", null) }
+                }
             }
         }
     }
 }
 
 object InkoParameterHints {
+    /**
+     * Asks Cuttlebone for every call's method at once, and waits for the answers
+     * together (for at most [CuttleboneQueries.BULK_BUDGET_MS]): a highlighting
+     * pass otherwise only uses answers already cached.
+     */
+    fun prefetch(file: PsiFile, openParens: List<PsiElement>) {
+        val imports = InkoImports.parse(file.text)
+        val callees = openParens.mapNotNull { paren ->
+            paren.previousToken()?.let { PsiTreeUtil.getParentOfType(it, InkoName::class.java, false) }
+                ?.takeIf { it !is InkoDeclaration && InkoResolver.isGuessed(InkoNameContext.of(it, imports)) }
+                ?.textRange?.startOffset
+        }
+        if (callees.isEmpty()) return
+        val queries = CuttleboneQueries.getInstance(file.project)
+        queries.awaitAll(queries.prefetchDefinitions(file, callees), CuttleboneQueries.BULK_BUDGET_MS)
+    }
+
     /** For a call's `(`, the (offset, parameter name) hints for its arguments. */
     fun at(openParen: PsiElement): List<Pair<Int, String>> {
         val callee = openParen.previousToken()?.let { PsiTreeUtil.getParentOfType(it, InkoName::class.java, false) } ?: return emptyList()

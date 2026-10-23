@@ -4,6 +4,8 @@
 # Usage: scripts/check.sh [--full]
 #
 # The tests include the integration tests, so `inko` must be installed.
+# Cuttlebone's integration tests are skipped when there's no `cuttlebone`,
+# except with --full, which requires it.
 # --full adds the Plugin Verifier against the oldest and newest supported
 # IDEs, which downloads them the first time and takes a few minutes. Run it
 # before any release or session report.
@@ -42,9 +44,31 @@ step() {
     "$@"
 }
 
+# Cuttlebone's integration tests need a real `cuttlebone`: $CUTTLEBONE, else
+# the one on PATH, else where `cargo install` puts it (as Parakeet looks).
+cuttlebone=${CUTTLEBONE-}
+if [ -z "$cuttlebone" ]; then
+    cuttlebone=$(command -v cuttlebone || true)
+fi
+if [ -z "$cuttlebone" ] && [ -x "$HOME/.cargo/bin/cuttlebone" ]; then
+    cuttlebone="$HOME/.cargo/bin/cuttlebone"
+fi
+cuttlebone_flag=
+if [ -n "$cuttlebone" ]; then
+    export CUTTLEBONE="$cuttlebone"
+    echo "==> using $("$cuttlebone" --version 2>/dev/null || echo "$cuttlebone") for Cuttlebone's integration tests"
+elif [ "$full" = true ]; then
+    echo "check.sh: --full needs cuttlebone for Cuttlebone's integration tests, and none was found." >&2
+    echo "Install it, put it on PATH, or set CUTTLEBONE to its path." >&2
+    exit 1
+else
+    echo "==> skipping Cuttlebone's integration tests: no cuttlebone on PATH (set CUTTLEBONE to its path to run them; --full requires it)"
+    cuttlebone_flag=-PnoCuttlebone
+fi
+
 # --rerun: a cached test result can't stand in for this run, since the
-# integration tests depend on the installed `inko`, which Gradle can't see.
-step "tests (unit, integration and guardrails)" run ./gradlew --quiet --console=plain test --rerun
+# integration tests depend on the installed `inko` and `cuttlebone`, which Gradle can't see.
+step "tests (unit, integration and guardrails)" run ./gradlew --quiet --console=plain test --rerun $cuttlebone_flag
 step "plugin build" run ./gradlew --quiet --console=plain buildPlugin
 
 if [ "$full" = true ]; then

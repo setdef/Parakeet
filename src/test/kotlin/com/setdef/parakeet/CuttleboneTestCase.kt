@@ -59,8 +59,10 @@ abstract class CuttleboneTestCase : InkoTestCase(onDisk = true) {
         }, condition, timeoutSeconds)
     }
 
-    protected fun runningServer(): LspServer {
-        waitFor("Cuttlebone to start (status: ${CuttleboneService.getInstance(project).status?.message})") { CuttleboneService.getInstance(project).server() != null }
+    /** Waits for the server to start, and to have the open file's text. */
+    protected fun runningServer(waitForOpen: Boolean = true): LspServer {
+        waitFor("Cuttlebone to start") { CuttleboneService.getInstance(project).server() != null }
+        if (waitForOpen) waitFor("didOpen") { CuttleboneService.getInstance(project).isOpened(myFixture.file.virtualFile) }
         return CuttleboneService.getInstance(project).server()!!
     }
 

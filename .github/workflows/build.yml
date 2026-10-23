@@ -131,7 +131,8 @@ jobs:
       - name: Install Inko
         run: ./ci/install-inko.sh "${{ steps.inko.outputs.version }}"
       - name: Run integration tests
-        run: ./gradlew test --tests '*IntegrationTest'
+        # Cuttlebone isn't installed on CI yet: its integration tests run locally (scripts/check.sh).
+        run: ./gradlew test --tests '*IntegrationTest' -PnoCuttlebone
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

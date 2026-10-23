@@ -105,9 +105,13 @@ tasks.register("updatePluginsXml") {
     }
 }
 
-// `./gradlew test -PunitOnly` skips tests that need a real `inko` installed.
+// `./gradlew test -PunitOnly` skips tests that need a real `inko` installed, and
+// `-PnoCuttlebone` the ones that need a real `cuttlebone` (scripts/check.sh decides).
 tasks.test {
     if (providers.gradleProperty("unitOnly").isPresent) exclude("**/*IntegrationTest*")
+    if (providers.gradleProperty("noCuttlebone").isPresent) exclude("**/CuttleboneIntegrationTest*")
+    // Where check.sh found cuttlebone; the tests otherwise look on PATH.
+    providers.environmentVariable("CUTTLEBONE").orNull?.let { environment("CUTTLEBONE", it) }
 }
 
 // TextMate bundles must be plain files on disk, so ship them beside the plugin's jars.

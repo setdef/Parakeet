@@ -196,6 +196,12 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
     /** Latest `cuttlebone/status` per (method, URI), taken by the response that follows it. */
     val statuses = ConcurrentHashMap<Pair<String, String>, CuttleboneStatus>()
 
+    /** Files the running server was sent `didOpen` for: it has their text, saved or not. */
+    private val opened: MutableSet<VirtualFile> = ConcurrentHashMap.newKeySet()
+
+    /** Whether the server has [file]'s text from IntelliJ (it was opened there), rather than from disk. */
+    fun isOpened(file: VirtualFile): Boolean = file in opened
+
     @Volatile var status: Cuttlebone.Status? = null
         private set
 
@@ -211,7 +217,12 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         if (!project.isDefault) LspServerManager.getInstance(project).addLspServerManagerListener(object : LspServerManagerListener {
             override fun serverStateChanged(lspServer: LspServer) {
                 if (lspServer.providerClass != CuttleboneSupportProvider::class.java) return
+                if (lspServer.state != LspServerState.Running) opened.clear()
                 stateChanged(lspServer.state)
+            }
+
+            override fun fileOpened(lspServer: LspServer, file: VirtualFile) {
+                if (lspServer.providerClass == CuttleboneSupportProvider::class.java) opened += file
             }
         }, this, true)
     }
@@ -259,6 +270,7 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         everInitialized = false
         restarts = 0
         statuses.clear()
+        opened.clear()
         if (!project.isDefault) LspServerManager.getInstance(project).stopServers(CuttleboneSupportProvider::class.java)
     }
 

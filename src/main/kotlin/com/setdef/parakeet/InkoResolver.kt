@@ -102,8 +102,23 @@ class InkoResolver private constructor(
         return fields.filter { it.owner == owner }.ifEmpty { fields }
     }
 
-    private fun function(name: String): List<InkoDefinition> =
-        symbols.named(name, Kind.MODULE_METHOD).filter { it.module == module }.ifEmpty { imported(name) }
+    /**
+     * A bare `name(…)`: inside a type (or impl, or trait), Inko calls the
+     * receiver's own method first (a static one from static methods), then
+     * falls back to module methods.
+     */
+    private fun function(name: String): List<InkoDefinition> {
+        selfMethod(name).takeIf { it.isNotEmpty() }?.let { return it }
+        return symbols.named(name, Kind.MODULE_METHOD).filter { it.module == module }.ifEmpty { imported(name) }
+    }
+
+    private fun selfMethod(name: String): List<InkoDefinition> {
+        val text = file.text
+        val owner = InkoLocals.selfType(text, offset)?.let { imports.symbol(it)?.second ?: it } ?: return emptyList()
+        val method = file.inkoOutline.enclosing(offset).lastOrNull { it.kind == InkoOutline.Kind.METHOD }
+        val inStatic = method != null && Regex("\\bstatic\\b").containsMatchIn(text.subSequence(method.range.startOffset, method.nameOffset))
+        return symbols.named(name, if (inStatic) Kind.STATIC_METHOD else Kind.INSTANCE_METHOD).filter { it.owner == owner }
+    }
 
     companion object {
         fun resolve(name: InkoName): List<PsiElement> =

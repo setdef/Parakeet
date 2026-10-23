@@ -29,7 +29,7 @@ sealed class InkoNameContext {
     /** A capitalized name: a type, trait, constant, or enum constructor. */
     data class Constant(val name: String) : InkoNameContext()
 
-    /** A lowercase name that isn't a local: a module method. */
+    /** A lowercase name that isn't a local: a method on `self` (inside a type), or a module method. */
     data class Identifier(val name: String) : InkoNameContext()
 
     /** A name being defined, e.g. after `fn` or `let`. */

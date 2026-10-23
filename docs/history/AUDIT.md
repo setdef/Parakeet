@@ -719,7 +719,9 @@ up `\u{…}` escapes.
   `let pub mut @x: T` (`compiler/src/docs.rs:626`). `InkoCalls.parameters`
   strips `let ` and `pub ` but not `mut ` (`P/InkoParameterInfo.kt:49`). So
   `Type(…)` parameter info shows `mut @count: Int`, and the derived names
-  keep `@`.
+  keep `@`. *Status: confirmed and fixed in <commit:3.mut>
+  (`InkoFieldSignaturesTest` failed before the fix). Parameter info strips
+  `let`, `pub`, `mut` and `@` from inko doc's field signatures.*
 - **Compiler-internal enum fields under `--private`.** `inko doc --private`
   lists them, for example `let @tag: Uint8` and `let @1: <unknown>` on
   `type enum Shape` (seen in the scratch run). Parakeet indexes them as real

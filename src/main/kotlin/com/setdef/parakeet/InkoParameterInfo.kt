@@ -12,6 +12,8 @@ import com.setdef.parakeet.InkoDefinitionKind as Kind
 class InkoCall(val callee: InkoName, val openParen: Int, val argument: Int)
 
 object InkoCalls {
+    private val FIELD_KEYWORDS = Regex("""^let\s+(pub\s+)?(mut\s+)?@""")
+
     /** The innermost call whose parentheses contain [offset], if any. */
     fun at(file: PsiFile, offset: Int): InkoCall? {
         val text = file.viewProvider.document?.charsSequence ?: return null
@@ -46,7 +48,8 @@ object InkoCalls {
      */
     fun parameters(definition: InkoDefinition, symbols: InkoSymbols?): List<String> = when (definition.kind) {
         Kind.TYPE -> symbols?.ownedBy(definition.name, Kind.FIELD).orEmpty().filter { it.module == definition.module }.map { field ->
-            field.signature?.removePrefix("let ")?.removePrefix("pub ")?.removePrefix("@") ?: field.name
+            // `let pub mut @count: Int` (compiler/src/docs.rs) gives `count: Int`.
+            field.signature?.replace(FIELD_KEYWORDS, "") ?: field.name
         }
         else -> definition.signature?.let(::signatureParameters).orEmpty()
     }

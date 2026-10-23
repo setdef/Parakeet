@@ -544,6 +544,13 @@ Inline Method's body statements, and Smart Enter.
 
 ### 1.14 Constant types from `inko doc` are never recognised (Low)
 
+**Status: confirmed and fixed in <commit:1.14>.** `InkoConstantTypeTest`
+(with `inko doc`'s `let pub LIMIT: Int`) failed before the fix. A
+constant's type now comes from the annotation in `inko doc`'s signature,
+and from the literal value for definitions read from source.
+`InkoIntegrationTest.testConstantTypesFromInkoDoc` checks it against the
+real compiler.
+
 **What Parakeet assumes.** A constant's signature is `let pub X = value`, and
 the value after `=` gives its type (`P/InkoExpressionType.kt:205`). The tests
 fake that shape, for example

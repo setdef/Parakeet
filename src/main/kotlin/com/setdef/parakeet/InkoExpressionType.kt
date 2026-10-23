@@ -203,8 +203,14 @@ object InkoExpressionTypes {
         Kind.TYPE -> definition.name
         Kind.CONSTRUCTOR -> definition.owner
         Kind.FIELD -> definition.signature?.substringAfter(":", "")?.trim()?.takeIf { it.isNotEmpty() }
-        Kind.CONSTANT -> definition.signature?.substringAfter("=", "")?.trim()?.let { value ->
-            InkoTokenStream(value).tokens.singleOrNull()?.let(::literal)
+        // `inko doc` writes `let pub LIMIT: Int` (compiler/src/docs.rs); source has `let pub LIMIT = 10`.
+        Kind.CONSTANT -> definition.signature?.let { signature ->
+            val declared = signature.substringAfter(" ${definition.name}", "").trimStart()
+            if (declared.startsWith(":")) {
+                declared.removePrefix(":").substringBefore("=").trim().takeIf { it.isNotEmpty() }
+            } else {
+                InkoTokenStream(signature.substringAfter("=", "").trim()).tokens.singleOrNull()?.let(::literal)
+            }
         }
         Kind.MODULE_METHOD, Kind.STATIC_METHOD, Kind.INSTANCE_METHOD -> returnType(file, definition)
         else -> null

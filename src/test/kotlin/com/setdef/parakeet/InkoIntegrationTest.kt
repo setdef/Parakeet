@@ -278,6 +278,16 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf("Show"), InkoTypeHierarchy.related(debug, supertypes = true).map { InkoTypeHierarchy.definition(it)!!.name })
     }
 
+    // AUDIT.md finding 1.14: inko doc gives a constant's type as `let pub LIMIT: Int`.
+    fun testConstantTypesFromInkoDoc() {
+        myFixture.addFileToProject("src/app/limits.inko", "let pub LIMIT = 10\n")
+        val text = "import app.limits (LIMIT)\n\nfn pub twice -> Int {\n  LIMIT * 2\n}\n"
+        open("src/app/twice.inko", text)
+        FileDocumentManager.getInstance().saveAllDocuments()
+        val start = text.indexOf("LIMIT *")
+        assertEquals("Int", InkoExpressionTypes.of(myFixture.file, com.intellij.openapi.util.TextRange(start, start + "LIMIT".length)))
+    }
+
     fun testInlinedMethodsStillCompile() {
         putTempDirInProjectContent()
         myFixture.addFileToProject(

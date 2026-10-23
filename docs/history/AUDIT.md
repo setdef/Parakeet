@@ -572,6 +572,11 @@ fn twice -> Int {
 
 ### 1.15 Two number-literal forms lex differently (Low)
 
+**Status: confirmed and fixed in <commit:1.15>.** `InkoNumberLiteralsTest`
+failed before the fix (all 4 tests). The lexer now follows Inko's `number`
+and `digits`: after a `.` only digits, signed exponents, and no letters
+other than an exponent's `e` (so `10e` is `10` and `e`).
+
 **What Parakeet assumes.** A number continues through letters, digits, `_`,
 and `.` followed by a digit (`P/InkoLexer.kt:89-93`).
 

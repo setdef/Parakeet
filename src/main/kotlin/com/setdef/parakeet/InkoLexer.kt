@@ -136,10 +136,7 @@ class InkoLexer : LexerBase() {
             }
             // A `-` right before a digit is part of the number, as in Inko's lexer (ast/src/lexer.rs, `minus`).
             c.isDigit() || (c == '-' && i + 1 < end && buffer[i + 1].isDigit()) -> {
-                if (c == '-') i++
-                i++
-                while (i < end && (buffer[i].isLetterOrDigit() || buffer[i] == '_' ||
-                        (buffer[i] == '.' && i + 1 < end && buffer[i + 1].isDigit()))) i++
+                i = skipNumber(if (c == '-') i + 1 else i)
                 InkoTokens.NUMBER
             }
             c == '@' && i + 1 < end && isNameStart(buffer[i + 1]) -> {
@@ -184,6 +181,40 @@ class InkoLexer : LexerBase() {
         if (tokenType != InkoTokens.WHITE_SPACE && tokenType != InkoTokens.COMMENT) {
             previous = tokenType
             fnStage = nextFnStage
+        }
+    }
+
+    /**
+     * Skips a number from [from], as Inko's lexer does (ast/src/lexer.rs, `number` and `digits`): after a `.`
+     * only digits (so `pair.0.1` is two integers); `0x` and `0b` integers; and decimals with an optional
+     * fraction (`.` and a digit) and exponent (`e5`, `e+5`, `E-5`).
+     */
+    private fun skipNumber(from: Int): Int {
+        fun at(i: Int) = if (i < end) buffer[i] else '\u0000'
+        var i = from
+        if (previous == InkoTokens.DOT) {
+            while (at(i).isDigit() || at(i) == '_') i++
+            return i
+        }
+        if (at(i) == '0' && (at(i + 1) == 'x' || at(i + 1) == 'X')) {
+            i += 2
+            while (at(i).isDigit() || at(i) in 'a'..'f' || at(i) in 'A'..'F' || at(i) == '_') i++
+            return i
+        }
+        if (at(i) == '0' && at(i + 1) == 'b') {
+            i += 2
+            while (at(i) == '0' || at(i) == '1' || at(i) == '_') i++
+            return i
+        }
+        while (true) {
+            val c = at(i)
+            when {
+                c.isDigit() || c == '_' -> i++
+                (c == 'e' || c == 'E') && at(i + 1).isDigit() -> i += 2
+                (c == 'e' || c == 'E') && (at(i + 1) == '+' || at(i + 1) == '-') && at(i + 2).isDigit() -> i += 3
+                c == '.' && at(i + 1).isDigit() -> i += 2
+                else -> return i
+            }
         }
     }
 

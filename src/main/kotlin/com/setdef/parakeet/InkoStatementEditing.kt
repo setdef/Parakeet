@@ -112,9 +112,16 @@ class InkoSmartEnterProcessor : SmartEnterProcessor() {
         return closeIndent < indent.length
     }
 
-    /** The last keyword on the line that takes a body (`fn pub name`, `} else`, `if x`, `fn (x)`), if any. */
+    /** The last keyword on the line that takes a body (`fn pub name`, `} else`, `if x`, `fn (x)`), if any (ast/src/parser.rs). */
     private fun bodied(stream: InkoTokenStream, onLine: List<Int>): Int? =
-        onLine.lastOrNull { stream.tokens[it].isKeyword(*bodied.toTypedArray()) }
+        onLine.lastOrNull { index ->
+            val token = stream.tokens[index]
+            token.isKeyword(*bodied.toTypedArray()) &&
+                // A match guard's or build tags' `if` takes no body, nor does `fn extern` (a C function's signature).
+                (!token.isKeyword("if") || stream.startsIfExpression(index)) &&
+                !(token.isKeyword("fn") && stream.tokens.getOrNull(index + 1)?.isKeyword("extern") == true) &&
+                !(token.isKeyword("fn") && stream.tokens.getOrNull(index + 1)?.isKeyword("pub") == true && stream.tokens.getOrNull(index + 2)?.isKeyword("extern") == true)
+        }
 
     // A trait's method without a body is a required method; don't give it one.
     private fun isRequiredTraitMethod(text: CharSequence, offset: Int): Boolean =

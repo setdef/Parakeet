@@ -486,6 +486,12 @@ and the braces.
 
 ### 1.12 Complete Current Statement adds a body after the wrong `if` (Low)
 
+**Status: confirmed and fixed in <commit:1.12>, partly by 1.11's fix.**
+`InkoSmartEnterKindsTest` failed before the fix (all three failing inputs
+below). Smart Enter now uses `startsIfExpression` from 1.11, so build tags
+and guards get no body, and it doesn't give `fn extern` a body, since
+`define_module_method` makes it optional for C functions.
+
 **What Parakeet assumes.** The last "bodied" keyword on the line gets
 ` { … }` (`P/InkoStatementEditing.kt:62` and
 `P/InkoStatementEditing.kt:116`). The same `if` confusion as 1.11 applies.

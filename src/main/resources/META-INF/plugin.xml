@@ -87,6 +87,8 @@
                          groupName="Inko" enabledByDefault="true" level="WEAK WARNING"
                          implementationClass="com.setdef.parakeet.InkoEmptyParenthesesInspection"/>
         <codeInsight.template.postfixTemplateProvider language="Inko" implementationClass="com.setdef.parakeet.InkoPostfixTemplateProvider"/>
+        <testFinder implementation="com.setdef.parakeet.InkoTestFinder"/>
+        <testCreator language="Inko" implementationClass="com.setdef.parakeet.InkoTestCreator"/>
         <definitionsScopedSearch implementation="com.setdef.parakeet.InkoImplementationsSearch"/>
         <codeInsight.gotoSuper language="Inko" implementationClass="com.setdef.parakeet.InkoGotoSuperHandler"/>
         <codeInsight.implementMethod language="Inko" implementationClass="com.setdef.parakeet.InkoImplementMethodsHandler"/>

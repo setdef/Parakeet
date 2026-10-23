@@ -19,12 +19,23 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - Syntax highlighting, from the TextMate grammar in
   [inko-lang/vscode](https://github.com/inko-lang/vscode)
 - Line comment toggling (`#`), bracket matching, and auto-closing brackets and quotes
-- Compiler errors and warnings as you type, from `inko check`
+- Two-space indentation as you type, like `inko fmt` (*Settings → Editor → Code
+  Style → Inko*)
+- Compiler errors and warnings as you type, from `inko check`, with **quick
+  fixes** (Alt+Enter): import an undefined name from the module that defines
+  it, remove an unused import, rename an unused local to `_name`, or discard an
+  unused result with `let _ =`
 - *Code → Reformat Code* (⌥⌘L / Ctrl+Alt+L) with `inko fmt`. To format on save,
   turn on *Settings → Tools → Actions on Save → Reformat code*.
 - **Go to definition** (⌘-click / Ctrl-click, ⌘B / Ctrl+B) for types, traits,
-  constants, functions, methods, fields, and modules, including the standard
-  library and dependencies
+  constants, functions, methods, fields, modules, and local variables and
+  parameters, including the standard library and dependencies
+- **Highlight usages** of the name at the caret within the file
+  (⌘⇧F7 / Ctrl+Shift+F7)
+- **Parameter info** (⌘P / Ctrl+P) in calls, and parameter-name hints before
+  positional arguments
+- **Trait gutter icons** linking traits, their implementations, and the
+  methods that implement them
 - **Quick documentation** (F1, or hover): a definition's signature, where
   it's defined, and its doc comment
 - **Go to Class / Go to Symbol** (⌘O / ⌥⌘O) and Search Everywhere for Inko
@@ -32,7 +43,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Structure view**, breadcrumbs, and sticky lines for each file's
   declarations
 - **Code folding** for blocks, comment runs, and imports
-- **Completion** for keywords, names in scope, imports, members after `.`, and
+- **Completion** for keywords, local variables, names in scope, imports,
+  members after `.` (narrowed to the receiver's type when it's known), and
   fields after `@`
 - **Live templates**: `fn`, `fnp`, `type`, `typep`, `trait`, `impl`, `match`,
   `main`, `tests`, and `test`
@@ -50,7 +62,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Per-project toolchain** in *Settings → Languages & Frameworks → Inko*:
   auto-detect, ivm's default, any version ivm has installed, or a custom
   executable. With ivm installed, you can also install and remove Inko versions
-  there, and a banner offers to install Inko when it's missing.
+  there, and banners offer to install Inko when it's missing, or a newer one
+  when `inko.pkg` requires it.
 
 ### How it works
 

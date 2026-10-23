@@ -70,6 +70,12 @@ class InkoManifest(val inkoVersion: String?, val dependencies: List<InkoDependen
 /** Whether a project's dependencies are synced, the way `inko` decides: dep/hash is the BLAKE3 of inko.pkg. */
 object InkoDependencySync {
     /**
+     * An editor's text as it would be saved: editors always use `\n`, but a
+     * file keeps its own line separator (e.g. `\r\n`), and inko hashes the bytes.
+     */
+    fun asSaved(editorText: CharSequence, separator: String): String = editorText.toString().replace("\n", separator)
+
+    /**
      * Whether `inko pkg sync` would change anything, given [manifestText] (the
      * open editor's text, or the file's). Projects without dependencies (and no
      * `dep` directory) never need it.

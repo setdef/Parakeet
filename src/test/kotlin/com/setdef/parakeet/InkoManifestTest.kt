@@ -124,6 +124,17 @@ class InkoManifestTest : InkoTestCase(onDisk = true) {
         assertFalse("edited back", component.shown)
     }
 
+    // Editors use \n, but inko hashes the file's bytes: hash the text with the file's own line separator.
+    fun testHashesEditorTextAsItWouldBeSaved() {
+        val crlf = idoc.replace("\n", "\r\n")
+        Files.createDirectories(root.resolve("dep"))
+        Files.writeString(root.resolve("dep/hash"), InkoBlake3.hex(crlf.toByteArray()))
+        Files.writeString(root.resolve("inko.pkg"), crlf)
+        assertTrue("as the editor holds it", InkoDependencySync.needed(root, idoc))
+        assertFalse("as it would be saved", InkoDependencySync.needed(root, InkoDependencySync.asSaved(idoc, "\r\n")))
+        assertFalse("on disk", InkoDependencySync.needed(root))
+    }
+
     fun testOtherEditorsNeverShowTheSyncButton() {
         myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/main.inko", "fn main {}\n").virtualFile)
         val component = RecordingToolbar()

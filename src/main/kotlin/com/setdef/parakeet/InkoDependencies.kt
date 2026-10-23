@@ -190,7 +190,9 @@ class InkoManifestFloatingToolbarProvider : AbstractFloatingToolbarProvider("Par
         val project = editor.project ?: return
         val root = editor.virtualFile?.parent?.toNioPath() ?: return
         fun update() {
-            if (InkoDependencySync.needed(root, editor.document.immutableCharSequence)) component.scheduleShow() else component.scheduleHide()
+            val separator = editor.virtualFile?.let { FileDocumentManager.getInstance().getLineSeparator(it, project) } ?: "\n"
+            val text = InkoDependencySync.asSaved(editor.document.immutableCharSequence, separator)
+            if (InkoDependencySync.needed(root, text)) component.scheduleShow() else component.scheduleHide()
         }
         editor.document.addDocumentListener(object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) = update()

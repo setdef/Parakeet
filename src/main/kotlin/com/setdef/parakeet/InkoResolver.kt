@@ -109,7 +109,7 @@ class InkoResolver private constructor(
         }
 
         /** The element to navigate to: where the definition's name is defined, or its file for modules. */
-        private fun toPsi(context: PsiFile, definition: InkoDefinition): PsiElement? {
+        fun toPsi(context: PsiFile, definition: InkoDefinition): PsiElement? {
             val virtualFile = LocalFileSystem.getInstance().findFileByNioFile(definition.file) ?: return null
             val psiFile = PsiManager.getInstance(context.project).findFile(virtualFile) ?: return null
             if (definition.kind == Kind.MODULE) return psiFile

@@ -22,10 +22,23 @@ object FakeInkoDoc {
         fields: List<Map<String, Any>> = emptyList(),
         staticMethods: List<Map<String, Any>> = emptyList(),
         instanceMethods: List<Map<String, Any>> = emptyList(),
+        implementedTraits: List<Pair<String, String>> = emptyList(),
     ) = mapOf(
         "name" to name, "location" to location(line), "type" to signature, "documentation" to docs,
         "constructors" to emptyList<Any>(), "fields" to fields,
         "static_methods" to staticMethods, "instance_methods" to instanceMethods,
+        "implemented_traits" to implementedTraits.map { (module, trait) -> mapOf("module" to module, "name" to trait) },
+    )
+
+    fun trait(
+        name: String,
+        line: Int,
+        requiredMethods: List<Map<String, Any>> = emptyList(),
+        implementations: List<Pair<String, String>> = emptyList(),
+    ) = mapOf(
+        "name" to name, "location" to location(line), "type" to "trait $name", "documentation" to "",
+        "required_methods" to requiredMethods, "default_methods" to emptyList<Any>(),
+        "implementations" to implementations.map { (module, type) -> mapOf("module" to module, "name" to type) },
     )
 
     fun module(
@@ -34,9 +47,10 @@ object FakeInkoDoc {
         methods: List<Map<String, Any>> = emptyList(),
         types: List<Map<String, Any>> = emptyList(),
         docs: String = "",
+        traits: List<Map<String, Any>> = emptyList(),
     ) = gson.toJson(
         mapOf("name" to name, "file" to file.toString(), "documentation" to docs, "constants" to emptyList<Any>(),
-            "methods" to methods, "types" to types, "traits" to emptyList<Any>()),
+            "methods" to methods, "types" to types, "traits" to traits),
     )
 
     /** A fake answering `inko doc` by writing the JSON [modules] returns (given the mirror's directory). */

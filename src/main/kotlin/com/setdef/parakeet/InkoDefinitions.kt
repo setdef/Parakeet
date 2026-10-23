@@ -22,7 +22,12 @@ data class InkoDefinition(
     val column: Int,
     val signature: String? = null,
     val documentation: String = "",
+    /** For a trait, the types implementing it; for a type, the traits it implements. */
+    val related: List<InkoTypeRef> = emptyList(),
 )
+
+/** A type or trait named by module, e.g. `Show` in `app.util`. */
+data class InkoTypeRef(val module: String, val name: String)
 
 /** Every definition in a project (and its dependencies and the standard library), by name and module. */
 class InkoSymbols(definitions: List<InkoDefinition>) {
@@ -67,20 +72,20 @@ object InkoDocParser {
             InkoDefinition(InkoDefinitionKind.MODULE, module, module, null, moduleFile, 1, 1, "import $module", root.string("documentation").orEmpty()),
         )
 
-        fun add(kind: InkoDefinitionKind, obj: JsonObject, owner: String?) {
+        fun add(kind: InkoDefinitionKind, obj: JsonObject, owner: String?, related: List<InkoTypeRef> = emptyList()) {
             val name = obj.string("name") ?: return
             val location = obj.getAsJsonObject("location") ?: return
             // Methods carry their own file: default trait methods live in the trait's module.
             val file = obj.string("file")?.let { toReal(Path.of(it)) } ?: moduleFile
             val line = location.getAsJsonObject("lines")?.get("start")?.asInt ?: 1
             val column = location.getAsJsonObject("columns")?.get("start")?.asInt ?: 1
-            result += InkoDefinition(kind, name, module, owner, file, line, column, obj.string("type"), obj.string("documentation").orEmpty())
+            result += InkoDefinition(kind, name, module, owner, file, line, column, obj.string("type"), obj.string("documentation").orEmpty(), related)
         }
 
         root.objects("constants").forEach { add(InkoDefinitionKind.CONSTANT, it, null) }
         root.objects("methods").forEach { add(InkoDefinitionKind.MODULE_METHOD, it, null) }
         for (type in root.objects("types")) {
-            add(InkoDefinitionKind.TYPE, type, null)
+            add(InkoDefinitionKind.TYPE, type, null, type.typeRefs("implemented_traits"))
             val owner = type.string("name")
             type.objects("constructors").forEach { add(InkoDefinitionKind.CONSTRUCTOR, it, owner) }
             type.objects("fields").forEach { add(InkoDefinitionKind.FIELD, it, owner) }
@@ -88,7 +93,7 @@ object InkoDocParser {
             type.objects("instance_methods").forEach { add(InkoDefinitionKind.INSTANCE_METHOD, it, owner) }
         }
         for (trait in root.objects("traits")) {
-            add(InkoDefinitionKind.TRAIT, trait, null)
+            add(InkoDefinitionKind.TRAIT, trait, null, trait.typeRefs("implementations"))
             val owner = trait.string("name")
             trait.objects("required_methods").forEach { add(InkoDefinitionKind.INSTANCE_METHOD, it, owner) }
             trait.objects("default_methods").forEach { add(InkoDefinitionKind.INSTANCE_METHOD, it, owner) }
@@ -97,6 +102,10 @@ object InkoDocParser {
     }
 
     private fun JsonObject.string(key: String): String? = get(key)?.takeIf { it.isJsonPrimitive }?.asString
+
+    private fun JsonObject.typeRefs(key: String): List<InkoTypeRef> = objects(key).mapNotNull { ref ->
+        InkoTypeRef(ref.string("module") ?: return@mapNotNull null, ref.string("name") ?: return@mapNotNull null)
+    }
 
     private fun JsonObject.objects(key: String): List<JsonObject> =
         (get(key) as? JsonArray)?.mapNotNull { it.takeIf { e -> e.isJsonObject }?.asJsonObject }.orEmpty()

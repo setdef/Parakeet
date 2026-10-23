@@ -63,9 +63,13 @@ class InkoDocIndex(private val project: Project, private val scope: CoroutineSco
         val key = listOf(System.identityHashCode(base), sources.map { it.path to it.stamp })
         entry.merged?.takeIf { it.first == key }?.let { return it.second }
         val overridden = sources.map { it.path }.toSet()
+        // Trait relations come from inko doc only, so keep the last known ones for definitions read from source.
+        val related = base.orEmpty().filter { it.related.isNotEmpty() }.associate { (it.kind to it.module to it.name) to it.related }
         val fromSource = sources.flatMap { source ->
             val module = Inko.moduleName(source.path) ?: return@flatMap emptyList()
-            InkoSourceDefinitions.of(source.path, module, source.text())
+            InkoSourceDefinitions.of(source.path, module, source.text()).map { definition ->
+                related[definition.kind to definition.module to definition.name]?.let { definition.copy(related = it) } ?: definition
+            }
         }
         val symbols = InkoSymbols(base.orEmpty().filter { it.file !in overridden } + fromSource)
         entry.merged = key to symbols

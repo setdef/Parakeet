@@ -69,6 +69,7 @@
 
         <configurationType implementation="com.setdef.parakeet.InkoRunConfigurationType"/>
         <runConfigurationProducer implementation="com.setdef.parakeet.InkoRunConfigurationProducer"/>
+        <codeInsight.lineMarkerProvider language="Inko" implementationClass="com.setdef.parakeet.InkoTraitLineMarkerProvider"/>
         <runLineMarkerContributor language="Inko" implementationClass="com.setdef.parakeet.InkoRunLineMarkerContributor"/>
 
         <newProjectWizard.generator implementation="com.setdef.parakeet.InkoNewProjectWizard"/>

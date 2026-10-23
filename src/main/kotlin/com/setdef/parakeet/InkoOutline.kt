@@ -19,10 +19,17 @@ class InkoOutline private constructor(val roots: List<Node>) {
 
     /** For an `impl` node, the type it adds methods to: `Type` in both `impl Trait for Type` and `impl Type`. */
     fun implTarget(node: Node): String? {
-        val words = node.label.removePrefix("impl ").replace(Regex("\\[.*?]"), "").split(' ').filter { it.isNotBlank() }
+        val words = implWords(node)
         val forIndex = words.indexOf("for")
         return if (forIndex >= 0) words.getOrNull(forIndex + 1) else words.firstOrNull()
     }
+
+    /** For an `impl Trait for Type` node, `Trait`; null for `impl Type`. */
+    fun implTrait(node: Node): String? = implWords(node).takeIf { "for" in it }?.firstOrNull()
+
+    // The words of an impl's label (`impl Show[T] for Helper[T]`), without type arguments.
+    private fun implWords(node: Node): List<String> =
+        node.label.removePrefix("impl ").replace(Regex("\\[.*?]"), "").split(' ').filter { it.isNotBlank() }
 
     /** Every node, depth first. */
     val all: List<Node> get() = roots.flatMap { it.withDescendants() }

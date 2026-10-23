@@ -42,6 +42,9 @@
         <lang.commenter language="Inko" implementationClass="com.setdef.parakeet.InkoCommenter"/>
         <lang.braceMatcher language="Inko" implementationClass="com.setdef.parakeet.InkoBraceMatcher"/>
         <lang.quoteHandler language="Inko" implementationClass="com.setdef.parakeet.InkoQuoteHandler"/>
+        <langCodeStyleSettingsProvider implementation="com.setdef.parakeet.InkoCodeStyleSettingsProvider"/>
+        <lineIndentProvider implementation="com.setdef.parakeet.InkoLineIndentProvider"/>
+        <typedHandler implementation="com.setdef.parakeet.InkoClosingBracketTypedHandler"/>
         <lang.psiStructureViewFactory language="Inko" implementationClass="com.setdef.parakeet.InkoStructureViewFactory"/>
         <breadcrumbsInfoProvider implementation="com.setdef.parakeet.InkoBreadcrumbsProvider"/>
         <lang.foldingBuilder language="Inko" implementationClass="com.setdef.parakeet.InkoFoldingBuilder"/>

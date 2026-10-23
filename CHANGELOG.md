@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Inko code style (Settings | Editor | Code Style | Inko), defaulting to two-space indentation like `inko fmt`, and smart indentation when typing: Enter indents inside blocks (including between braces), and closing brackets line up with the line that opened them.
+
 ### Fixed
 
 - Opening a project logged "Read access is allowed from inside read-action only" from Parakeet's startup indexing.

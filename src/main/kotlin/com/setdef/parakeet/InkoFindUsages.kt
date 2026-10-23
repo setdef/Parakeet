@@ -57,6 +57,19 @@ class InkoModuleReferencesSearcher : QueryExecutorBase<PsiReference, ReferencesS
 }
 
 /**
+ * Finds a setter's calls: `fn value=` is called as `recv.value = x`, whose
+ * name token is `value` (with any spacing before the `=`), so the word index
+ * is searched for `value`, and each occurrence checked to resolve to the setter.
+ */
+class InkoSetterReferencesSearcher : QueryExecutorBase<PsiReference, ReferencesSearch.SearchParameters>(true) {
+    override fun processQuery(parameters: ReferencesSearch.SearchParameters, consumer: Processor<in PsiReference>) {
+        val setter = parameters.elementToSearch as? InkoDeclaration ?: return
+        val name = setter.name.takeIf { it.endsWith("=") && it.length > 1 } ?: return
+        parameters.optimizer.searchWord(name.removeSuffix("="), parameters.effectiveSearchScope, UsageSearchContext.IN_CODE, true, setter)
+    }
+}
+
+/**
  * Marks method calls whose receiver's type isn't known, which may mean a
  * same-named method on another type, so Find Usages and Rename's preview show
  * them apart (like RubyMine's and PyCharm's dynamic usages).
@@ -96,7 +109,8 @@ class InkoRenameInputValidator : RenameInputValidator {
         return when (declaration.tokenType) {
             InkoTokens.CONSTANT -> Regex("[A-Z][A-Za-z0-9_]*").matches(name)
             InkoTokens.FIELD -> Regex("[a-z_][a-z0-9_]*").matches(name)
-            else -> Regex("[a-z_][A-Za-z0-9_]*\\??").matches(name)
+            // A setter stays a setter: `value=` becomes `other=`.
+            else -> if (declaration.name.endsWith("=")) Regex("[a-z_][A-Za-z0-9_]*=").matches(name) else Regex("[a-z_][A-Za-z0-9_]*\\??").matches(name)
         }
     }
 }

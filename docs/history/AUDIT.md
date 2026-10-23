@@ -284,6 +284,15 @@ new name under that tag.
 
 ### 1.6 Setter methods (`fn value=`) are disconnected from their calls (Medium)
 
+**Status: confirmed and fixed in <commit:1.6>.** `InkoSetterTest` failed
+before the fix (all 4 tests). `recv.name = x` (with or without spaces) now
+resolves to the setter `name=`, as Inko's `assign_setter` does, and to the
+field only when there's no setter. A references searcher finds a setter's
+calls by the word without its `=`; renaming keeps the `=` on the
+declaration and leaves it off the calls; the rename validator accepts
+`other=` for a setter. Find Usages, Safe Delete and Highlight Usages use the
+same search.
+
 **What Parakeet assumes.** `value=` is one name token, but only right after
 `fn` (`P/InkoLexer.kt:136` and `P/InkoLexer.kt:143-155`). A call site
 `x.value = 1` lexes as `value`, `=`. The rename validator rejects `=` in

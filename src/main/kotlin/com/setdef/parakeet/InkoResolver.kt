@@ -19,8 +19,11 @@ class InkoReference(element: InkoName) :
     override fun getVariants(): Array<Any> = emptyArray()
 
     // A renamed module file (`util.inko`) renames the module in import paths (`util`).
-    override fun handleElementRename(newElementName: String): PsiElement =
-        element.rename(newElementName.removeSuffix(".${Inko.EXTENSION}"))
+    // A setter's call (`recv.value = x`) names it without its `=`.
+    override fun handleElementRename(newElementName: String): PsiElement {
+        val name = newElementName.removeSuffix(".${Inko.EXTENSION}")
+        return element.rename(if (!element.text.endsWith("=")) name.removeSuffix("=") else name)
+    }
 
     // A moved module file changes its module path: an import names it anew; `util.helper` (by its last name) stays.
     override fun bindToElement(target: PsiElement): PsiElement {
@@ -52,7 +55,10 @@ class InkoResolver private constructor(
         is InkoNameContext.ModuleReference -> listOfNotNull(symbols.module(context.module))
         is InkoNameContext.Field -> field(context.name)
         is InkoNameContext.StaticMember -> staticMember(context.type, context.name)
-        is InkoNameContext.InstanceMember -> instanceMember(context.name, context.receiverType)
+        is InkoNameContext.InstanceMember ->
+            // `recv.name = x` calls the setter `name=`, or assigns the field when there's no setter.
+            if (context.assigned) instanceMember("${context.name}=", context.receiverType).ifEmpty { fieldsNamed(context.name, context.receiverType) }
+            else instanceMember(context.name, context.receiverType)
         is InkoNameContext.Local -> emptyList() // Resolved from the file itself; see [localDeclaration].
         is InkoNameContext.Constant -> typesNamed(context.name).ifEmpty { symbols.named(context.name, Kind.CONSTRUCTOR) }
         is InkoNameContext.Identifier -> function(context.name)
@@ -93,6 +99,12 @@ class InkoResolver private constructor(
             .map { it.text }
             .toSet() + imports.symbolNames
         return methods.filter { it.owner in inScope }.ifEmpty { methods }
+    }
+
+    private fun fieldsNamed(name: String, receiverType: String?): List<InkoDefinition> {
+        val fields = symbols.named(name, Kind.FIELD)
+        val owner = receiverType?.let { imports.symbol(it)?.second ?: it } ?: return fields
+        return fields.filter { it.owner == owner }.ifEmpty { fields }
     }
 
     /** `@name` means the enclosing type's field (fields are private to their type). */

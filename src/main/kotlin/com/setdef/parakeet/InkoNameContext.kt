@@ -17,8 +17,12 @@ sealed class InkoNameContext {
     /** `Type.name` */
     data class StaticMember(val type: String, val name: String) : InkoNameContext()
 
-    /** `value.name`; [receiverType] is the receiver's type when it's known (a typed local, or `self`). */
-    data class InstanceMember(val name: String, val receiverType: String? = null) : InkoNameContext()
+    /**
+     * `value.name`; [receiverType] is the receiver's type when it's known (a typed local, or `self`). With
+     * [assigned], it's `value.name = x`, which Inko's parser reads as a call of the setter `name=`
+     * (ast/src/parser.rs, `call_with_receiver` and `assign_setter`).
+     */
+    data class InstanceMember(val name: String, val receiverType: String? = null, val assigned: Boolean = false) : InkoNameContext()
 
     /** A local variable or parameter in scope. */
     data class Local(val local: InkoLocal) : InkoNameContext()
@@ -60,7 +64,7 @@ sealed class InkoNameContext {
                     imports.moduleAliasedAs(receiver!!.text)?.let { return ModuleMember(it, text) }
                 }
                 if (receiver.isToken(InkoTokens.CONSTANT)) return StaticMember(receiver!!.text, text)
-                return InstanceMember(text, receiver?.let { receiverType(it) })
+                return InstanceMember(text, receiver?.let { receiverType(it) }, isAssigned(name))
             }
             if (name.tokenType == InkoTokens.CONSTANT) return Constant(text)
             if (previous.isKeyword(*DEFINING_KEYWORDS)) return Definition
@@ -69,6 +73,13 @@ sealed class InkoNameContext {
             }
             InkoLocals.visibleAt(name.containingFile.text, offset).lastOrNull { it.name == text }?.let { return Local(it) }
             return Identifier(text)
+        }
+
+        /** Whether a plain `=` (not `==` or `=>`) follows [name]: `recv.name = x`. */
+        fun isAssigned(name: com.intellij.psi.PsiElement): Boolean {
+            val next = name.nextToken()?.takeIf { it.isToken(InkoTokens.OPERATOR) && it.text == "=" } ?: return false
+            val after = next.nextToken()
+            return !(after.isToken(InkoTokens.OPERATOR) && after!!.textRange.startOffset == next.textRange.endOffset && after.text in setOf("=", ">"))
         }
 
         /** The type of a receiver before `.`: a local with a known type, or `self`. */

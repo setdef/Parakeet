@@ -187,6 +187,7 @@
         <internalFileTemplate name="Inko Program"/>
         <lang.findUsagesProvider language="Inko" implementationClass="com.setdef.parakeet.InkoFindUsagesProvider"/>
         <referencesSearch implementation="com.setdef.parakeet.InkoModuleReferencesSearcher"/>
+        <referencesSearch implementation="com.setdef.parakeet.InkoSetterReferencesSearcher"/>
         <usageTypeProvider implementation="com.setdef.parakeet.InkoUsageTypeProvider"/>
         <lang.namesValidator language="Inko" implementationClass="com.setdef.parakeet.InkoNamesValidator"/>
         <renameInputValidator implementation="com.setdef.parakeet.InkoRenameInputValidator"/>

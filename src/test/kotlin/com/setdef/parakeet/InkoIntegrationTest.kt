@@ -250,6 +250,16 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertCompiles()
     }
 
+    // AUDIT.md finding 1.6: `recv.value = x` calls the setter `value=`, so renaming the setter renames the call.
+    fun testRenamedSettersStillCompile() {
+        putTempDirInProjectContent()
+        myFixture.addFileToProject("src/app/counter.inko", "type pub Counter {\n  let mut @value: Int\n\n  fn pub mut value=(v: Int) {\n    @value = v\n  }\n}\n")
+        myFixture.addFileToProject("src/main.inko", "import app.counter (Counter)\n\nfn bump(c: mut Counter) {\n  c.value = 2\n}\n")
+        myFixture.renameElement(declaration("src/app/counter.inko", "value="), "amount=")
+        assertTrue(PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/main.inko"))!!.text.contains("c.amount = 2"))
+        assertCompiles()
+    }
+
     fun testInlinedMethodsStillCompile() {
         putTempDirInProjectContent()
         myFixture.addFileToProject(

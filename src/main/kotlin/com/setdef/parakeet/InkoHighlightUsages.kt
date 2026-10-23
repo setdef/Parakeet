@@ -33,7 +33,9 @@ object InkoUsages {
     /** Names in [name]'s file that mean what it means, each marked whether it's the declaration. */
     fun inFile(name: InkoName): List<Pair<InkoName, Boolean>> {
         val file = name.containingFile ?: return emptyList()
-        val candidates = PsiTreeUtil.findChildrenOfType(file, InkoName::class.java).filter { it.text == name.text }
+        // A setter (`value=`) is called as `recv.value = x`, and that call means the setter.
+        val texts = setOf(name.text, name.text.removeSuffix("="), "${name.text}=")
+        val candidates = PsiTreeUtil.findChildrenOfType(file, InkoName::class.java).filter { it.text in texts }
         val symbol = symbolOf(name)
         return candidates.mapNotNull { candidate ->
             val other = if (candidate == name) symbol else symbolOf(candidate)

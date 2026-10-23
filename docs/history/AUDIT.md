@@ -71,6 +71,12 @@ fn greet(name: String) -> String {
 
 ### 1.2 `for` loop variables and destructuring `let` patterns aren't locals (High)
 
+**Status: confirmed and fixed in <commit:1.2>, with 1.3 and section 3's
+module-qualified constant patterns.** `InkoLocalPatternsTest` failed before
+the fix (all 8 tests). `InkoLocals` now reads `let`, `for` and `match` arm
+patterns with one scanner that follows Inko's `pattern()`, and a `for`
+pattern's names belong to the loop's body.
+
 **What Parakeet assumes.** `InkoLocals.scan` declares locals for only three
 things:
 
@@ -114,6 +120,10 @@ Parakeet, so:
 - Completion and Expression Type don't know them.
 
 ### 1.3 Enum constructors turn the next method into a "local variable" (High)
+
+**Status: confirmed and fixed in <commit:1.2>, by the same change as 1.2.**
+`case` only binds names inside a `match` block; in a type's body it defines
+a constructor, which binds nothing. `InkoLocalPatternsTest` covers both.
 
 **What Parakeet assumes.** In the `case` branch, `InkoLocals` treats every
 `IDENTIFIER` up to the next `->` (or `if`) as a binding
@@ -609,7 +619,8 @@ up `\u{…}` escapes.
   (`P/InkoLexer.kt:95`), so `@0` lexes as two operator and number tokens.
   These fields aren't fields to the outline, completion, or
   `InkoDefinitionSite`.
-- **Constant patterns with a module qualifier.** `case mod.CONST ->`
+- **Constant patterns with a module qualifier.** *Status: confirmed and fixed
+  in <commit:1.2>, by the fix for 1.2 (`testModuleQualifiedConstantPatternsBindNothing`).* `case mod.CONST ->`
   (`ast/src/parser.rs:2803-2817`). Parakeet's `case` scan declares `mod` as
   a binding (`P/InkoLocals.kt:124-128`), because only the name after the dot
   is excluded.

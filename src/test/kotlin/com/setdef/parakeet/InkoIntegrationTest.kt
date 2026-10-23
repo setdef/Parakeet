@@ -213,6 +213,21 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         "fn pub greet(name: String) -> String {\n  let greeting: String = 'Hello'\n  <selection>'\${greeting}, \${name}!'</selection>\n}\n",
     )
 
+    // AUDIT.md findings 1.2 and 1.3: loop and pattern variables are locals, and an enum's methods aren't.
+    fun testRenamedPatternVariablesStillCompile() {
+        putTempDirInProjectContent()
+        val text = "type pub enum Shape {\n  case Circle(Int)\n  case Square(Int)\n\n  fn pub area -> Int {\n    match self {\n      case Circle(r) -> r * r\n      case Square(s) -> s * s\n    }\n  }\n}\n\n" +
+            "fn pub total(items: Array[Int]) -> Int {\n  let mut sum = 0\n  for (index, value) in items.iter.with_index { sum += value + index }\n  let Some(first) = items.first else return 0\n  sum + first\n}\n"
+        open("src/app/shapes.inko", text)
+        for ((marker, name) in listOf("value)" to "item", "first)" to "head", "r) ->" to "radius")) {
+            val declaration = PsiTreeUtil.getParentOfType(myFixture.file.findElementAt(myFixture.file.text.indexOf(marker)), InkoDeclaration::class.java, false)!!
+            myFixture.renameElement(declaration, name)
+        }
+        assertTrue(myFixture.file.text, myFixture.file.text.contains("sum += item + index") && myFixture.file.text.contains("sum + head") && myFixture.file.text.contains("radius * radius"))
+        assertFalse(declaration("src/app/shapes.inko", "area").isLocal)
+        assertCompiles()
+    }
+
     fun testInlinedMethodsStillCompile() {
         putTempDirInProjectContent()
         myFixture.addFileToProject(

@@ -16,6 +16,9 @@ import com.intellij.psi.PsiReference
 import com.intellij.psi.impl.source.tree.LeafPsiElement
 import com.intellij.psi.search.LocalSearchScope
 import com.intellij.psi.search.SearchScope
+import com.intellij.openapi.util.TextRange
+import com.intellij.psi.PsiDocumentManager
+import com.intellij.util.IncorrectOperationException
 import com.intellij.psi.tree.IElementType
 import com.intellij.psi.tree.IFileElementType
 import com.intellij.psi.tree.TokenSet
@@ -58,6 +61,17 @@ class InkoDeclaration(node: ASTNode) : InkoName(node), PsiNameIdentifierOwner {
     val isLocal: Boolean get() = InkoLocals.declaredAt(containingFile.text, textRange.startOffset) != null
 
     override fun getUseScope(): SearchScope = if (isLocal) LocalSearchScope(containingFile) else super.getUseScope()
+
+    /** Deleting a declaration deletes all of it (Safe Delete): its body, and the comment lines above it. */
+    override fun delete() {
+        val range = InkoDeclarations.extent(this) ?: throw IncorrectOperationException("Can't delete ${text} here.")
+        val file = containingFile
+        val manager = PsiDocumentManager.getInstance(project)
+        val document = manager.getDocument(file) ?: throw IncorrectOperationException("Can't delete ${text}.")
+        manager.doPostponedOperationsAndUnblockDocument(document)
+        document.deleteString(range.startOffset, range.endOffset)
+        manager.commitDocument(document)
+    }
 }
 
 /** Where names are declared, found from a file's text alone (so the parser can use it). */
@@ -89,6 +103,42 @@ object InkoDeclarations {
             InkoOutline.Kind.METHOD -> if (path.size > 1) "method" else "function"
             InkoOutline.Kind.IMPL -> "impl"
         }
+    }
+
+    /**
+     * The whole of what [declaration] declares, as whole lines (with the comment
+     * lines right above it): a method or type with its body, a field, a
+     * constant, an enum constructor, or a local's `let` statement. Null for a
+     * parameter or pattern binding, which can't be deleted on its own.
+     */
+    fun extent(declaration: InkoDeclaration): TextRange? {
+        val text = declaration.containingFile.text
+        val offset = declaration.textRange.startOffset
+        val stream = InkoTokenStream(text)
+        val span: TextRange = InkoOutline.of(text).enclosing(offset).lastOrNull { it.nameOffset == offset }?.range
+            ?: run {
+                val index = stream.tokens.indexOfFirst { it.start == offset }
+                val previous = stream.tokens.getOrNull(index - 1)
+                when {
+                    // An enum constructor: `case Name(…)`, on its own line.
+                    previous?.isKeyword("case") == true -> TextRange(previous.start, stream.tokens[stream.statementEnd(index - 1)].end)
+                    // A local: `let name = …` (or `let mut name`), the whole statement.
+                    previous?.isKeyword("let") == true || (previous?.isKeyword("mut") == true && stream.tokens.getOrNull(index - 2)?.isKeyword("let") == true) -> {
+                        val let = if (previous!!.isKeyword("let")) index - 1 else index - 2
+                        TextRange(stream.tokens[let].start, stream.tokens[stream.statementEnd(let)].end)
+                    }
+                    else -> return null
+                }
+            }
+        var start = text.lastIndexOf('\n', span.startOffset - 1) + 1
+        // Comment lines directly above go with it (its documentation).
+        while (start > 0) {
+            val previousStart = text.lastIndexOf('\n', start - 2) + 1
+            if (!text.substring(previousStart, start).trimStart().startsWith("#")) break
+            start = previousStart
+        }
+        val end = text.indexOf('\n', span.endOffset).let { if (it < 0) text.length else it + 1 }
+        return TextRange(start, end)
     }
 
     /** Whether [declaration] is a method that's called on a value, which can't always be told apart from same-named ones. */

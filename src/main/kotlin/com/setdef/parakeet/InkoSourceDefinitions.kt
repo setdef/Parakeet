@@ -15,12 +15,13 @@ object InkoSourceDefinitions {
         val lines = LineIndex(text)
         val result = mutableListOf(InkoDefinition(Kind.MODULE, module, module, null, file, 1, 1))
 
-        fun add(kind: Kind, name: String, owner: String?, node: InkoOutline.Node) {
+        fun add(kind: Kind, name: String, owner: String?, node: InkoOutline.Node, required: Boolean = false) {
             val (line, column) = lines.position(node.nameOffset)
             result += InkoDefinition(
                 kind, name, module, owner, file, line, column,
                 signature = signature(text, node),
                 documentation = lines.docCommentAbove(node.range.startOffset),
+                required = required,
             )
         }
 
@@ -31,7 +32,11 @@ object InkoSourceDefinitions {
                     if (root.kind != InkoOutline.Kind.IMPL) add(if (root.kind == InkoOutline.Kind.TYPE) Kind.TYPE else Kind.TRAIT, root.label, null, root)
                     for (member in root.children) {
                         when (member.kind) {
-                            InkoOutline.Kind.METHOD -> add(if (isStatic(text, member)) Kind.STATIC_METHOD else Kind.INSTANCE_METHOD, member.label, owner, member)
+                            // A trait method without a body is one implementations must define.
+                            InkoOutline.Kind.METHOD -> add(
+                                if (isStatic(text, member)) Kind.STATIC_METHOD else Kind.INSTANCE_METHOD, member.label, owner, member,
+                                required = root.kind == InkoOutline.Kind.TRAIT && member.range.endOffset == member.nameOffset,
+                            )
                             InkoOutline.Kind.FIELD -> add(Kind.FIELD, member.label.removePrefix("@"), owner, member)
                             else -> {}
                         }

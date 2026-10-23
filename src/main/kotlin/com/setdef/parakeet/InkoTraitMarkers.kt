@@ -100,7 +100,8 @@ object InkoTraitLinks {
     }
 
     /** The trait named [name] as seen from this file: imported, else any. */
-    private fun trait(symbols: InkoSymbols, imports: InkoImports, name: String): InkoDefinition? {
+    /** The trait [name] refers to: the one imported under that name, or any trait so named. */
+    fun trait(symbols: InkoSymbols, imports: InkoImports, name: String): InkoDefinition? {
         imports.symbol(name)?.let { (module, original) ->
             symbols.named(original, Kind.TRAIT).firstOrNull { it.module == module }?.let { return it }
         }

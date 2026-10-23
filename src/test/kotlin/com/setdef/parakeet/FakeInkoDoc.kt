@@ -36,9 +36,10 @@ object FakeInkoDoc {
         requiredMethods: List<Map<String, Any>> = emptyList(),
         implementations: List<Pair<String, String>> = emptyList(),
         signature: String = "trait $name",
+        defaultMethods: List<Map<String, Any>> = emptyList(),
     ) = mapOf(
         "name" to name, "location" to location(line), "type" to signature, "documentation" to "",
-        "required_methods" to requiredMethods, "default_methods" to emptyList<Any>(),
+        "required_methods" to requiredMethods, "default_methods" to defaultMethods,
         "implementations" to implementations.map { (module, type) -> mapOf("module" to module, "name" to type) },
     )
 

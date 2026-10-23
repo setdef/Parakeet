@@ -24,6 +24,8 @@ data class InkoDefinition(
     val documentation: String = "",
     /** For a trait, the types implementing it; for a type, the traits it implements. */
     val related: List<InkoTypeRef> = emptyList(),
+    /** For a trait's method, whether implementations must define it (it has no default body). */
+    val required: Boolean = false,
 )
 
 /** A type or trait named by module, e.g. `Show` in `app.util`. */
@@ -75,14 +77,14 @@ object InkoDocParser {
             InkoDefinition(InkoDefinitionKind.MODULE, module, module, null, moduleFile, 1, 1, "import $module", root.string("documentation").orEmpty()),
         )
 
-        fun add(kind: InkoDefinitionKind, obj: JsonObject, owner: String?, related: List<InkoTypeRef> = emptyList()) {
+        fun add(kind: InkoDefinitionKind, obj: JsonObject, owner: String?, related: List<InkoTypeRef> = emptyList(), required: Boolean = false) {
             val name = obj.string("name") ?: return
             val location = obj.getAsJsonObject("location") ?: return
             // Methods carry their own file: default trait methods live in the trait's module.
             val file = obj.string("file")?.let { toReal(Path.of(it)) } ?: moduleFile
             val line = location.getAsJsonObject("lines")?.get("start")?.asInt ?: 1
             val column = location.getAsJsonObject("columns")?.get("start")?.asInt ?: 1
-            result += InkoDefinition(kind, name, module, owner, file, line, column, obj.string("type"), obj.string("documentation").orEmpty(), related)
+            result += InkoDefinition(kind, name, module, owner, file, line, column, obj.string("type"), obj.string("documentation").orEmpty(), related, required)
         }
 
         root.objects("constants").forEach { add(InkoDefinitionKind.CONSTANT, it, null) }
@@ -98,7 +100,7 @@ object InkoDocParser {
         for (trait in root.objects("traits")) {
             add(InkoDefinitionKind.TRAIT, trait, null, trait.typeRefs("implementations"))
             val owner = trait.string("name")
-            trait.objects("required_methods").forEach { add(InkoDefinitionKind.INSTANCE_METHOD, it, owner) }
+            trait.objects("required_methods").forEach { add(InkoDefinitionKind.INSTANCE_METHOD, it, owner, required = true) }
             trait.objects("default_methods").forEach { add(InkoDefinitionKind.INSTANCE_METHOD, it, owner) }
         }
         return result

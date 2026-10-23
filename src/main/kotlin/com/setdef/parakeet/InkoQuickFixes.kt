@@ -17,6 +17,8 @@ object InkoQuickFixes {
         "invalid-symbol" -> InkoImportFix.forDiagnostic(file, diagnostic)
         "unused-symbol" -> unusedSymbol(file, diagnostic, range)
         "unused-result" -> listOf(DiscardResultFix(range.startOffset))
+        "invalid-implementation" ->
+            if ("must be implemented" in diagnostic.message) listOf(InkoImplementMethodsFix(range.startOffset)) else emptyList()
         else -> emptyList()
     }
 

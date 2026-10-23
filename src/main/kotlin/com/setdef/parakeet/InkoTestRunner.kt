@@ -85,6 +85,19 @@ object InkoTestProgram {
 
 /** Where a project's test runs build, in the IDE's system directory (never the project). */
 object InkoTestRuns {
+    /**
+     * The compiled test program, relative to the mirror: `build/debug/tests`,
+     * `build/release/tests` with `--release`, and under the target's name for
+     * a target other than the host's (as the compiler's BuildDirectories does).
+     */
+    fun program(configuration: InkoRunConfiguration, cli: InkoCli): String {
+        val options = configuration.options
+        val optimization = if (options.release) "release" else "debug"
+        val target = options.compileTarget?.takeIf { it.isNotBlank() }
+        val native = target == null || target == InkoTargets.host(cli)
+        return if (native) "build/$optimization/tests" else "build/$target/$optimization/tests"
+    }
+
     fun directoryFor(root: Path): Path =
         PathManager.getSystemDir().resolve("parakeet").resolve("tests").resolve("${root.name}-${Integer.toHexString(root.toString().hashCode())}")
 
@@ -136,10 +149,12 @@ class InkoTestRunState(
         val arguments = ParametersListUtil.parse(options.arguments.orEmpty())
         val command = if (rerun != null) {
             val script = mirror.directory.resolve(".parakeet").resolve("rerun.sh")
-            Files.writeString(script, InkoTestReruns.script(rerun, root))
+            Files.writeString(script, InkoTestReruns.script(rerun, root, configuration.buildFlags(), InkoTestRuns.program(configuration, cli)))
             listOf("/bin/sh", script.toString(), inko, mirror.directory.toString(), root.toString()) + arguments
         } else {
-            val script = """mirror="${'$'}1"; root="${'$'}2"; shift 2; cd "${'$'}mirror" && "${'$'}0" build --include test .parakeet/tests.inko && cd "${'$'}root" && exec "${'$'}mirror/build/debug/tests" "${'$'}@""""
+            val build = (listOf("build") + configuration.buildFlags() + listOf("--include", "test", ".parakeet/tests.inko")).joinToString(" ") { InkoTestReruns.sh(it) }
+        val program = InkoTestRuns.program(configuration, cli)
+        val script = """mirror="${'$'}1"; root="${'$'}2"; shift 2; cd "${'$'}mirror" && "${'$'}0" $build && cd "${'$'}root" && exec "${'$'}mirror/$program" "${'$'}@""""
             listOf("/bin/sh", "-c", script, inko, mirror.directory.toString(), root.toString()) + listOfNotNull(filter) + arguments
         }
         return GeneralCommandLine(command)
@@ -179,13 +194,14 @@ class InkoTestConsoleProperties(configuration: InkoRunConfiguration, executor: E
 
 /** The script that reruns failed tests: build once, then one run per test name. */
 object InkoTestReruns {
-    fun script(tests: List<InkoFailedTest>, root: Path): String {
+    fun script(tests: List<InkoFailedTest>, root: Path, buildFlags: List<String> = emptyList(), program: String = "build/debug/tests"): String {
         val names = tests.map { it.name }.distinct()
         val suites = tests.map { it.path }.distinct()
         fun message(text: String) = "printf '%s\\n' ${sh("##teamcity[$text]")}"
         return buildString {
             appendLine("""inko="${'$'}1"; mirror="${'$'}2"; root="${'$'}3"; shift 3""")
-            appendLine("""cd "${'$'}mirror" && "${'$'}inko" build --include test .parakeet/tests.inko || exit ${'$'}?""")
+            val build = (listOf("build") + buildFlags + listOf("--include", "test", ".parakeet/tests.inko")).joinToString(" ") { sh(it) }
+            appendLine("""cd "${'$'}mirror" && "${'$'}inko" $build || exit ${'$'}?""")
             appendLine("""cd "${'$'}root" || exit ${'$'}?""")
             for (path in suites) {
                 val name = path.removePrefix("$root/test/")
@@ -194,7 +210,7 @@ object InkoTestReruns {
             appendLine("status=0")
             for ((index, name) in names.withIndex()) {
                 append("PARAKEET_ANNOUNCED_SUITES=${sh(suites.joinToString("\n"))} PARAKEET_RUN=${sh("r$index-")} ")
-                appendLine(""""${'$'}mirror/build/debug/tests" ${sh(name)} "${'$'}@" || status=1""")
+                appendLine(""""${'$'}mirror/$program" ${sh(name)} "${'$'}@" || status=1""")
             }
             for (path in suites) appendLine(message("testSuiteFinished nodeId='${teamcity("s:$path")}'"))
             appendLine("""exit ${'$'}status""")
@@ -202,7 +218,7 @@ object InkoTestReruns {
     }
 
     /** Quotes [text] for a POSIX shell. */
-    private fun sh(text: String) = "'" + text.replace("'", "'\\''") + "'"
+    fun sh(text: String) = "'" + text.replace("'", "'\\''") + "'"
 
     /** Escapes a TeamCity service message value. */
     private fun teamcity(text: String) = text.replace("|", "||").replace("'", "|'").replace("\n", "|n").replace("\r", "|r")
@@ -258,4 +274,12 @@ object InkoTestLocator : SMTestLocator {
             ?: psiFile
         return listOf(PsiLocation(leaf))
     }
+}
+
+/** The targets `inko` can compile for (`inko targets`), and the host's (`inko print target`). */
+object InkoTargets {
+    fun list(cli: InkoCli): List<String> = cli.run(listOf("targets"), null, timeoutMs = 10_000)?.takeIf { it.succeeded }?.stdout
+        ?.lines()?.map { it.removeSuffix("(native)").trim() }?.filter { it.isNotEmpty() }.orEmpty()
+
+    fun host(cli: InkoCli): String? = cli.run(listOf("print", "target"), null, timeoutMs = 10_000)?.takeIf { it.succeeded }?.stdout?.trim()
 }

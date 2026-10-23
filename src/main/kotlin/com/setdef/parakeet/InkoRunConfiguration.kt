@@ -23,11 +23,12 @@ import com.intellij.util.execution.ParametersListUtil
 import java.nio.file.Files
 import java.nio.file.Path
 
-enum class InkoCommand(val cli: String, val label: String) {
-    RUN("run", "run — compile and run a file"),
-    TEST("test", "test — run the project's tests"),
-    BUILD("build", "build — compile an executable"),
-    CHECK("check", "check — type-check without compiling"),
+/** The `inko` commands a run configuration can run, and which build options each accepts (from `inko COMMAND --help`). */
+enum class InkoCommand(val cli: String, val label: String, val release: Boolean, val target: Boolean, val static: Boolean) {
+    RUN("run", "run — compile and run a file", release = true, target = false, static = true),
+    TEST("test", "test — run the project's tests", release = true, target = true, static = false),
+    BUILD("build", "build — compile an executable", release = true, target = true, static = true),
+    CHECK("check", "check — type-check without compiling", release = false, target = true, static = false),
 }
 
 class InkoRunConfigurationType : ConfigurationTypeBase(
@@ -56,6 +57,12 @@ class InkoRunConfigurationOptions : LocatableRunConfigurationOptions() {
     /** The file for run/build/check; for test, an optional filter (a test file path or a test name). */
     var target by string()
     var arguments by string()
+
+    /** `--release`, `--target TARGET`, and `--static`, passed to the commands that accept them. */
+    var release by property(false)
+    var compileTarget by string()
+    var staticLinking by property(false)
+
     var workingDirectory by string()
     var environment by map<String, String>()
     var passParentEnvironment by property(true)
@@ -86,6 +93,14 @@ class InkoRunConfiguration(project: Project, factory: ConfigurationFactory, name
     }
 
     /** The project directory: the working directory if set, else the project root of the target file. */
+    /** The build options this configuration's command accepts: `--release`, `--target`, `--static`. */
+    fun buildFlags(): List<String> = buildList {
+        val target = options.compileTarget?.takeIf { it.isNotBlank() }
+        if (command.release && options.release) add("--release")
+        if (command.target && target != null) addAll(listOf("--target", target))
+        if (command.static && options.staticLinking) add("--static")
+    }
+
     fun projectRoot(): Path? = options.workingDirectory?.takeIf { it.isNotBlank() }?.let(Path::of)
         ?: options.target?.takeIf { it.isNotBlank() }?.let(Path::of)?.takeIf { it.isAbsolute && Files.exists(it) }?.let(Inko::projectRoot)
         ?: project.basePath?.let(Path::of)
@@ -101,7 +116,7 @@ class InkoRunState(environment: ExecutionEnvironment, private val configuration:
     /** `inko <command> [target] [arguments…]`, with the configuration's environment and working directory. */
     fun commandLine(): GeneralCommandLine {
         val options = configuration.options
-        val arguments = listOf(configuration.command.cli) +
+        val arguments = listOf(configuration.command.cli) + configuration.buildFlags() +
             listOfNotNull(options.target?.takeIf { it.isNotBlank() }) +
             ParametersListUtil.parse(options.arguments.orEmpty())
         val command = InkoCli.getInstance(environment.project).commandLine(arguments, workingDirectory)

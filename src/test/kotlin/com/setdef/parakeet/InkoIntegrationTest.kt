@@ -173,6 +173,28 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf("test_a.inko > a fails: failed", "test_b.inko > b's failure: failed"), second)
     }
 
+    fun testRunsTestsInReleaseModeAndListsTargets() {
+        myFixture.addFileToProject("src/math.inko", "fn pub add(a: Int, b: Int) -> Int {\n  a + b\n}\n")
+        myFixture.addFileToProject("test/test_math.inko", "import math (add)\nimport std.test (Tests)\n\nfn pub tests(t: mut Tests) {\n  t.test('adds', fn (t) { t.equal(add(1, 1), 2) })\n}\n")
+        val configuration = InkoRunConfigurationType.getInstance().configurationFactories[0].createTemplateConfiguration(project) as InkoRunConfiguration
+        configuration.options.command = InkoCommand.TEST.cli
+        configuration.options.workingDirectory = myFixture.tempDirPath
+        configuration.options.release = true
+        val environment = ExecutionEnvironmentBuilder.create(DefaultRunExecutor.getRunExecutorInstance(), configuration).build()
+        val result = (configuration.getState(environment.executor, environment) as InkoTestRunState).execute(environment.executor, environment.runner)
+        val console = result.executionConsole as com.intellij.execution.testframework.sm.runner.ui.SMTRunnerConsoleView
+        try {
+            result.processHandler!!.startNotify()
+            assertTrue("tests timed out", result.processHandler!!.waitFor(300_000))
+            com.intellij.util.ui.UIUtil.dispatchAllInvocationEvents()
+            assertTrue(console.resultsViewer.testsRootNode.allTests.single { it.isLeaf }.isPassed)
+        } finally {
+            com.intellij.openapi.util.Disposer.dispose(console)
+        }
+        val cli = InkoCli.getInstance(project)
+        assertTrue(InkoTargets.list(cli).contains(InkoTargets.host(cli)))
+    }
+
     fun testCreatesAProjectWithInkoInit() {
         val directory = Files.createDirectories(Path.of(myFixture.tempDirPath, "From IntelliJ"))
         InkoProjectGenerator.generate(project, directory, InkoNewProjectSettings(github = true, moduleName = "from_intellij"))

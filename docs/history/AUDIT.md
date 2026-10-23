@@ -732,7 +732,10 @@ up `\u{…}` escapes.
   is 4, like any copy type.*
 - **Invalid code sample.** The Code Style preview calls `Iter.each`
   (`P/InkoCodeStyle.kt:42`), which doesn't exist in v0.21.1
-  (`std/src/std/iter.inko`).
+  (`std/src/std/iter.inko`). *Status: confirmed and fixed in <commit:3.sample>
+  (`InkoIntegrationTest.testTheCodeStyleSampleCompiles` failed before the
+  fix with "the method 'each' isn't defined for type 'Iter[Int]'"). The
+  sample uses a `for` loop.*
 
 ---
 

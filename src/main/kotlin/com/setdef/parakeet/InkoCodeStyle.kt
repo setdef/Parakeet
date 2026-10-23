@@ -39,9 +39,9 @@ class InkoCodeStyleSettingsProvider : LanguageCodeStyleSettingsProvider() {
         |  fn async main {
         |    let out = Stdout.new
         |
-        |    [1, 2, 3].iter.each(fn (n) {
-        |      out.print(n.to_string)
-        |    })
+        |    for n in [1, 2, 3] {
+        |      let _ = out.print(n.to_string)
+        |    }
         |  }
         |}
         |""".trimMargin()

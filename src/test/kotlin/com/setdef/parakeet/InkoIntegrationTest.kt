@@ -288,6 +288,13 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals("Int", InkoExpressionTypes.of(myFixture.file, com.intellij.openapi.util.TextRange(start, start + "LIMIT".length)))
     }
 
+    // AUDIT.md section 3: the Code Style preview must be valid Inko.
+    fun testTheCodeStyleSampleCompiles() {
+        val sample = InkoCodeStyleSettingsProvider().getCodeSample(com.intellij.psi.codeStyle.LanguageCodeStyleSettingsProvider.SettingsType.INDENT_SETTINGS)
+        myFixture.addFileToProject("src/sample.inko", sample)
+        assertCompiles()
+    }
+
     fun testInlinedMethodsStillCompile() {
         putTempDirInProjectContent()
         myFixture.addFileToProject(

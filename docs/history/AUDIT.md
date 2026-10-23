@@ -705,7 +705,9 @@ up `\u{…}` escapes.
   (`ast/src/lexer.rs:772-782`). Parakeet requires a letter or `_`
   (`P/InkoLexer.kt:95`), so `@0` lexes as two operator and number tokens.
   These fields aren't fields to the outline, completion, or
-  `InkoDefinitionSite`.
+  `InkoDefinitionSite`. *Status: confirmed and fixed in <commit:3.fields>
+  (`InkoNumericFieldsTest` failed before the fix). The lexer takes digits
+  after `@`, as Inko's `field` does.*
 - **Constant patterns with a module qualifier.** *Status: confirmed and fixed
   in <commit:1.2>, by the fix for 1.2 (`testModuleQualifiedConstantPatternsBindNothing`).* `case mod.CONST ->`
   (`ast/src/parser.rs:2803-2817`). Parakeet's `case` scan declares `mod` as

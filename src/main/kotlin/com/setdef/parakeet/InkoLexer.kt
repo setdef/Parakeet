@@ -139,7 +139,8 @@ class InkoLexer : LexerBase() {
                 i = skipNumber(if (c == '-') i + 1 else i)
                 InkoTokens.NUMBER
             }
-            c == '@' && i + 1 < end && isNameStart(buffer[i + 1]) -> {
+            // Any identifier bytes, digits included (`@0`), as Inko's `field` reads them.
+            c == '@' && i + 1 < end && (isNameStart(buffer[i + 1]) || buffer[i + 1].isDigit()) -> {
                 i = skipName(i + 1)
                 InkoTokens.FIELD
             }

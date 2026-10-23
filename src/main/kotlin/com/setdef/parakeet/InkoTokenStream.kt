@@ -32,19 +32,29 @@ class InkoTokenStream(val text: CharSequence) {
         }
     }
 
+    // Pairs each closer with the nearest unclosed opener of its kind; openers left in between stay unmatched (-1).
     private val matches: IntArray = IntArray(tokens.size) { -1 }.also { matches ->
         val open = ArrayDeque<Int>()
         tokens.forEachIndexed { index, token ->
             when {
                 token.opens -> open.addLast(index)
-                token.closes && open.isNotEmpty() -> {
-                    val start = open.removeLast()
-                    matches[start] = index
-                    matches[index] = start
+                token.closes -> {
+                    val opener = open.indexOfLast { pairs(tokens[it], token) }
+                    if (opener >= 0) {
+                        val start = open[opener]
+                        while (open.size > opener) open.removeLast()
+                        matches[start] = index
+                        matches[index] = start
+                    }
                 }
             }
         }
     }
+
+    private fun pairs(open: InkoToken, close: InkoToken): Boolean =
+        (open.type == InkoTokens.LPAREN && close.type == InkoTokens.RPAREN) ||
+            (open.type == InkoTokens.LBRACKET && close.type == InkoTokens.RBRACKET) ||
+            (open.type == InkoTokens.LBRACE && close.type == InkoTokens.RBRACE)
 
     /** The index of the bracket matching the one at [index], or -1. */
     fun match(index: Int): Int = matches.getOrElse(index) { -1 }
@@ -117,6 +127,19 @@ class InkoTokenStream(val text: CharSequence) {
             if (lineBreakBetween(i, next) && !continues(next)) return i
             i = next
         }
+    }
+
+    /** The statements in the block opened at [block] (-1 for the file's top level), as token index ranges. */
+    fun statementsIn(block: Int): List<IntRange> {
+        val close = if (block < 0) tokens.size else match(block).let { if (it < 0) tokens.size else it }
+        val result = mutableListOf<IntRange>()
+        var start = block + 1
+        while (start < close) {
+            val end = statementEnd(start).coerceAtMost(close - 1)
+            result += start..end
+            start = end + 1
+        }
+        return result
     }
 
     /** Whether the line starting at token [index] continues the previous line's statement. */

@@ -95,6 +95,8 @@
         <inlineActionHandler implementation="com.setdef.parakeet.InkoInlineVariableHandler"/>
         <typeHierarchyProvider language="Inko" implementationClass="com.setdef.parakeet.InkoTypeHierarchyProvider"/>
         <moveFileHandler implementation="com.setdef.parakeet.InkoMoveFileHandler"/>
+        <statementUpDownMover implementation="com.setdef.parakeet.InkoStatementMover"/>
+        <lang.smartEnterProcessor language="Inko" implementationClass="com.setdef.parakeet.InkoSmartEnterProcessor"/>
         <lang.findUsagesProvider language="Inko" implementationClass="com.setdef.parakeet.InkoFindUsagesProvider"/>
         <referencesSearch implementation="com.setdef.parakeet.InkoModuleReferencesSearcher"/>
         <usageTypeProvider implementation="com.setdef.parakeet.InkoUsageTypeProvider"/>

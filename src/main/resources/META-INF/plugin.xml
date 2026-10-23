@@ -212,6 +212,14 @@
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </group>
+        <action id="Parakeet.GenerateConstructor" class="com.setdef.parakeet.InkoGenerateConstructorAction"
+                text="Constructor (fn static new)" description="Generate fn static new taking every field">
+            <add-to-group group-id="GenerateGroup" anchor="first"/>
+        </action>
+        <action id="Parakeet.GenerateTraitImpl" class="com.setdef.parakeet.InkoGenerateTraitImplAction"
+                text="Implement Trait…" description="Implement a trait for this type, with stubs for its required methods">
+            <add-to-group group-id="GenerateGroup" anchor="after" relative-to-action="Parakeet.GenerateConstructor"/>
+        </action>
         <action id="Parakeet.NewInkoFile" class="com.setdef.parakeet.InkoNewFileAction">
             <add-to-group group-id="NewGroup" anchor="before" relative-to-action="NewFromTemplate"/>
         </action>

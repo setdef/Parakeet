@@ -128,6 +128,23 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     fun testSpecifiedTypeStillCompiles() =
         intentionCompiles("fn pub area(width: Int, height: Int) -> Int {\n  let <caret>total = width * height\n  total\n}\n", "Specify type explicitly")
 
+    fun testGeneratedConstructorAndTraitImplCompile() {
+        putTempDirInProjectContent()
+        val text = "type pub Point {\n  let @x: Int\n  let pub @label: String\n}\n"
+        open("src/app/point.inko", text)
+        myFixture.editor.caretModel.moveToOffset(text.indexOf("let @x"))
+        myFixture.performEditorAction("Parakeet.GenerateConstructor")
+        InkoGenerateTraitImplAction.chooser = { traits -> traits.first { it.name == "Equal" && it.module == "std.cmp" } }
+        try {
+            myFixture.editor.caretModel.moveToOffset(myFixture.editor.document.text.indexOf("let @x"))
+            myFixture.performEditorAction("Parakeet.GenerateTraitImpl")
+        } finally {
+            InkoGenerateTraitImplAction.chooser = null
+        }
+        assertTrue(myFixture.editor.document.text, myFixture.editor.document.text.contains("impl Equal for Point"))
+        assertCompiles()
+    }
+
     private fun extractAndCompile(path: String, text: String) {
         val start = text.indexOf("<selection>")
         val end = text.indexOf("</selection>") - "<selection>".length

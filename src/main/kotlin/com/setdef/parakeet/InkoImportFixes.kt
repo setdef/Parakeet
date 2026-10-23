@@ -82,7 +82,7 @@ class InkoImportFix(private val name: String, private val module: String) : Inte
         }
 
         /** 0 for the project's own modules, 1 for dependencies, 2 for everything else (the standard library). */
-        private fun origin(root: Path, file: Path): Int = when {
+        fun origin(root: Path, file: Path): Int = when {
             file.startsWith(root.resolve("dep")) -> 1
             file.startsWith(root) -> 0
             else -> 2

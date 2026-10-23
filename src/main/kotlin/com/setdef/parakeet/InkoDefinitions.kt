@@ -26,6 +26,8 @@ data class InkoDefinition(
     val related: List<InkoTypeRef> = emptyList(),
     /** For a trait's method, whether implementations must define it (it has no default body). */
     val required: Boolean = false,
+    /** Whether it's `pub`, so other modules can import or call it. */
+    val public: Boolean = true,
 )
 
 /** A type or trait named by module, e.g. `Show` in `app.util`. */
@@ -84,7 +86,8 @@ object InkoDocParser {
             val file = obj.string("file")?.let { toReal(Path.of(it)) } ?: moduleFile
             val line = location.getAsJsonObject("lines")?.get("start")?.asInt ?: 1
             val column = location.getAsJsonObject("columns")?.get("start")?.asInt ?: 1
-            result += InkoDefinition(kind, name, module, owner, file, line, column, obj.string("type"), obj.string("documentation").orEmpty(), related, required)
+            val public = obj.get("public")?.takeIf { it.isJsonPrimitive }?.asBoolean ?: true
+            result += InkoDefinition(kind, name, module, owner, file, line, column, obj.string("type"), obj.string("documentation").orEmpty(), related, required, public)
         }
 
         root.objects("constants").forEach { add(InkoDefinitionKind.CONSTANT, it, null) }

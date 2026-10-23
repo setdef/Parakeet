@@ -4,12 +4,14 @@ import com.intellij.codeInsight.AutoPopupController
 import com.intellij.codeInsight.completion.CompletionContributor
 import com.intellij.codeInsight.completion.CompletionParameters
 import com.intellij.codeInsight.completion.CompletionResultSet
+import com.intellij.codeInsight.completion.PrioritizedLookupElement
 import com.intellij.codeInsight.editorActions.TypedHandlerDelegate
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 import java.nio.file.Files
 import com.setdef.parakeet.InkoDefinitionKind as Kind
@@ -79,8 +81,13 @@ class InkoCompletionContributor : CompletionContributor() {
         val context = InkoCompletionContext.of(before)
         val sink = result.withPrefixMatcher(context.prefix)
         val completions = InkoCompletions(file).apply { offset = parameters.offset }
-        sink.addAllElements(completions.items(context).distinctBy { it.lookupString to it.allLookupStrings })
-        if (context !is InkoCompletionContext.Bare) sink.stopHere()
+        val items = completions.items(context).distinctBy { it.lookupString to it.allLookupStrings }
+        sink.addAllElements(items)
+        if (context is InkoCompletionContext.Bare) {
+            sink.addAllElements(completions.unimported(taken = items.map { it.lookupString }.toSet()))
+        } else {
+            sink.stopHere()
+        }
     }
 }
 
@@ -156,7 +163,34 @@ private class InkoCompletions(private val file: PsiFile) {
         module?.let { symbols?.topLevelIn(it)?.forEach { definition -> add(definition(definition)) } }
     }
 
-    private fun definition(definition: InkoDefinition): LookupElement =
+    /**
+     * Public types, traits, constants, and module methods from other modules
+     * that aren't imported yet (and aren't already offered as [taken]), below
+     * what's in scope. Choosing one adds its `import`.
+     */
+    fun unimported(taken: Set<String>): List<LookupElement> {
+        val symbols = symbols ?: return emptyList()
+        val root = path?.let(Inko::projectRoot) ?: return emptyList()
+        val inTest = path.startsWith(root.resolve("test"))
+        return symbols.names.asSequence()
+            .filter { it !in taken && imports.symbol(it) == null }
+            .flatMap { symbols.named(it, Kind.TYPE, Kind.TRAIT, Kind.CONSTANT, Kind.MODULE_METHOD).asSequence() }
+            .filter { it.public && it.module != module }
+            // Test modules can't be imported from src/.
+            .filter { inTest || !it.file.startsWith(root.resolve("test")) }
+            .distinctBy { it.module to it.name }
+            .map { definition ->
+                val item = definition(definition).withInsertHandler { context, _ ->
+                    InkoImportEdits.add(context.document, definition.module, definition.name)
+                    PsiDocumentManager.getInstance(context.project).commitDocument(context.document)
+                }
+                // Below names in scope; the project's own modules first, then dependencies, then std.
+                PrioritizedLookupElement.withPriority(item, -1.0 - InkoImportFix.origin(root, definition.file))
+            }
+            .toList()
+    }
+
+    private fun definition(definition: InkoDefinition): LookupElementBuilder =
         LookupElementBuilder.create(definition, definition.name)
             .withIcon(definition.icon)
             .withTypeText(listOfNotNull(definition.module, definition.owner).joinToString("."), true)

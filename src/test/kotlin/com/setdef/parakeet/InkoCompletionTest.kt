@@ -31,6 +31,10 @@ class InkoCompletionTest : InkoTestCase(onDisk = true) {
                     types = listOf(FakeInkoDoc.type(
                         "Other", 1, instanceMethods = listOf(FakeInkoDoc.member("size", mirror.resolve("src/app/other.inko"), 2)),
                     )),
+                    constants = listOf(
+                        FakeInkoDoc.member("LIMIT", mirror.resolve("src/app/other.inko"), 5, 1, signature = "let pub LIMIT = 10"),
+                        FakeInkoDoc.member("SECRET", mirror.resolve("src/app/other.inko"), 6, 1, signature = "let SECRET = 1") + ("public" to false),
+                    ),
                 ),
             )
         })
@@ -130,5 +134,36 @@ class InkoCompletionTest : InkoTestCase(onDisk = true) {
         assertEquals(InkoCompletionContext.Bare("emp"), InkoCompletionContext.of("let x = emp"))
         val member = InkoCompletionContext.of("foo.bar") as InkoCompletionContext.Member
         assertEquals("foo" to "bar", member.receiver to member.prefix)
+    }
+
+    fun testOffersNamesFromModulesNotYetImported() {
+        val items = complete("fn main {\n  Oth<caret>\n}\n")
+        assertTrue(items.toString(), "Other" in items)
+    }
+
+    fun testChoosingAnUnimportedNameImportsIt() {
+        complete("fn main {\n  LIMI<caret>\n}\n")
+        // A single match is inserted when the list would only hold it.
+        myFixture.lookup?.let { lookup -> lookup.currentItem = lookup.items.single { it.lookupString == "LIMIT" }; myFixture.finishLookup('\n') }
+        assertEquals("import app.other (LIMIT)\n\nfn main {\n  LIMIT\n}\n", myFixture.editor.document.text)
+    }
+
+    fun testAddsToAnExistingImportOfTheModule() {
+        complete("import app.other (Other)\n\nfn main {\n  LIMI<caret>\n}\n")
+        myFixture.lookup?.let { lookup -> lookup.currentItem = lookup.items.single { it.lookupString == "LIMIT" }; myFixture.finishLookup('\n') }
+        assertEquals("import app.other (Other, LIMIT)\n\nfn main {\n  LIMIT\n}\n", myFixture.editor.document.text)
+    }
+
+    fun testDoesNotOfferPrivateNamesFromOtherModules() {
+        assertFalse("SECRET" in complete("fn main {\n  SEC<caret>\n}\n"))
+    }
+
+    fun testNamesInScopeComeBeforeUnimportedOnes() {
+        val items = complete("import app.util (Helper)\n\nfn main {\n  <caret>\n}\n")
+        assertTrue(items.toString(), items.indexOf("Helper") < items.indexOf("Other"))
+    }
+
+    fun testOnlyOneEntryPerModuleAndName() {
+        assertEquals(1, complete("fn main {\n  Oth<caret>\n}\n").count { it == "Other" })
     }
 }

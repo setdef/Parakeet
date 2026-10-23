@@ -10,6 +10,8 @@ import com.setdef.parakeet.InkoDefinitionKind as Kind
  * but always current.
  */
 object InkoSourceDefinitions {
+    private val PUB = Regex("""\bpub\b""")
+
     fun of(file: Path, module: String, text: CharSequence): List<InkoDefinition> {
         val outline = InkoOutline.of(text)
         val lines = LineIndex(text)
@@ -22,6 +24,7 @@ object InkoSourceDefinitions {
                 signature = signature(text, node),
                 documentation = lines.docCommentAbove(node.range.startOffset),
                 required = required,
+                public = PUB.containsMatchIn(text.subSequence(node.range.startOffset, node.nameOffset)),
             )
         }
 

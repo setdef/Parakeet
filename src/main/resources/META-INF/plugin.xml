@@ -87,6 +87,7 @@
                          groupName="Inko" enabledByDefault="true" level="WEAK WARNING"
                          implementationClass="com.setdef.parakeet.InkoEmptyParenthesesInspection"/>
         <codeInsight.template.postfixTemplateProvider language="Inko" implementationClass="com.setdef.parakeet.InkoPostfixTemplateProvider"/>
+        <qualifiedNameProvider implementation="com.setdef.parakeet.InkoQualifiedNameProvider"/>
         <lang.unwrapDescriptor language="Inko" implementationClass="com.setdef.parakeet.InkoUnwrapDescriptor"/>
         <extendWordSelectionHandler implementation="com.setdef.parakeet.InkoExtendSelectionHandler"/>
         <testFinder implementation="com.setdef.parakeet.InkoTestFinder"/>

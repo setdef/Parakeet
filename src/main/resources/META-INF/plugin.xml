@@ -9,20 +9,22 @@
             <li>Line comment toggling (<code>#</code>)</li>
             <li>Bracket matching, auto-closing pairs, and surrounding pairs</li>
             <li>Two-space indentation as you type, like <code>inko fmt</code></li>
-            <li>Compiler errors and warnings as you type, from <code>inko check</code>, with quick fixes: auto-import, and fixes for unused imports, locals, and results</li>
+            <li>Compiler errors and warnings as you type, from <code>inko check</code>, with quick fixes: auto-import, fixes for unused imports, locals, and results, missing fields, methods, and traits, and unreachable code</li>
+            <li>Inspections for Inko's style guide: naming, Bool methods ending in <code>?</code>, redundant argument names, and empty parentheses</li>
             <li>Reformat Code (and format on save) with <code>inko fmt</code></li>
             <li>Go to definition, quick documentation, Go to Class/Symbol, and completion, using the definitions <code>inko doc</code> reports, plus local variables and parameters</li>
             <li>Find Usages and Rename across the project, and highlight usages</li>
-            <li>Parameter info, parameter-name hints, and trait gutter icons</li>
+            <li>Parameter info, parameter-name hints, trait gutter icons, Go to Implementation and Super Method, and Implement/Override Methods</li>
+            <li>Go to Test and Create Test</li>
             <li>Optimize Imports, removing unused imports and sorting the rest</li>
-            <li>Introduce and Inline Variable, Safe Delete, and moving files with their imports updated</li>
+            <li>Introduce and Inline Variable, Safe Delete, and moving files and renaming directories with their imports updated</li>
             <li>Type and Call Hierarchies, and usage counts</li>
-            <li>Surround With, Move Statement, and Complete Current Statement</li>
+            <li>Surround With, Unwrap/Remove, Move Statement, Complete Current Statement, Extend Selection, and Copy Reference</li>
             <li>New Inko File templates, and standard library docs on docs.inko-lang.org (Shift+F1)</li>
             <li>The standard library and dependencies under External Libraries</li>
             <li><code>inko.pkg</code> highlighting and errors, and syncing, updating, adding, and removing dependencies</li>
             <li>Structure view, breadcrumbs, and code folding</li>
-            <li>Live templates, TODO highlighting, and spell checking</li>
+            <li>Live templates, postfix completion, TODO highlighting, and spell checking</li>
             <li>Run and test from the gutter, with run configurations for <code>inko run</code>, <code>test</code>, <code>build</code>, and <code>check</code>, with release builds, other targets, and static linking, and a test runner that reruns failed tests</li>
             <li>New Project wizard using <code>inko init</code></li>
             <li>Per-project toolchain: <code>inko</code> on PATH, ivm's default, or any ivm-installed version, with banners when Inko is missing or older than <code>inko.pkg</code> requires</li>

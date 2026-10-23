@@ -16,7 +16,7 @@ for you to review and submit.
 
 I use three words for how code comes to exist. Code I wrote, I typed by hand, with nothing generated. Code I wrought, an AI agent generated while I iterated with it, and I reviewed every change before committing it, so I own every diff. Code I requested, an agent built with little or no review from me, the way a dark factory runs without lights.
 
-**Versions 0.1.0 through 0.8.0 are requested.**
+**Versions 0.1.0 through 0.9.0 are requested.**
 
 ## Features
 
@@ -28,8 +28,15 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   Style → Inko*)
 - Compiler errors and warnings as you type, from `inko check`, with **quick
   fixes** (Alt+Enter): import an undefined name from the module that defines
-  it, remove an unused import, rename an unused local to `_name`, or discard an
-  unused result with `let _ =`
+  it, remove an unused import, rename an unused local to `_name`, discard an
+  unused result with `let _ =`, add a missing field, implement missing methods
+  or a missing required trait, and remove unreachable code
+- **Style-guide inspections** for what `inko fmt` doesn't fix, with quick
+  fixes: names in the wrong case, Bool methods not ending in `?` (or prefixed
+  with `is_`), redundant argument names like `start: start`, and empty
+  parentheses in calls like `pop()`. They're weak warnings, configurable in
+  *Settings → Editor → Inspections → Inko*, and `# noinspection Name` on the
+  line above suppresses one.
 - *Code → Reformat Code* (⌥⌘L / Ctrl+Alt+L) with `inko fmt`. To format on save,
   turn on *Settings → Tools → Actions on Save → Reformat code*.
 - **Go to definition** (⌘-click / Ctrl-click, ⌘B / Ctrl+B) for types, traits,
@@ -43,7 +50,12 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Parameter info** (⌘P / Ctrl+P) in calls, and parameter-name hints before
   positional arguments
 - **Trait gutter icons** linking traits, their implementations, and the
-  methods that implement them
+  methods that implement them, with **Go to Implementation** (⌥⌘B /
+  Ctrl+Alt+B) and **Go to Super Method** (⌘U / Ctrl+U)
+- **Implement Methods** (⌃I / Ctrl+I) and **Override Methods** (⌃O / Ctrl+O)
+  in `impl Trait for Type`, stubbing the trait's methods
+- **Go to Test** (⌘⇧T / Ctrl+Shift+T) between `src/app/util.inko` and
+  `test/app/test_util.inko`, and Create Test
 - **Quick documentation** (F1, or hover): a definition's signature, where
   it's defined, and its doc comment; ⇧F1 opens standard library definitions
   on docs.inko-lang.org
@@ -56,13 +68,16 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   the rest
 - **Refactorings**: Introduce Variable (⌥⌘V / Ctrl+Alt+V), Inline Variable
   (⌥⌘N / Ctrl+Alt+N), Safe Delete (⌘⌫ / Alt+Delete), and moving files or
-  directories (which updates their modules' imports)
+  directories and renaming directories (which updates their modules' imports)
 - **Type Hierarchy** (⌃H / Ctrl+H) for traits and the types implementing
   them, and **Call Hierarchy** (⌃⌥H / Ctrl+Alt+H) for callers and callees
 - **Usage counts** ("N usages") above declarations
-- **Surround With** (⌥⌘T / Ctrl+Alt+T), **Move Statement** (⇧⌘↑/↓ /
-  Ctrl+Shift+↑/↓), and **Complete Current Statement** (⇧⌘⏎ /
-  Ctrl+Shift+Enter)
+- **Surround With** (⌥⌘T / Ctrl+Alt+T) and **Unwrap/Remove** (⌘⇧⌫ /
+  Ctrl+Shift+Delete), **Move Statement** (⇧⌘↑/↓ / Ctrl+Shift+↑/↓),
+  **Complete Current Statement** (⇧⌘⏎ / Ctrl+Shift+Enter), and **Extend
+  Selection** (⌥↑ / Ctrl+W) through strings, arguments, brackets, statements,
+  and blocks
+- **Copy Reference** (⌥⇧⌘C / Ctrl+Alt+Shift+C), like `app.util.Helper.new`
 - **New Inko File** (*File → New → Inko File*): a module, a test, or a program
 - Inko highlighting in Markdown ```` ```inko ```` code fences
 - **External Libraries**: the standard library and each project's
@@ -75,7 +90,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   members after `.` (narrowed to the receiver's type when it's known), and
   fields after `@`
 - **Live templates**: `fn`, `fnp`, `type`, `typep`, `trait`, `impl`, `match`,
-  `main`, `tests`, and `test`
+  `main`, `tests`, and `test`, and **postfix completion**: `.if`, `.match`,
+  `.let`, `.not`, `.return`, and `.par` after an expression
 - **TODO highlighting** and **spell checking** in comments
 - **Test runner**: results per test file and test, failures with expected and
   actual values, jumping to (or rerunning) a single test, and rerunning the
@@ -134,16 +150,27 @@ compiler, so it always agrees with your installed Inko version.
   differently (Inko's binary operators share one precedence, and `and`/`or`
   bind tighter).
 - **Quick fixes** act on the diagnostic IDs `inko check` reports
-  (`invalid-symbol`, `unused-symbol`, `unused-result`); auto-import finds
+  (`invalid-symbol`, `unused-symbol`, `unused-result`, `missing-field`,
+  `invalid-implementation`, `missing-trait`, `unreachable`); auto-import finds
   candidates in the `inko doc` definitions.
+- **Implement and Override Methods** stub the methods `inko doc` lists as a
+  trait's required or default ones, with bodies that call
+  `panic('not implemented')` (in Inko's prelude), which compiles for any
+  return type. **Go to Implementation and Super Method** follow the same
+  trait links as the gutter icons.
+- **Style-guide inspections** follow
+  [Inko's style guide](https://docs.inko-lang.org/manual/latest/references/style/)
+  where `inko fmt` doesn't. Removing an argument name is only offered where it
+  keeps the meaning (the argument is in that parameter's position, after only
+  positional ones), which needs the call to resolve to one method.
 - **Tests** run the way `inko test` does (from the project root), but through
   a program Parakeet generates that reports each test to the IDE. It's built in
   a mirror of the project in the IDE's system directory (with its own build
   cache), so nothing is added to your project. It takes one name filter, so
   rerunning failed tests builds it once and runs it once per failed test.
-- **The Structure view, breadcrumbs, folding, indentation, and usage
-  highlighting** come from the file's own tokens, so they follow unsaved edits
-  and work without `inko`.
+- **The Structure view, breadcrumbs, folding, indentation, usage
+  highlighting, Extend Selection, Unwrap, and postfix completion** come from
+  the file's own tokens, so they follow unsaved edits and work without `inko`.
 
 ## Requirements
 
@@ -209,7 +236,7 @@ Dependabot proposes weekly updates to Gradle dependencies and GitHub Actions.
 
 ### Releasing
 
-Pushing a tag like `v0.8.0` (matching `version` in `gradle.properties`) runs
+Pushing a tag like `v0.9.0` (matching `version` in `gradle.properties`) runs
 [`release.yml`](.github/workflows/release.yml): the full build above, then it
 signs the plugin and creates a GitHub Release with the signed zip and
 `updatePlugins.xml` (the plugin repository file IDEs check for updates). If a

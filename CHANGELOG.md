@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-22
+
+### Added
+
+- Inspections for Inko's style guide, as weak warnings with quick fixes, for what `inko fmt` doesn't fix: names in the wrong case (`PascalCase` types and constructors, `snake_case` methods, fields, and variables, `SCREAMING_SNAKE_CASE` constants), Bool methods not ending in `?` or prefixed with `is_`, redundant argument names (`start: start`), and empty parentheses in calls (`pop()`). Names a trait or `extern` dictates, Bool-returning `mut`/`move` methods (actions, like std's `insert -> Bool`), and the standard library and dependencies are left alone. `# noinspection Name` on the line above suppresses one.
+- Implement Methods (⌃I / Ctrl+I) and Override Methods (⌃O / Ctrl+O) in `impl Trait for Type`: stubs for the trait's required or default methods, with the impl's type arguments in place of the trait's parameters, calling `panic('not implemented')` so they compile until filled in.
+- Postfix completion: `.if`, `.match`, `.let`, `.not` (`!`), `.return`, and `.par` after an expression like `numbers.get(0).ok`.
+- Go to Implementation (⌥⌘B / Ctrl+Alt+B) for traits and trait methods, including the project's implementations of standard library traits, and Go to Super Method (⌘U / Ctrl+U) from an impl's method, an impl, or a type to what it implements.
+- Go to Test (⌘⇧T / Ctrl+Shift+T) between `src/app/util.inko` and `test/app/test_util.inko`, and Create Test when there's none.
+- Extend Selection (⌥↑ / Ctrl+W) through strings, arguments, brackets, statements, blocks, and declarations.
+- Unwrap/Remove (⌘⇧⌫ / Ctrl+Shift+Delete) for `if`, `else`, `while`, `loop`, `for`, `recover`, and bare blocks.
+- Copy Reference (⌥⇧⌘C / Ctrl+Alt+Shift+C): `app.util.Helper.new`.
+- Quick fixes for more of `inko check`'s errors: add a missing field, implement missing methods, implement a missing required trait, and remove unreachable code.
+- Renaming a directory of Inko modules updates their imports.
+
+### Fixed
+
+- Breadcrumbs no longer loop forever in operator methods like `fn ==`.
+
+### Changed
+
+- CI no longer caches unpacked IDEs, which nearly filled GitHub's 10 GB cache budget.
+
 ## [0.8.0] - 2026-10-22
 
 ### Added

@@ -63,8 +63,11 @@ compiler, so it always agrees with your installed Inko version.
   both directions and dependencies resolve.
 - **Go to definition, quick documentation, Go to Class/Symbol, and
   completion** use the definitions `inko doc --private --dependencies`
-  reports, rebuilt in the background when you save. Locations are exact, but the
-  plugin doesn't know types, so a method call like `x.to_string` offers every
+  reports, rebuilt in the background when you save. `inko doc` only works on
+  saved files in a project that compiles, so files you've edited since (saved
+  or not) are read from source, and when the project doesn't compile, the
+  standard library and dependencies are still documented while your own files
+  are read from source. Locations are exact, but the plugin doesn't know types, so a method call like `x.to_string` offers every
   `to_string` it can't rule out, preferring types mentioned in the file. Local
   variables don't resolve.
 - **Tests** run the way `inko test` does (from the project root), but through

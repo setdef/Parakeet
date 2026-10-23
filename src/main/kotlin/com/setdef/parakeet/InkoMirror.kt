@@ -31,11 +31,14 @@ class InkoMirror private constructor(val root: Path, val directory: Path, privat
         /** What a mirror links to; refreshing a persistent mirror replaces exactly these. */
         private val LINKED = Inko.SOURCE_DIRECTORIES + Inko.MANIFEST + "dep"
 
-        /** A temporary mirror of [root], replacing [file] (if given) with [text]. */
-        fun create(root: Path, file: Path? = null, text: String? = null): InkoMirror {
+        /**
+         * A temporary mirror of [root], replacing [file] (if given) with [text].
+         * Without [sources], only the manifest and dependencies are linked.
+         */
+        fun create(root: Path, file: Path? = null, text: String? = null, sources: Boolean = true): InkoMirror {
             val mirror = InkoMirror(root, Files.createTempDirectory("parakeet").toRealPath(), temporary = true)
             try {
-                mirror.populate(file, text)
+                mirror.populate(file, text, sources)
                 return mirror
             } catch (e: Exception) {
                 mirror.close()
@@ -48,7 +51,7 @@ class InkoMirror private constructor(val root: Path, val directory: Path, privat
             Files.createDirectories(directory)
             val mirror = InkoMirror(root, directory.toRealPath(), temporary = false)
             LINKED.map(mirror.directory::resolve).forEach(::deleteWithoutFollowingLinks)
-            mirror.populate(null, null)
+            mirror.populate(null, null, sources = true)
             return mirror
         }
 
@@ -65,8 +68,8 @@ class InkoMirror private constructor(val root: Path, val directory: Path, privat
         }
     }
 
-    private fun populate(file: Path?, text: String?) {
-        for (dir in Inko.SOURCE_DIRECTORIES.map(root::resolve).filter(Files::isDirectory)) {
+    private fun populate(file: Path?, text: String?, sources: Boolean) {
+        for (dir in Inko.SOURCE_DIRECTORIES.map(root::resolve).filter(Files::isDirectory).takeIf { sources }.orEmpty()) {
             Files.walk(dir).use { paths ->
                 paths.filter { it.isRegularFile() && it.extension == Inko.EXTENSION }.forEach(::link)
             }

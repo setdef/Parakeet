@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Opening a project logged "Read access is allowed from inside read-action only" from Parakeet's startup indexing.
+- Go to definition, quick documentation, Go to Class/Symbol, and completion no longer go stale while the project doesn't compile, or before a file is saved: definitions in edited or unsaved files are read from source, and a project that doesn't compile still gets the standard library and its dependencies.
+
 ## [0.5.0] - 2026-10-22
 
 ### Added

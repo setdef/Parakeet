@@ -8,6 +8,7 @@
 - Auto-import: on "the symbol 'X' is undefined", Alt+Enter offers to import `X` from each module that defines it (your project's first, then dependencies, then the standard library), adding to an existing import of that module when there is one.
 - Quick fixes for compiler warnings: remove an unused import (or just the unused symbol from it), rename an unused local to `_name`, and discard an unused result with `let _ =`.
 - Gutter icons linking traits and implementations: `impl Trait for Type` and its methods point to the trait and its methods; traits and their methods point to the types implementing them; types point to the traits they implement.
+- Parameter info (⌘P / Ctrl+P) in calls: the callee's parameters with the current argument highlighted, for functions, methods (listing each candidate when the type isn't known), enum constructors, and `Type(…)` (its fields).
 - Local variables and parameters (including closure parameters and `case` bindings): Go to Declaration and completion, scoped by blocks.
 - Method calls on a local with a written or obvious type (`x: Foo`, `let x = Foo.new`, `Foo(…)`), or on `self`, now complete and navigate to that type's methods and fields, instead of every type's.
 - A banner when `inko.pkg` requires a newer Inko (`require inko X`) than the project uses, offering to switch to an installed ivm version that's new enough, or to install one.

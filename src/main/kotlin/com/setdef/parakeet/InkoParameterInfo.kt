@@ -1,0 +1,120 @@
+package com.setdef.parakeet
+
+import com.intellij.lang.parameterInfo.CreateParameterInfoContext
+import com.intellij.lang.parameterInfo.ParameterInfoHandler
+import com.intellij.lang.parameterInfo.ParameterInfoUIContext
+import com.intellij.lang.parameterInfo.UpdateParameterInfoContext
+import com.intellij.psi.PsiFile
+import com.intellij.psi.util.PsiTreeUtil
+import com.setdef.parakeet.InkoDefinitionKind as Kind
+
+/** A call around an offset: the callee's name, its `(`, and which argument the offset is in. */
+class InkoCall(val callee: InkoName, val openParen: Int, val argument: Int)
+
+object InkoCalls {
+    /** The innermost call whose parentheses contain [offset], if any. */
+    fun at(file: PsiFile, offset: Int): InkoCall? {
+        val text = file.viewProvider.document?.charsSequence ?: return null
+        val lexer = InkoLexer()
+        lexer.start(text, 0, minOf(offset, text.length), 0)
+        // Open brackets before the offset: (kind, start, top-level commas so far), and each one's callee (a name right before `(`).
+        val open = ArrayDeque<Triple<Char, Int, Int>>()
+        val calleeStarts = ArrayDeque<Int?>()
+        var lastName: Int? = null
+        while (lexer.tokenType != null) {
+            when (lexer.tokenType) {
+                InkoTokens.LPAREN -> { open.addLast(Triple('(', lexer.tokenStart, 0)); calleeStarts.addLast(lastName) }
+                InkoTokens.LBRACKET, InkoTokens.LBRACE -> { open.addLast(Triple(text[lexer.tokenStart], lexer.tokenStart, 0)); calleeStarts.addLast(null) }
+                InkoTokens.RPAREN, InkoTokens.RBRACKET, InkoTokens.RBRACE -> { open.removeLastOrNull(); calleeStarts.removeLastOrNull() }
+                InkoTokens.COMMA -> open.removeLastOrNull()?.let { (kind, start, commas) -> open.addLast(Triple(kind, start, commas + 1)) }
+            }
+            if (lexer.tokenType != InkoTokens.WHITE_SPACE && lexer.tokenType != InkoTokens.COMMENT) {
+                lastName = lexer.tokenStart.takeIf { lexer.tokenType == InkoTokens.IDENTIFIER || lexer.tokenType == InkoTokens.CONSTANT }
+            }
+            lexer.advance()
+        }
+        // The nearest enclosing call, looking past arrays and blocks (e.g. `f(1, [2, |])`).
+        val index = open.indices.lastOrNull { open[it].first == '(' && calleeStarts[it] != null } ?: return null
+        val (_, start, commas) = open[index]
+        val callee = PsiTreeUtil.getParentOfType(file.findElementAt(calleeStarts[index]!!), InkoName::class.java, false) ?: return null
+        return InkoCall(callee, start, commas)
+    }
+
+    /**
+     * The parameters of what a call can invoke: from a method's signature, an
+     * enum constructor's arguments, or (for `Type(…)`) the type's fields.
+     */
+    fun parameters(definition: InkoDefinition, symbols: InkoSymbols?): List<String> = when (definition.kind) {
+        Kind.TYPE -> symbols?.ownedBy(definition.name, Kind.FIELD).orEmpty().filter { it.module == definition.module }.map { field ->
+            field.signature?.removePrefix("let ")?.removePrefix("pub ")?.removePrefix("@") ?: field.name
+        }
+        else -> definition.signature?.let(::signatureParameters).orEmpty()
+    }
+
+    /** `a: Int, b: Array[Int]` out of `fn name(a: Int, b: Array[Int]) -> X` (or `Some(T)`). */
+    private fun signatureParameters(signature: String): List<String> {
+        val start = signature.indexOf('(').takeIf { it >= 0 } ?: return emptyList()
+        val parameters = mutableListOf<String>()
+        var depth = 0
+        var current = StringBuilder()
+        for (c in signature.substring(start + 1)) {
+            when {
+                (c == ')' || c == ',') && depth == 0 -> {
+                    current.toString().trim().takeIf { it.isNotEmpty() }?.let(parameters::add)
+                    current = StringBuilder()
+                    if (c == ')') return parameters
+                }
+                else -> {
+                    if (c == '(' || c == '[') depth++
+                    if (c == ')' || c == ']') depth--
+                    current.append(c)
+                }
+            }
+        }
+        return parameters
+    }
+}
+
+/** Parameter info (⌘P / Ctrl+P) inside a call's parentheses, from the `inko doc` index. */
+class InkoParameterInfoHandler : ParameterInfoHandler<InkoName, InkoDefinition> {
+    override fun findElementForParameterInfo(context: CreateParameterInfoContext): InkoName? {
+        val call = InkoCalls.at(context.file, context.offset) ?: return null
+        val candidates = InkoResolver.resolveDefinitions(call.callee).map { it.first }
+            .filter { it.kind in CALLABLE }
+            .distinctBy { it.signature to it.owner }
+        if (candidates.isEmpty()) return null
+        context.itemsToShow = candidates.toTypedArray()
+        return call.callee
+    }
+
+    override fun showParameterInfo(element: InkoName, context: CreateParameterInfoContext) {
+        val call = InkoCalls.at(context.file, context.offset) ?: return
+        context.showHint(element, call.openParen + 1, this)
+    }
+
+    override fun findElementForUpdatingParameterInfo(context: UpdateParameterInfoContext): InkoName? =
+        InkoCalls.at(context.file, context.offset)?.callee?.takeIf { it == context.parameterOwner }
+
+    override fun updateParameterInfo(element: InkoName, context: UpdateParameterInfoContext) {
+        context.setCurrentParameter(InkoCalls.at(context.file, context.offset)?.argument ?: -1)
+    }
+
+    override fun updateUI(definition: InkoDefinition, context: ParameterInfoUIContext) {
+        val path = context.parameterOwner?.containingFile?.virtualFile?.let(Inko::pathOf)
+        val symbols = path?.let { InkoDocIndex.getInstance(context.parameterOwner.project).symbols(Inko.projectRoot(path)) }
+        val parameters = InkoCalls.parameters(definition, symbols)
+        if (parameters.isEmpty()) {
+            context.setupUIComponentPresentation("<no parameters>", -1, -1, false, false, false, context.defaultParameterColor)
+            return
+        }
+        val text = parameters.joinToString(", ")
+        val current = context.currentParameterIndex
+        val start = parameters.take(current.coerceAtLeast(0)).sumOf { it.length + 2 }
+        val (highlightStart, highlightEnd) = if (current in parameters.indices) start to start + parameters[current].length else -1 to -1
+        context.setupUIComponentPresentation(text, highlightStart, highlightEnd, false, false, false, context.defaultParameterColor)
+    }
+
+    private companion object {
+        val CALLABLE = setOf(Kind.MODULE_METHOD, Kind.STATIC_METHOD, Kind.INSTANCE_METHOD, Kind.CONSTRUCTOR, Kind.TYPE)
+    }
+}

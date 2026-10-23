@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-22
+
+### Added
+
+- Find Usages (⌥F7 / Alt+F7) and Rename (⇧F6 / Shift+F6) for types, traits, methods, fields, constants, enum constructors, modules, and local variables and parameters, across the project. Renaming a module's file updates its imports. Like RubyMine and PyCharm, calls whose receiver type isn't known are listed as possible usages, and renaming a method called on values always shows the preview so you can untick them. Locals rename in place; standard library and dependency declarations can't be renamed.
+- The standard library and each project's dependencies under External Libraries, searchable with Go to File and Find in Files. `dep` and `build` are excluded from the project (once, so un-excluding sticks).
+- `inko.pkg` support: highlighting, commenting, and errors for lines `inko` would reject. Tools → Inko Dependencies (and the editor's context menu) syncs, updates, adds, and removes dependencies with `inko pkg`. A floating Sync button appears on `inko.pkg` while it differs from what was last synced (like Gradle's "Load changes"), and Inko files show a banner until dependencies are synced.
+- Optimize Imports (⌃⌥O / Ctrl+Alt+O): removes the imports `inko check` reports as unused, and sorts imports with `inko fmt`.
+- Rerun Failed Tests in the test runner.
+
+### Fixed
+
+- `@field` resolved to same-named fields in other types in the module; it now means the enclosing type's field.
+- The standard library and dependencies were checked with `inko check` as if they were the project's code when opened.
+
 ## [0.6.0] - 2026-10-22
 
 ### Added

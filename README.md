@@ -16,7 +16,7 @@ for you to review and submit.
 
 I use three words for how code comes to exist. Code I wrote, I typed by hand, with nothing generated. Code I wrought, an AI agent generated while I iterated with it, and I reviewed every change before committing it, so I own every diff. Code I requested, an agent built with little or no review from me, the way a dark factory runs without lights.
 
-**Versions 0.1.0 through 0.6.0 are requested.**
+**Versions 0.1.0 through 0.7.0 are requested.**
 
 ## Features
 
@@ -35,6 +35,9 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Go to definition** (⌘-click / Ctrl-click, ⌘B / Ctrl+B) for types, traits,
   constants, functions, methods, fields, modules, and local variables and
   parameters, including the standard library and dependencies
+- **Find Usages** (⌥F7 / Alt+F7) and **Rename** (⇧F6 / Shift+F6) across the
+  project, including renaming a module's file; calls on values of unknown type
+  are shown as possible usages
 - **Highlight usages** of the name at the caret within the file
   (⌘⇧F7 / Ctrl+Shift+F7)
 - **Parameter info** (⌘P / Ctrl+P) in calls, and parameter-name hints before
@@ -48,6 +51,14 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Structure view**, breadcrumbs, and sticky lines for each file's
   declarations
 - **Code folding** for blocks, comment runs, and imports
+- **Optimize Imports** (⌃⌥O / Ctrl+Alt+O): removes unused imports and sorts
+  the rest
+- **External Libraries**: the standard library and each project's
+  dependencies, browsable and searchable, with `dep` and `build` excluded from
+  the project
+- **`inko.pkg`**: highlighting and errors, plus *Tools → Inko Dependencies* to
+  sync, update, add, and remove dependencies, and a Sync button when
+  `inko.pkg` changes
 - **Completion** for keywords, local variables, names in scope, imports,
   members after `.` (narrowed to the receiver's type when it's known), and
   fields after `@`
@@ -55,7 +66,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   `main`, `tests`, and `test`
 - **TODO highlighting** and **spell checking** in comments
 - **Test runner**: results per test file and test, failures with expected and
-  actual values, and jumping to (or rerunning) a single test
+  actual values, jumping to (or rerunning) a single test, and rerunning the
+  failed tests
 - **Run and test from the gutter**: ▶ next to `fn async main`, next to
   `fn pub tests` in test files, and next to each `t.test('…')`
 - **Run configurations** for `inko run`, `inko test`, `inko build`, and
@@ -92,11 +104,19 @@ compiler, so it always agrees with your installed Inko version.
   mentioned in the file. Parameter-name hints only appear when exactly one
   parameter list fits. Local variables and parameters are found from the
   file's own tokens.
+- **Find Usages and Rename** search the IDE's word index for each name, then
+  keep the occurrences that resolve to the declaration. A method call whose
+  receiver type isn't known resolves to every candidate, so it's listed as a
+  possible usage.
+- **Dependencies need syncing** when `dep/hash` isn't the BLAKE3 hash of
+  `inko.pkg`, which is how `inko` itself decides.
 - **Quick fixes** act on the diagnostic IDs `inko check` reports
   (`invalid-symbol`, `unused-symbol`, `unused-result`); auto-import finds
   candidates in the `inko doc` definitions.
 - **Tests** run the way `inko test` does (from the project root), but through
-  a program Parakeet generates that reports each test to the IDE. It's built in
+  a program Parakeet generates that reports each test to the IDE. It takes one
+  name filter, so rerunning failed tests builds it once and runs it once per
+  failed test. It's built in
   a mirror of the project in the IDE's system directory (with its own build
   cache), so nothing is added to your project.
 - **The Structure view, breadcrumbs, folding, indentation, and usage

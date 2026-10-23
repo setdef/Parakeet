@@ -601,6 +601,13 @@ on those wrong tokens.
 
 ### 1.16 The Bool-method inspection flags names std uses on purpose (Low)
 
+**Status: confirmed and fixed in <commit:1.16>.** `InkoBoolActionsTest`
+failed before the fix on std's own three examples. The inspection already
+treated `mut` and `move` methods as actions that report success. It now
+treats two more kinds the same way: methods of `ref` types, which change
+shared state without `mut`, and functions that take a `mut` argument to
+write into. Predicates like `fn empty -> Bool` are still flagged.
+
 **What Parakeet assumes.** Any non-`mut`, non-`move` method returning `Bool`
 should end in `?` (`P/InkoStyleInspections.kt`,
 `InkoBooleanMethodNameInspection`).

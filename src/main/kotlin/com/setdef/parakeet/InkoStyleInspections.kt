@@ -120,6 +120,7 @@ class InkoNamingInspection : InkoStyleInspection() {
 class InkoBooleanMethodNameInspection : InkoStyleInspection() {
     override fun check(file: InkoFile, report: (TextRange, String, LocalQuickFix?) -> Unit) {
         val text = file.text
+        val outline = file.inkoOutline
         for (entry in InkoDeclarationKinds(file).entries) {
             val node = entry.node ?: continue
             if (entry.kind != InkoDeclarationKinds.Kind.METHOD || entry.traitImpl || entry.extern) continue
@@ -127,7 +128,12 @@ class InkoBooleanMethodNameInspection : InkoStyleInspection() {
             val isPrefixed = name.startsWith("is_") && name.length > 3
             val header = text.substring(node.range.startOffset, node.nameOffset)
             // `mut` and `move` methods are actions; a Bool they return reports success (like std's `insert -> Bool`).
-            val isAction = Regex("\\b(mut|move)\\b").containsMatchIn(header)
+            // So are methods of `ref` types, which change shared state without `mut` (std's `AtomicBool.load` and
+            // `compare_and_swap`), and functions writing into a `mut` argument (std's `uri.decode`).
+            val owner = outline.enclosing(node.nameOffset).dropLast(1).lastOrNull()
+            val inRefType = owner?.kind == InkoOutline.Kind.TYPE && Regex("\\bref\\b").containsMatchIn(text.substring(owner.range.startOffset, owner.nameOffset))
+            val writesArgument = InkoSignatures.at(text, node.nameOffset)?.parameters.orEmpty().any { it.type.startsWith("mut ") }
+            val isAction = Regex("\\b(mut|move)\\b").containsMatchIn(header) || inRefType || writesArgument
             val needsQuestionMark = !name.endsWith("?") && !name.endsWith("=") && !isAction && InkoNames.returnsBool(text, node)
             if (!isPrefixed && !needsQuestionMark) continue
             val expected = name.removePrefix(if (isPrefixed) "is_" else "").removeSuffix("?") + "?"

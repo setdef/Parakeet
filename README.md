@@ -263,6 +263,8 @@ Tools are managed with [mise](https://mise.jdx.dev) (`mise install`).
 | `./gradlew test -PunitOnly` | Run only the unit tests, which use a fake `inko` and need nothing installed |
 | `./gradlew verifyPlugin` | Check compatibility with the oldest and newest supported IDEs |
 | `./gradlew buildPlugin` | Build the installable zip |
+| `scripts/check.sh [--full]` | Every check a commit must pass (`--full` adds the Plugin Verifier); see AGENTS.md |
+| `scripts/install-hooks.sh` | Run `scripts/check.sh` on what's staged before each commit |
 
 The files in `bundles/inko/` are copied unchanged from inko-lang/vscode
 (v0.7.0, commit `46243e5`). To update them, copy `package.json`,
@@ -319,6 +321,12 @@ hand at [plugins.jetbrains.com](https://plugins.jetbrains.com/plugin/add) (it
 only accepts automated uploads for plugins that already exist), then add a
 `PUBLISH_TOKEN` secret (a
 [Marketplace token](https://plugins.jetbrains.com/author/me/tokens)).
+
+## History
+
+Audits and session reports, oldest first:
+
+- [Audit against Inko v0.21.1](docs/history/AUDIT.md)
 
 ## Icon
 

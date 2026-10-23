@@ -1,0 +1,35 @@
+#!/bin/sh
+# Runs scripts/check.sh on exactly what's being committed (AGENTS.md):
+# unstaged and untracked changes are stashed first and restored afterwards,
+# whether the checks pass or not. Set it up with scripts/install-hooks.sh.
+set -eu
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Nothing to set aside: check the tree as it is.
+if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+    exec scripts/check.sh
+fi
+
+before=$(git rev-parse -q --verify refs/stash || true)
+git stash push --quiet --keep-index --include-untracked \
+    --message "pre-commit: unstaged and untracked changes"
+after=$(git rev-parse -q --verify refs/stash || true)
+
+restore() {
+    status=$?
+    # Only pop the stash this hook made, never an older one.
+    if [ "$after" != "$before" ]; then
+        # The tree now matches the index; put back what was set aside.
+        git reset --quiet --hard
+        if ! git stash pop --quiet --index; then
+            echo "pre-commit: couldn't restore your unstaged changes; they're in 'git stash list'" >&2
+            status=1
+        fi
+    fi
+    exit "$status"
+}
+trap restore EXIT
+trap 'exit 130' INT TERM
+
+scripts/check.sh

@@ -96,7 +96,9 @@ object InkoDocParser {
             add(InkoDefinitionKind.TYPE, type, null, type.typeRefs("implemented_traits"))
             val owner = type.string("name")
             type.objects("constructors").forEach { add(InkoDefinitionKind.CONSTRUCTOR, it, owner) }
-            type.objects("fields").forEach { add(InkoDefinitionKind.FIELD, it, owner) }
+            // An enum can't define fields; under --private, inko doc lists the compiler's own (`@tag`, `@1`, …).
+            val isEnum = type.objects("constructors").isNotEmpty()
+            if (!isEnum) type.objects("fields").forEach { add(InkoDefinitionKind.FIELD, it, owner) }
             type.objects("static_methods").forEach { add(InkoDefinitionKind.STATIC_METHOD, it, owner) }
             type.objects("instance_methods").forEach { add(InkoDefinitionKind.INSTANCE_METHOD, it, owner) }
         }

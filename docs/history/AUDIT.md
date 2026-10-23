@@ -725,7 +725,11 @@ up `\u{…}` escapes.
 - **Compiler-internal enum fields under `--private`.** `inko doc --private`
   lists them, for example `let @tag: Uint8` and `let @1: <unknown>` on
   `type enum Shape` (seen in the scratch run). Parakeet indexes them as real
-  fields.
+  fields. *Status: confirmed and fixed in <commit:3.enum>
+  (`InkoEnumFieldsTest`, with inko doc 0.21.1's real output, failed before
+  the fix). Fields of a type with constructors aren't indexed, since enums
+  can't define fields. The `kind` code can't be used for this: a `copy enum`
+  is 4, like any copy type.*
 - **Invalid code sample.** The Code Style preview calls `Iter.each`
   (`P/InkoCodeStyle.kt:42`), which doesn't exist in v0.21.1
   (`std/src/std/iter.inko`).

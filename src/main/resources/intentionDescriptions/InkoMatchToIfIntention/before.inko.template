@@ -1,0 +1,6 @@
+fn describe(x: Int) -> String {
+  <spot>match</spot> x {
+    case 1 or 2 -> 'small'
+    case _ -> 'big'
+  }
+}

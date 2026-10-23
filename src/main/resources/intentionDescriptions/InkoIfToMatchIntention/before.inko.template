@@ -1,0 +1,7 @@
+fn describe(x: Int) -> String {
+  <spot>if</spot> x == 1 or x == 2 {
+    'small'
+  } else {
+    'big'
+  }
+}

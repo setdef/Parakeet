@@ -1,0 +1,7 @@
+fn sign(x: Int) -> Int {
+  <spot>if x == 0</spot> {
+    0
+  } else {
+    1
+  }
+}

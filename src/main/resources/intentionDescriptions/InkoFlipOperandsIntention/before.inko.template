@@ -1,0 +1,3 @@
+fn check(limit: Int, value: Int) -> Bool {
+  <spot>limit < value</spot>
+}

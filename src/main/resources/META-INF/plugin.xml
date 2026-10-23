@@ -130,6 +130,46 @@
         <moveFileHandler implementation="com.setdef.parakeet.InkoMoveFileHandler"/>
         <copyPastePostProcessor implementation="com.setdef.parakeet.InkoPasteImportsProcessor"/>
         <codeInsight.typeInfo language="Inko" implementationClass="com.setdef.parakeet.InkoExpressionTypeProvider"/>
+        <intentionAction>
+            <language>Inko</language>
+            <className>com.setdef.parakeet.InkoFlipOperandsIntention</className>
+            <category>Inko</category>
+        </intentionAction>
+        <intentionAction>
+            <language>Inko</language>
+            <className>com.setdef.parakeet.InkoInvertIfIntention</className>
+            <category>Inko</category>
+        </intentionAction>
+        <intentionAction>
+            <language>Inko</language>
+            <className>com.setdef.parakeet.InkoIfToMatchIntention</className>
+            <category>Inko</category>
+        </intentionAction>
+        <intentionAction>
+            <language>Inko</language>
+            <className>com.setdef.parakeet.InkoMatchToIfIntention</className>
+            <category>Inko</category>
+        </intentionAction>
+        <intentionAction>
+            <language>Inko</language>
+            <className>com.setdef.parakeet.InkoAddArgumentNamesIntention</className>
+            <category>Inko</category>
+        </intentionAction>
+        <intentionAction>
+            <language>Inko</language>
+            <className>com.setdef.parakeet.InkoRemoveArgumentNamesIntention</className>
+            <category>Inko</category>
+        </intentionAction>
+        <intentionAction>
+            <language>Inko</language>
+            <className>com.setdef.parakeet.InkoSpecifyTypeIntention</className>
+            <category>Inko</category>
+        </intentionAction>
+        <intentionAction>
+            <language>Inko</language>
+            <className>com.setdef.parakeet.InkoRemoveTypeIntention</className>
+            <category>Inko</category>
+        </intentionAction>
         <statementUpDownMover implementation="com.setdef.parakeet.InkoStatementMover"/>
         <lang.smartEnterProcessor language="Inko" implementationClass="com.setdef.parakeet.InkoSmartEnterProcessor"/>
         <callHierarchyProvider language="Inko" implementationClass="com.setdef.parakeet.InkoCallHierarchyProvider"/>

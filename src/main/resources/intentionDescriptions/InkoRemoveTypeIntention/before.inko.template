@@ -1,0 +1,3 @@
+fn main {
+  let <spot>count: Int</spot> = 0
+}

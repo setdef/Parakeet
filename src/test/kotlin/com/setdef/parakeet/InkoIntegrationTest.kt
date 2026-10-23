@@ -98,6 +98,36 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     /** Extracts the text between `<selection>` markers in [path]'s [text], with the real compiler checking the result. */
+    /** Applies the intention titled [title] at `<caret>` in a fresh module, and checks the project still compiles. */
+    private fun intentionCompiles(text: String, title: String) {
+        putTempDirInProjectContent()
+        open("src/app/rewrite.inko", text.replace("<caret>", ""))
+        myFixture.editor.caretModel.moveToOffset(text.indexOf("<caret>"))
+        val intention = myFixture.availableIntentions.firstOrNull { it.text == title } ?: error("'$title' wasn't offered")
+        myFixture.launchAction(intention)
+        assertCompiles()
+    }
+
+    private val describe = "fn pub describe(x: Int) -> String {\n  <caret>if x == 1 or x == 2 {\n    'small'\n  } else if x == 3 {\n    let y = 'three'\n    y\n  } else {\n    'big'\n  }\n}\n"
+
+    fun testIfToMatchAndBackStillCompile() {
+        intentionCompiles(describe, "Replace 'if' with 'match'")
+        myFixture.editor.caretModel.moveToOffset(myFixture.editor.document.text.indexOf("match"))
+        myFixture.launchAction(myFixture.availableIntentions.first { it.text == "Replace 'match' with 'if'" })
+        assertCompiles()
+    }
+
+    fun testInvertedIfStillCompiles() = intentionCompiles(describe.replace("} else if x == 3 {\n    let y = 'three'\n    y\n  ", ""), "Invert 'if' condition")
+
+    fun testFlippedComparisonStillCompiles() =
+        intentionCompiles("fn pub check(a: Int, b: Int) -> Bool {\n  a + 1 <caret>< b and b > 2\n}\n", "Flip '<' to '>'")
+
+    fun testNamedArgumentsStillCompile() =
+        intentionCompiles("fn pub area(width: Int, height: Int) -> Int {\n  width * height\n}\n\nfn pub twice -> Int {\n  area(<caret>2, 3)\n}\n", "Add argument names")
+
+    fun testSpecifiedTypeStillCompiles() =
+        intentionCompiles("fn pub area(width: Int, height: Int) -> Int {\n  let <caret>total = width * height\n  total\n}\n", "Specify type explicitly")
+
     private fun extractAndCompile(path: String, text: String) {
         val start = text.indexOf("<selection>")
         val end = text.indexOf("</selection>") - "<selection>".length

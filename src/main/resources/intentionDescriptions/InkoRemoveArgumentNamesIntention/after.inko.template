@@ -1,0 +1,3 @@
+fn main {
+  resize(10, 20)
+}

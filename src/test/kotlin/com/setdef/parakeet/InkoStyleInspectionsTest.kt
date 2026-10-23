@@ -4,14 +4,13 @@ import com.intellij.codeInsight.daemon.impl.HighlightInfo
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.codeInspection.InspectionManager
 import com.intellij.openapi.command.WriteCommandAction
-import com.intellij.testFramework.PsiTestUtil
 
 /** Style-guide inspections, with inko doc output (for resolving calls) supplied by a fake. */
 class InkoStyleInspectionsTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
-        // Inspections only run on project content; on-disk test files aren't in the light project's content root.
-        PsiTestUtil.addContentRoot(module, myFixture.tempDirFixture.getFile("")!!)
+        // Inspections only run in project content; on-disk test files aren't in the light project's content root.
+        putTempDirInProjectContent()
         myFixture.enableInspections(
             InkoNamingInspection(), InkoBooleanMethodNameInspection(), InkoRedundantNamedArgumentInspection(), InkoEmptyParenthesesInspection(),
         )

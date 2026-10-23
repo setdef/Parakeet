@@ -86,6 +86,17 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertCompiles()
     }
 
+    fun testIntroducedConstantsStillCompile() {
+        val text = "import std.stdio (Stdout)\n\nfn pub seconds(hours: Int) -> Int {\n  hours * 60 * 60\n}\n\nfn pub minutes -> Int {\n  60 * 60 / 60\n}\n"
+        open("src/app/time.inko", text)
+        val stream = InkoTokenStream(text)
+        val start = text.indexOf("60 * 60")
+        val expression = com.intellij.openapi.util.TextRange(start, start + "60 * 60".length)
+        val plan = InkoIntroduceConstant.plan(stream, expression, InkoIntroduceVariable.occurrences(stream, expression, fileWide = true)).getOrThrow()
+        InkoIntroduceConstant.apply(project, myFixture.editor, plan)
+        assertCompiles()
+    }
+
     fun testQuickFixesUseTheCompilersDiagnostics() {
         open("src/app/util.inko", "import std.stdio (Stdout, Stderr)\n\nfn pub helper {\n  Stdout.new\n}\n")
         myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Remove unused import 'Stderr'" })

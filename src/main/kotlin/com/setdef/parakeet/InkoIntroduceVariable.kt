@@ -121,14 +121,15 @@ object InkoIntroduceVariable {
     }
 
     /**
-     * Other places in the same method (or the file, outside methods) where the
-     * same expression appears, by tokens, and not as part of a longer chain.
+     * Other places in the same method (or the file, outside methods, or with
+     * [fileWide]) where the same expression appears, by tokens, and not as
+     * part of a longer chain.
      */
-    fun occurrences(stream: InkoTokenStream, expression: TextRange): List<TextRange> {
+    fun occurrences(stream: InkoTokenStream, expression: TextRange, fileWide: Boolean = false): List<TextRange> {
         val tokens = stream.tokens
         val pattern = tokens.filter { expression.contains(it.range) }.map { it.text }
-        val scope = InkoOutline.of(stream.text).enclosing(expression.startOffset)
-            .lastOrNull { it.kind == InkoOutline.Kind.METHOD }?.range ?: TextRange(0, stream.text.length)
+        val method = if (fileWide) null else InkoOutline.of(stream.text).enclosing(expression.startOffset).lastOrNull { it.kind == InkoOutline.Kind.METHOD }
+        val scope = method?.range ?: TextRange(0, stream.text.length)
         return tokens.indices.filter { i ->
             tokens[i].start >= scope.startOffset && tokens[i].end <= scope.endOffset &&
                 i + pattern.size <= tokens.size &&

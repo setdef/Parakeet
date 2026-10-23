@@ -4,8 +4,12 @@ import com.intellij.psi.PsiDirectory
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiReference
+import com.intellij.psi.search.SearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
+import com.intellij.refactoring.listeners.RefactoringElementListener
 import com.intellij.refactoring.move.moveFilesOrDirectories.MoveFileHandler
+import com.intellij.refactoring.rename.RenamePsiElementProcessor
 import com.intellij.usageView.UsageInfo
 import com.intellij.util.containers.MultiMap
 
@@ -66,5 +70,42 @@ object InkoModuleImports {
         if (start < 0) return
         document.replaceString(start, start + import.module.length, module)
         PsiDocumentManager.getInstance(file.project).commitDocument(document)
+    }
+}
+
+/**
+ * Renaming a directory of Inko modules updates their imports: renaming
+ * `src/app` to `src/core` turns `import app.util` into `import core.util`.
+ * The imports are found before the rename and rebound to their (moved) files
+ * after it, as for moves.
+ */
+class InkoDirectoryRenameProcessor : RenamePsiElementProcessor() {
+    override fun canProcessElement(element: PsiElement): Boolean =
+        element is PsiDirectory && modulesIn(element).isNotEmpty()
+
+    override fun findReferences(element: PsiElement, searchScope: SearchScope, searchInCommentsAndStrings: Boolean): Collection<PsiReference> =
+        super.findReferences(element, searchScope, searchInCommentsAndStrings) +
+            modulesIn(element as PsiDirectory).flatMap { ReferencesSearch.search(it, searchScope).findAll() }.filterIsInstance<InkoReference>()
+
+    override fun renameElement(element: PsiElement, newName: String, usages: Array<out UsageInfo>, listener: RefactoringElementListener?) {
+        val (imports, others) = usages.partition { it.reference is InkoReference }
+        // What each import names, while the old paths still resolve.
+        val targets = imports.mapNotNull { usage ->
+            val reference = usage.reference as InkoReference
+            val module = reference.multiResolve(false).mapNotNull { it.element as? InkoFile }.firstOrNull() ?: return@mapNotNull null
+            reference to module
+        }
+        super.renameElement(element, newName, others.toTypedArray(), listener)
+        for ((reference, module) in targets) reference.bindToElement(module)
+    }
+
+    private fun modulesIn(directory: PsiDirectory): List<InkoFile> {
+        val files = mutableListOf<InkoFile>()
+        fun walk(dir: PsiDirectory) {
+            dir.files.filterIsInstanceTo(files)
+            dir.subdirectories.forEach(::walk)
+        }
+        walk(directory)
+        return files
     }
 }

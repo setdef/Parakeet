@@ -29,6 +29,20 @@ class InkoMoveFileTest : InkoTestCase(onDisk = true) {
         )
     }
 
+    fun testRenamingADirectoryUpdatesTheImportsOfEveryModuleInIt() {
+        myFixture.addFileToProject("src/main.inko", "import app.util (helper)\nimport app.other.util (other)\n\nfn main {\n  helper + other\n}\n")
+        val directory = PsiManager.getInstance(project).findDirectory(myFixture.findFileInTempDir("src/app"))!!
+        myFixture.renameElement(directory, "core")
+        assertEquals("import core.util (helper)\nimport core.other.util (other)\n\nfn main {\n  helper + other\n}\n", text("src/main.inko"))
+    }
+
+    fun testRenamingANestedDirectory() {
+        myFixture.addFileToProject("src/main.inko", "import app.util (helper)\nimport app.other.util (other)\n")
+        val directory = PsiManager.getInstance(project).findDirectory(myFixture.findFileInTempDir("src/app/other"))!!
+        myFixture.renameElement(directory, "extra")
+        assertEquals("import app.util (helper)\nimport app.extra.util (other)\n", text("src/main.inko"))
+    }
+
     fun testMovingIntoAnotherModulesDirectory() {
         myFixture.addFileToProject("src/main.inko", "import app.util (helper)\n")
         myFixture.moveFile("src/app/util.inko", "src/app/other/nested".also { myFixture.addFileToProject("$it/.keep", "") })

@@ -87,6 +87,7 @@
         <editorFloatingToolbarProvider implementation="com.setdef.parakeet.InkoManifestFloatingToolbarProvider"/>
         <editorNotificationProvider implementation="com.setdef.parakeet.InkoDependenciesBanner"/>
         <additionalLibraryRootsProvider implementation="com.setdef.parakeet.InkoLibraryRootsProvider"/>
+        <lang.importOptimizer language="Inko" implementationClass="com.setdef.parakeet.InkoImportOptimizer"/>
         <lang.findUsagesProvider language="Inko" implementationClass="com.setdef.parakeet.InkoFindUsagesProvider"/>
         <referencesSearch implementation="com.setdef.parakeet.InkoModuleReferencesSearcher"/>
         <usageTypeProvider implementation="com.setdef.parakeet.InkoUsageTypeProvider"/>

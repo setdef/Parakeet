@@ -11,6 +11,7 @@ import com.intellij.execution.process.ProcessOutput
 import com.intellij.execution.runners.ExecutionEnvironmentBuilder
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.actionSystem.IdeActions
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.psi.PsiElement
 import com.intellij.psi.search.GlobalSearchScope
 import java.nio.file.Files
@@ -49,6 +50,13 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         open("src/app/util.inko", "import std.stdio (Stdout, Stderr)\n\nfn pub helper {\n  Stdout.new\n}\n")
         myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Remove unused import 'Stderr'" })
         myFixture.checkResult("import std.stdio (Stdout)\n\nfn pub helper {\n  Stdout.new\n}\n")
+    }
+
+    fun testOptimizeImportsRemovesUnusedAndSorts() {
+        open("src/app/util.inko", "import std.stdio (Stdout, Stderr)\nimport std.fmt (Format)\nimport std.array (Array)\n\nfn pub helper -> Array[Int] {\n  Stdout.new\n  []\n}\n")
+        val runnable = InkoImportOptimizer().processFile(myFixture.file)
+        WriteCommandAction.runWriteCommandAction(project, runnable)
+        myFixture.checkResult("import std.array (Array)\nimport std.stdio (Stdout)\n\nfn pub helper -> Array[Int] {\n  Stdout.new\n  []\n}\n")
     }
 
     fun testFormatsWithInkoFmt() {

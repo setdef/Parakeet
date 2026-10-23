@@ -238,6 +238,14 @@ Compiles. Consequences:
 
 ### 1.5 Adding an import breaks files that use build tags or `import extern` (Medium–High)
 
+**Status: confirmed and fixed in <commit:1.5>.** `InkoImportFormsTest`
+failed before the fix (all 5 tests that could run on the old code). An
+import's range now includes its build tags, `import extern "…"` is its own
+form that imports no module, and new names are never added to a tagged
+import. Build tags are no longer read as imported symbols.
+`InkoIntegrationTest.testImportsAddedAfterTaggedAndExternImportsStillCompile`
+compiles the result.
+
 **What Parakeet assumes.** An import is
 `import path [ (symbols) ]` and nothing more. The regex is at
 `P/InkoImports.kt:41`. New imports are inserted right after the last

@@ -56,7 +56,7 @@ class InkoResolver private constructor(
         is InkoNameContext.Local -> emptyList() // Resolved from the file itself; see [localDeclaration].
         is InkoNameContext.Constant -> typesNamed(context.name).ifEmpty { symbols.named(context.name, Kind.CONSTRUCTOR) }
         is InkoNameContext.Identifier -> function(context.name)
-        InkoNameContext.Definition -> emptyList()
+        InkoNameContext.Definition, InkoNameContext.BuildTag -> emptyList()
     }
 
     private fun inModule(module: String, name: String): List<InkoDefinition> =

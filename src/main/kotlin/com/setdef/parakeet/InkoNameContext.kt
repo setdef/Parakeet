@@ -32,6 +32,9 @@ sealed class InkoNameContext {
     /** A lowercase name that isn't a local: a method on `self` (inside a type), or a module method. */
     data class Identifier(val name: String) : InkoNameContext()
 
+    /** A build tag in an import (`unix` in `import a (B) if unix`), which names no symbol. */
+    data object BuildTag : InkoNameContext()
+
     /** A name being defined, e.g. after `fn` or `let`. */
     data object Definition : InkoNameContext()
 
@@ -43,6 +46,7 @@ sealed class InkoNameContext {
             val text = name.text
             val offset = name.textRange.startOffset
             imports.at(offset)?.let { import ->
+                if (import.isInTags(offset)) return BuildTag
                 if (import.isInSymbols(offset)) return ImportedSymbol(import.module, import.symbols[text] ?: text)
                 val file = name.containingFile.text
                 return ImportPath(file.substring(file.indexOf(import.module, import.range.startOffset), name.textRange.endOffset))

@@ -238,6 +238,18 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertCompiles()
     }
 
+    // AUDIT.md finding 1.5: a new import goes after an import's build tags and after `import extern`.
+    fun testImportsAddedAfterTaggedAndExternImportsStillCompile() {
+        myFixture.addFileToProject("src/app/util.inko", "type pub Helper {}\n\nlet pub LIMIT = 1\n")
+        open("src/app/main.inko", "import std.stdio (Stdout) if unix\nimport extern \"m\"\n\nfn pub make -> Int {\n  Stdout.new\n  let _ = Helper()\n  LIMIT\n}\n")
+        WriteCommandAction.runWriteCommandAction(project) {
+            InkoImportEdits.add(myFixture.editor.document, "app.util", "Helper")
+            InkoImportEdits.add(myFixture.editor.document, "app.util", "LIMIT")
+        }
+        assertTrue(myFixture.editor.document.text, myFixture.editor.document.text.startsWith("import std.stdio (Stdout) if unix\nimport extern \"m\"\nimport app.util (Helper, LIMIT)\n"))
+        assertCompiles()
+    }
+
     fun testInlinedMethodsStillCompile() {
         putTempDirInProjectContent()
         myFixture.addFileToProject(

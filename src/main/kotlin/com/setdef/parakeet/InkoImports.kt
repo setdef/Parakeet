@@ -2,22 +2,34 @@ package com.setdef.parakeet
 
 import com.intellij.openapi.util.TextRange
 
-/** One `import` statement: `import a.b`, `import a.b (X, Y as Z)`, or `import a.b (self)`. */
+/**
+ * One `import` statement, following Inko's `import` (ast/src/parser.rs):
+ * `import a.b`, `import a.b (X, Y as Z)`, or `import a.b (self)`, each maybe
+ * with build tags (`if unix and amd64`), or `import extern "m"`, which links a
+ * C library and imports no module ([isExtern], with an empty [module]).
+ */
 class InkoImport(
     val module: String,
+    /** The whole statement, build tags included. */
     val range: TextRange,
     /** The text inside the parentheses, if any. */
     val symbolsRange: TextRange?,
     /** Local name to original name; `self` refers to the module itself. */
     val symbols: Map<String, String>,
+    /** `if tag and tag`, if the import has build tags. */
+    val tagsRange: TextRange? = null,
+    val isExtern: Boolean = false,
 ) {
     /** The name this import makes the module itself available as, if any (e.g. `b` for `import a.b`). */
     val moduleAlias: String? = when {
+        isExtern -> null
         symbolsRange == null -> module.substringAfterLast('.')
         else -> symbols.entries.firstOrNull { it.value == "self" }?.key
     }
 
-    fun isInSymbols(offset: Int): Boolean = symbolsRange != null && offset >= symbolsRange.startOffset
+    fun isInSymbols(offset: Int): Boolean = symbolsRange != null && offset >= symbolsRange.startOffset && offset <= symbolsRange.endOffset
+
+    fun isInTags(offset: Int): Boolean = tagsRange?.containsOffset(offset) == true
 }
 
 /** The `import` statements of an Inko file, and what names they bring into scope. */
@@ -38,7 +50,9 @@ class InkoImports(private val imports: List<InkoImport>) {
     val symbolNames: Set<String> get() = imports.flatMap { it.symbols.values }.toSet()
 
     companion object {
-        private val IMPORT = Regex("""(?m)^[ \t]*import\s+([A-Za-z_][\w.]*)(?:\s*\(([^)]*)\))?""")
+        private val IMPORT = Regex(
+            """(?m)^[ \t]*import\s+(?:extern\s+(?:'[^'\n]*'|"[^"\n]*")|([A-Za-z_][\w.]*)(?:\s*\(([^)]*)\))?(\s+if\s+[a-z_]\w*(?:\s+and\s+[a-z_]\w*)*)?)""",
+        )
         private val AS = Regex("\\s+as\\s+")
 
         fun parse(text: CharSequence): InkoImports = InkoImports(IMPORT.findAll(text).map { match ->
@@ -48,11 +62,14 @@ class InkoImports(private val imports: List<InkoImport>) {
                 val original = pieces.first().trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
                 (pieces.getOrNull(1)?.trim() ?: original) to original
             }?.toMap().orEmpty()
+            val tags = match.groups[3]
             InkoImport(
                 module = match.groupValues[1],
                 range = TextRange(match.range.first, match.range.last + 1),
                 symbolsRange = symbolsGroup?.range?.let { TextRange(it.first, it.last + 1) },
                 symbols = symbols,
+                tagsRange = tags?.range?.let { TextRange(it.first + (tags.value.length - tags.value.trimStart().length), it.last + 1) },
+                isExtern = match.groups[1] == null,
             )
         }.toList())
     }

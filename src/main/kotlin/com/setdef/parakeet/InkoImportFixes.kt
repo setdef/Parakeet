@@ -15,7 +15,8 @@ object InkoImportEdits {
     /** Imports [name] from [module]: into an existing `import module (…)`, else as a new line after the last import. */
     fun add(document: Document, module: String, name: String) {
         val imports = InkoImports.parse(document.charsSequence)
-        val existing = imports.statements.firstOrNull { it.module == module && it.symbolsRange != null }
+        // Not into a tagged import: the name would only be imported where the tags hold.
+        val existing = imports.statements.firstOrNull { it.module == module && it.symbolsRange != null && it.tagsRange == null }
         when {
             existing != null -> {
                 val symbols = existing.symbolsRange!!

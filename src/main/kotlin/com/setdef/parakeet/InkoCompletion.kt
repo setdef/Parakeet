@@ -7,6 +7,7 @@ import com.intellij.codeInsight.completion.CompletionResultSet
 import com.intellij.codeInsight.editorActions.TypedHandlerDelegate
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
@@ -76,7 +77,8 @@ class InkoCompletionContributor : CompletionContributor() {
         val before = file.viewProvider.document?.charsSequence?.subSequence(0, parameters.offset) ?: return
         val context = InkoCompletionContext.of(before)
         val sink = result.withPrefixMatcher(context.prefix)
-        sink.addAllElements(InkoCompletions(file).items(context).distinctBy { it.lookupString to it.allLookupStrings })
+        val completions = InkoCompletions(file).apply { offset = parameters.offset }
+        sink.addAllElements(completions.items(context).distinctBy { it.lookupString to it.allLookupStrings })
         if (context !is InkoCompletionContext.Bare) sink.stopHere()
     }
 }
@@ -89,6 +91,9 @@ private class InkoCompletions(private val file: PsiFile) {
     private val module: String? = path?.let { symbols?.moduleOf(it) ?: Inko.moduleName(it) }
     private val imports = InkoImports.parse(file.text)
     private val outline = file.inkoOutline
+
+    /** The caret's offset, for finding locals in scope. */
+    var offset: Int = 0
 
     fun items(context: InkoCompletionContext): List<LookupElement> = when (context) {
         is InkoCompletionContext.ImportPath -> symbols?.moduleNames.orEmpty().map { name ->
@@ -112,6 +117,11 @@ private class InkoCompletions(private val file: PsiFile) {
             val type = imports.symbol(context.receiver)?.second ?: context.receiver
             return symbols.ownedBy(type, Kind.STATIC_METHOD, Kind.CONSTRUCTOR).map(::definition)
         }
+        receiverType(context)?.let { type ->
+            // A known receiver type narrows it to that type's methods and (public) fields.
+            val owner = imports.symbol(type)?.second ?: type
+            symbols.ownedBy(owner, Kind.INSTANCE_METHOD, Kind.FIELD).takeIf { it.isNotEmpty() }?.let { return it.map(::definition) }
+        }
         // Without types, prefer methods of types this file mentions or imports.
         val inScope = outline.all.filter { it.kind == InkoOutline.Kind.TYPE || it.kind == InkoOutline.Kind.TRAIT }.map { it.label } +
             imports.symbolNames + Regex("""\b[A-Z]\w*""").findAll(file.text).map { it.value }
@@ -119,8 +129,18 @@ private class InkoCompletions(private val file: PsiFile) {
         return preferred.ifEmpty { symbols.names.flatMap { symbols.named(it, Kind.INSTANCE_METHOD) } }.map(::definition)
     }
 
+    /** The receiver's type, when it's `self` or a local with a known type. */
+    private fun receiverType(context: InkoCompletionContext.Member): String? = when {
+        context.receiverType == InkoTokens.KEYWORD && context.receiver == "self" -> InkoLocals.selfType(file.text, offset)
+        context.receiverType == InkoTokens.IDENTIFIER -> InkoLocals.visibleAt(file.text, offset).lastOrNull { it.name == context.receiver }?.type
+        else -> null
+    }
+
     private fun bare(): List<LookupElement> = buildList {
         InkoTokens.KEYWORDS.forEach { add(LookupElementBuilder.create(it).bold()) }
+        InkoLocals.visibleAt(file.text, offset).forEach { local ->
+            add(LookupElementBuilder.create(local.name).withIcon(AllIcons.Nodes.Variable).withTypeText(local.type))
+        }
         outline.all.filter { it.kind != InkoOutline.Kind.FIELD && it.kind != InkoOutline.Kind.IMPL }.forEach { node ->
             add(LookupElementBuilder.create(node.label).withIcon(node.kind.icon))
         }

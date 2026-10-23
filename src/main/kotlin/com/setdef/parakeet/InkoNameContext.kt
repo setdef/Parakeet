@@ -17,8 +17,11 @@ sealed class InkoNameContext {
     /** `Type.name` */
     data class StaticMember(val type: String, val name: String) : InkoNameContext()
 
-    /** `value.name` */
-    data class InstanceMember(val name: String) : InkoNameContext()
+    /** `value.name`; [receiverType] is the receiver's type when it's known (a typed local, or `self`). */
+    data class InstanceMember(val name: String, val receiverType: String? = null) : InkoNameContext()
+
+    /** A local variable or parameter in scope. */
+    data class Local(val local: InkoLocal) : InkoNameContext()
 
     /** `alias` in `alias.something`, where `alias` is an imported module. */
     data class ModuleReference(val module: String) : InkoNameContext()
@@ -26,7 +29,7 @@ sealed class InkoNameContext {
     /** A capitalized name: a type, trait, constant, or enum constructor. */
     data class Constant(val name: String) : InkoNameContext()
 
-    /** A lowercase name: a module method (or a local, which can't be resolved). */
+    /** A lowercase name that isn't a local: a module method. */
     data class Identifier(val name: String) : InkoNameContext()
 
     /** A name being defined, e.g. after `fn` or `let`. */
@@ -53,14 +56,26 @@ sealed class InkoNameContext {
                     imports.moduleAliasedAs(receiver!!.text)?.let { return ModuleMember(it, text) }
                 }
                 if (receiver.isToken(InkoTokens.CONSTANT)) return StaticMember(receiver!!.text, text)
-                return InstanceMember(text)
+                return InstanceMember(text, receiver?.let { receiverType(it) })
             }
             if (name.tokenType == InkoTokens.CONSTANT) return Constant(text)
             if (previous.isKeyword(*DEFINING_KEYWORDS)) return Definition
             if (name.nextToken().isToken(InkoTokens.DOT)) {
                 imports.moduleAliasedAs(text)?.let { return ModuleReference(it) }
             }
+            InkoLocals.visibleAt(name.containingFile.text, offset).lastOrNull { it.name == text }?.let { return Local(it) }
             return Identifier(text)
+        }
+
+        /** The type of a receiver before `.`: a local with a known type, or `self`. */
+        private fun receiverType(receiver: com.intellij.psi.PsiElement): String? {
+            val file = receiver.containingFile.text
+            val offset = receiver.textRange.startOffset
+            return when {
+                receiver.isKeyword("self") -> InkoLocals.selfType(file, offset)
+                receiver.isToken(InkoTokens.IDENTIFIER) -> InkoLocals.visibleAt(file, offset).lastOrNull { it.name == receiver.text }?.type
+                else -> null
+            }
         }
     }
 }

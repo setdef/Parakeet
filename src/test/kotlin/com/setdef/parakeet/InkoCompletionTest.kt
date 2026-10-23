@@ -26,7 +26,12 @@ class InkoCompletionTest : InkoTestCase(onDisk = true) {
                         instanceMethods = listOf(FakeInkoDoc.member("value", util, 6, signature = "fn pub value -> Int")),
                     )),
                 ),
-                FakeInkoDoc.module("app.other", mirror.resolve("src/app/other.inko")),
+                FakeInkoDoc.module(
+                    "app.other", mirror.resolve("src/app/other.inko"),
+                    types = listOf(FakeInkoDoc.type(
+                        "Other", 1, instanceMethods = listOf(FakeInkoDoc.member("size", mirror.resolve("src/app/other.inko"), 2)),
+                    )),
+                ),
             )
         })
     }
@@ -60,6 +65,30 @@ class InkoCompletionTest : InkoTestCase(onDisk = true) {
 
     fun testInstanceMethodsOfTypesInScope() {
         assertEquals(listOf("value"), complete("import app.util (Helper)\n\nfn a(h: Helper) {\n  h.va<caret>\n}\n"))
+    }
+
+    fun testLocalsAndParametersInScope() {
+        val items = complete("fn a(count: Int) {\n  let total = 1\n  if x {\n    let gone = 2\n  }\n  <caret>\n  let later = 3\n}\n")
+        assertTrue(items.toString(), items.containsAll(listOf("count", "total")))
+        assertTrue(items.toString(), "gone" !in items && "later" !in items)
+    }
+
+    fun testUntypedReceiversPreferTypesTheFileMentions() {
+        // x's type is unknown; Helper is mentioned and Other isn't, so only Helper's methods are offered.
+        assertEquals(listOf("value"), complete("import app.util (Helper)\n\nfn a(x) -> Helper {\n  x.<caret>\n}\n"))
+    }
+
+    fun testAKnownLocalTypeNarrowsMembers() {
+        // Other is mentioned too, but h is a Helper.
+        assertEquals(listOf("value"), complete("import app.util (Helper)\nimport app.other (Other)\n\nfn a(o: Other) {\n  let h = Helper.new\n  h.<caret>\n}\n"))
+    }
+
+    fun testSelfMembersAreTheEnclosingTypes() {
+        val util = "type pub Helper {\n  fn pub static new -> Helper {\n    Helper()\n  }\n\n  fn pub value -> Int {\n    self.<caret>\n  }\n}\n\nfn pub helper -> Int {\n  1\n}\n"
+        myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/app/util.inko", util.replace("<caret>", "")).virtualFile)
+        myFixture.editor.caretModel.moveToOffset(util.indexOf("<caret>"))
+        myFixture.completeBasic()
+        assertEquals(listOf("value"), myFixture.lookupElementStrings)
     }
 
     fun testModuleMembersThroughAnAlias() {

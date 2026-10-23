@@ -98,7 +98,8 @@ class InkoResolverTest : InkoTestCase(onDisk = true) {
 
     fun testStaticMethod() = assertEquals(listOf("util.inko:4:new"), targetsAt("new"))
 
-    fun testInstanceMethodPrefersTypesTheFileMentions() = assertEquals(listOf("util.inko:8:value"), targetsAt("value"))
+    // h is a Helper (from Helper.new), so Unmentioned's value (in std) isn't offered.
+    fun testAKnownReceiverTypeNarrowsMethods() = assertEquals(listOf("util.inko:8:value"), targetsAt("value"))
 
     fun testImportedFunction() = assertEquals(listOf("util.inko:13:helper"), targetsAt("helper\n"))
 
@@ -108,7 +109,7 @@ class InkoResolverTest : InkoTestCase(onDisk = true) {
 
     fun testStandardLibraryTypeFindsTheNameNotTheLocation() = assertEquals(listOf("string.inko:4:String"), targetsAt("String"))
 
-    fun testLocalVariablesDoNotResolve() = assertEmpty(targetsAt("h.value"))
+    fun testLocalVariablesResolveToTheirDeclaration() = assertEquals(listOf("main.inko:6:h"), targetsAt("h.value"))
 
     fun testDefinitionsDoNotResolve() = assertEmpty(targetsAt("main {"))
 }

@@ -27,7 +27,7 @@ object InkoSourceDefinitions {
         for (root in outline.roots) {
             when (root.kind) {
                 InkoOutline.Kind.TYPE, InkoOutline.Kind.TRAIT, InkoOutline.Kind.IMPL -> {
-                    val owner = if (root.kind == InkoOutline.Kind.IMPL) implOwner(root.label) else root.label
+                    val owner = if (root.kind == InkoOutline.Kind.IMPL) outline.implTarget(root) ?: root.label else root.label
                     if (root.kind != InkoOutline.Kind.IMPL) add(if (root.kind == InkoOutline.Kind.TYPE) Kind.TYPE else Kind.TRAIT, root.label, null, root)
                     for (member in root.children) {
                         when (member.kind) {
@@ -49,13 +49,6 @@ object InkoSourceDefinitions {
             }
         }
         return result
-    }
-
-    /** `impl Trait for Type` and `impl Type` both add methods to `Type`. */
-    private fun implOwner(label: String): String {
-        val words = label.removePrefix("impl ").replace(Regex("\\[.*?]"), "").split(' ').filter { it.isNotBlank() }
-        val forIndex = words.indexOf("for")
-        return if (forIndex >= 0) words.getOrElse(forIndex + 1) { words.first() } else words.first()
     }
 
     private fun isStatic(text: CharSequence, node: InkoOutline.Node): Boolean =

@@ -37,7 +37,8 @@ class InkoResolver private constructor(
         is InkoNameContext.ModuleReference -> listOfNotNull(symbols.module(context.module))
         is InkoNameContext.Field -> preferringThisModule(symbols.named(context.name, Kind.FIELD))
         is InkoNameContext.StaticMember -> staticMember(context.type, context.name)
-        is InkoNameContext.InstanceMember -> instanceMember(context.name)
+        is InkoNameContext.InstanceMember -> instanceMember(context.name, context.receiverType)
+        is InkoNameContext.Local -> emptyList() // Resolved from the file itself; see [localDeclaration].
         is InkoNameContext.Constant -> typesNamed(context.name).ifEmpty { symbols.named(context.name, Kind.CONSTRUCTOR) }
         is InkoNameContext.Identifier -> function(context.name)
         InkoNameContext.Definition -> emptyList()
@@ -65,7 +66,12 @@ class InkoResolver private constructor(
     }
 
     /** Without types, any type's method could match; prefer types the file mentions or imports. */
-    private fun instanceMember(name: String): List<InkoDefinition> {
+    private fun instanceMember(name: String, receiverType: String?): List<InkoDefinition> {
+        if (receiverType != null) {
+            // A known receiver type narrows it to that type's methods, and (public) fields.
+            val owner = imports.symbol(receiverType)?.second ?: receiverType
+            symbols.named(name, Kind.INSTANCE_METHOD, Kind.FIELD).filter { it.owner == owner }.takeIf { it.isNotEmpty() }?.let { return it }
+        }
         val methods = symbols.named(name, Kind.INSTANCE_METHOD)
         val inScope = PsiTreeUtil.findChildrenOfType(file, InkoName::class.java)
             .filter { it.tokenType == InkoTokens.CONSTANT }
@@ -78,7 +84,17 @@ class InkoResolver private constructor(
         symbols.named(name, Kind.MODULE_METHOD).filter { it.module == module }.ifEmpty { imported(name) }
 
     companion object {
-        fun resolve(name: InkoName): List<PsiElement> = resolveDefinitions(name).map { it.second }
+        fun resolve(name: InkoName): List<PsiElement> =
+            localDeclaration(name)?.let(::listOf) ?: resolveDefinitions(name).map { it.second }
+
+        /** Where a local variable or parameter is declared, found from the file alone (no index needed). */
+        private fun localDeclaration(name: InkoName): PsiElement? {
+            if (name.tokenType != InkoTokens.IDENTIFIER) return null
+            val file = name.containingFile ?: return null
+            val local = (InkoNameContext.of(name, InkoImports.parse(file.text)) as? InkoNameContext.Local)?.local ?: return null
+            val leaf = file.findElementAt(local.offset) ?: return null
+            return PsiTreeUtil.getParentOfType(leaf, InkoName::class.java, false) ?: leaf
+        }
 
         /** What [name] refers to: each definition, with the element where its name is written. */
         fun resolveDefinitions(name: InkoName): List<Pair<InkoDefinition, PsiElement>> {

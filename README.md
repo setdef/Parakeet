@@ -67,9 +67,11 @@ compiler, so it always agrees with your installed Inko version.
   saved files in a project that compiles, so files you've edited since (saved
   or not) are read from source, and when the project doesn't compile, the
   standard library and dependencies are still documented while your own files
-  are read from source. Locations are exact, but the plugin doesn't know types, so a method call like `x.to_string` offers every
-  `to_string` it can't rule out, preferring types mentioned in the file. Local
-  variables don't resolve.
+  are read from source. Locations are exact, but the plugin doesn't infer types: a method call like `x.to_string` narrows to `x`'s
+  type when it's written or obvious (`x: Foo`, `let x = Foo.new`, `self`), and
+  otherwise offers every `to_string` it can't rule out, preferring types
+  mentioned in the file. Local variables and parameters are found from the
+  file's own tokens.
 - **Tests** run the way `inko test` does (from the project root), but through
   a program Parakeet generates that reports each test to the IDE. It's built in
   a mirror of the project in the IDE's system directory (with its own build

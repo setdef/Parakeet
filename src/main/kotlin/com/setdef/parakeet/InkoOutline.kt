@@ -17,6 +17,13 @@ class InkoOutline private constructor(val roots: List<Node>) {
         val children: MutableList<Node> = mutableListOf()
     }
 
+    /** For an `impl` node, the type it adds methods to: `Type` in both `impl Trait for Type` and `impl Type`. */
+    fun implTarget(node: Node): String? {
+        val words = node.label.removePrefix("impl ").replace(Regex("\\[.*?]"), "").split(' ').filter { it.isNotBlank() }
+        val forIndex = words.indexOf("for")
+        return if (forIndex >= 0) words.getOrNull(forIndex + 1) else words.firstOrNull()
+    }
+
     /** Every node, depth first. */
     val all: List<Node> get() = roots.flatMap { it.withDescendants() }
 

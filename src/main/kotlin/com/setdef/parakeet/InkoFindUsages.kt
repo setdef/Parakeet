@@ -18,6 +18,7 @@ import com.intellij.psi.search.UsageSearchContext
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.RefactoringActionHandler
+import com.intellij.refactoring.changeSignature.ChangeSignatureHandler
 import com.intellij.refactoring.rename.RenameInputValidator
 import com.intellij.refactoring.rename.RenamePsiElementProcessor
 import com.intellij.usages.impl.rules.UsageType
@@ -128,6 +129,8 @@ class InkoRefactoringSupportProvider : RefactoringSupportProvider() {
         element is InkoDeclaration && !element.isLocal
 
     override fun getIntroduceVariableHandler(): RefactoringActionHandler = InkoIntroduceVariableHandler()
+
+    override fun getChangeSignatureHandler(): ChangeSignatureHandler = InkoChangeSignatureHandler()
 
     // Safe Delete (⌘⌫ / Alt+Delete) warns about usages, then deletes the whole declaration. Not parameters:
     // removing one would mean editing every call.

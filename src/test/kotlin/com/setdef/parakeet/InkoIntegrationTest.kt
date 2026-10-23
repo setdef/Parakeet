@@ -12,7 +12,10 @@ import com.intellij.execution.runners.ExecutionEnvironmentBuilder
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiManager
+import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.search.GlobalSearchScope
 import java.nio.file.Files
 import java.nio.file.Path
@@ -44,6 +47,31 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         myFixture.editor.caretModel.moveToOffset(myFixture.editor.document.text.indexOf("42"))
         myFixture.type("unsaved_only + ")
         assertEquals("the symbol 'unsaved_only' is undefined", problems().single { it.severity == HighlightSeverity.ERROR }.description)
+    }
+
+    /** Saves every file, then checks the whole project with the real compiler. */
+    private fun assertCompiles() {
+        FileDocumentManager.getInstance().saveAllDocuments()
+        val result = InkoCli.getInstance(project).run(listOf("check"), Path.of(myFixture.tempDirPath))!!
+        assertTrue(result.stderr, result.succeeded)
+    }
+
+    private fun declaration(path: String, name: String): InkoDeclaration {
+        val file = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir(path))!!
+        return PsiTreeUtil.findChildrenOfType(file, InkoDeclaration::class.java).first { it.name == name }
+    }
+
+    fun testChangedSignaturesStillCompile() {
+        putTempDirInProjectContent()
+        myFixture.addFileToProject("src/app/util.inko", "fn pub area(width: Int, height: Int) -> Int {\n  width * height\n}\n\nfn pub square(side: Int) -> Int {\n  area(side, height: side)\n}\n")
+        myFixture.addFileToProject("src/main.inko", "import app.util (area)\n\nfn total -> Int {\n  area(2, 3) + area(width: 4, height: area(1, 1))\n}\n")
+        InkoChangeSignatureProcessor(project, declaration("src/app/util.inko", "area"), InkoSignatureChange(
+            "rectangle",
+            listOf(InkoParameterChange(1, "tall", "Int"), InkoParameterChange(0, "wide", "Int"), InkoParameterChange(-1, "scale", "Int", "1")),
+            "Int",
+        )).run()
+        assertCompiles()
+        assertTrue(PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/main.inko"))!!.text.contains("rectangle(3, 2, 1) + rectangle(tall: rectangle(1, 1, 1), wide: 4, scale: 1)"))
     }
 
     fun testQuickFixesUseTheCompilersDiagnostics() {

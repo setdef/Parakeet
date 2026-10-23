@@ -39,4 +39,44 @@
     <variable name="NAME" expression="" defaultValue="&quot;does something&quot;" alwaysStopAt="true"/>
     <context><option name="INKO" value="true"/></context>
   </template>
+  <template name="surround_if" value="if $CONDITION$ {&#10;  $SELECTION$&#10;}" description="Surround with if" toReformat="false" toShortenFQNames="false">
+    <variable name="CONDITION" expression="" defaultValue="" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="surround_if_else" value="if $CONDITION$ {&#10;  $SELECTION$&#10;} else {&#10;  $END$&#10;}" description="Surround with if / else" toReformat="false" toShortenFQNames="false">
+    <variable name="CONDITION" expression="" defaultValue="" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="surround_if_not" value="if !$CONDITION$ {&#10;  $SELECTION$&#10;}" description="Surround with if !" toReformat="false" toShortenFQNames="false">
+    <variable name="CONDITION" expression="" defaultValue="" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="surround_while" value="while $CONDITION$ {&#10;  $SELECTION$&#10;}" description="Surround with while" toReformat="false" toShortenFQNames="false">
+    <variable name="CONDITION" expression="" defaultValue="" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="surround_loop" value="loop {&#10;  $SELECTION$$END$&#10;}" description="Surround with loop" toReformat="false" toShortenFQNames="false">
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="surround_for" value="for $NAME$ in $ITERABLE$ {&#10;  $SELECTION$&#10;}" description="Surround with for … in" toReformat="false" toShortenFQNames="false">
+    <variable name="NAME" expression="" defaultValue="&quot;item&quot;" alwaysStopAt="true"/>
+    <variable name="ITERABLE" expression="" defaultValue="" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="surround_match" value="match $VALUE$ {&#10;  case _ -&gt; {&#10;    $SELECTION$&#10;  }&#10;}" description="Surround with match" toReformat="false" toShortenFQNames="false">
+    <variable name="VALUE" expression="" defaultValue="" alwaysStopAt="true"/>
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="surround_closure" value="fn {&#10;  $SELECTION$$END$&#10;}" description="Surround with closure (fn { … })" toReformat="false" toShortenFQNames="false">
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="surround_recover" value="recover {&#10;  $SELECTION$$END$&#10;}" description="Surround with recover { … }" toReformat="false" toShortenFQNames="false">
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="surround_block" value="{&#10;  $SELECTION$$END$&#10;}" description="Surround with block { … }" toReformat="false" toShortenFQNames="false">
+    <context><option name="INKO" value="true"/></context>
+  </template>
+  <template name="surround_parentheses" value="($SELECTION$)$END$" description="Surround with ( … )" toReformat="false" toShortenFQNames="false">
+    <context><option name="INKO" value="true"/></context>
+  </template>
 </templateSet>

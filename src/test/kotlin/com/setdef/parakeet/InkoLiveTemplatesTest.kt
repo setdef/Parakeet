@@ -12,7 +12,8 @@ class InkoLiveTemplatesTest : InkoTestCase() {
     }
 
     fun testTemplatesAreRegistered() {
-        val names = TemplateSettings.getInstance().templates.filter { it.groupName == "Inko" }.map { it.key }.toSet()
+        // Expandable templates; the ones wrapping a $SELECTION$ are for Surround With (see InkoSurroundTest).
+        val names = TemplateSettings.getInstance().templates.filter { it.groupName == "Inko" && !it.isSelectionTemplate }.map { it.key }.toSet()
         assertEquals(setOf("fn", "fnp", "type", "typep", "trait", "impl", "match", "main", "tests", "test"), names)
     }
 

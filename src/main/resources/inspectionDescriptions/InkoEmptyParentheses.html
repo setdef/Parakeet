@@ -1,0 +1,8 @@
+<html><body>
+Reports empty parentheses in method calls, which
+<a href="https://docs.inko-lang.org/manual/latest/references/style/">Inko's style guide</a> leaves out:
+<pre><code>numbers.pop()  # Unnecessary.
+numbers.pop    # Fine.</code></pre>
+<p>Not reported for <code>Type()</code>, which builds a value, or where a local variable of the same name would
+take the place of the call.</p>
+</body></html>

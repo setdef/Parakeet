@@ -1,0 +1,8 @@
+<html><body>
+Reports named arguments passed a variable of the same name, which
+<a href="https://docs.inko-lang.org/manual/latest/references/style/">Inko's style guide</a> calls redundant:
+<pre><code>'hello'.slice(start: start, chars: chars)  # Redundant.
+'hello'.slice(start, chars)                # Fine.</code></pre>
+<p>Only reported where removing the name keeps the meaning: the argument is in that parameter's position,
+and no named argument comes before it.</p>
+</body></html>

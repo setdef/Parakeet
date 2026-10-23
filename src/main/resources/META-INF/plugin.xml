@@ -72,6 +72,21 @@
         <editorNotificationProvider implementation="com.setdef.parakeet.InkoRequiredVersionBanner"/>
 
         <externalAnnotator language="Inko" implementationClass="com.setdef.parakeet.InkoCheckAnnotator"/>
+
+        <!-- Inko's style guide, for what inko fmt doesn't fix. Weak warnings, like the IDE's own naming checks. -->
+        <localInspection language="Inko" shortName="InkoNaming" displayName="Name doesn't follow the style guide"
+                         groupName="Inko" enabledByDefault="true" level="WEAK WARNING"
+                         implementationClass="com.setdef.parakeet.InkoNamingInspection"/>
+        <localInspection language="Inko" shortName="InkoBooleanMethodName" displayName="Bool method name doesn't end in ?"
+                         groupName="Inko" enabledByDefault="true" level="WEAK WARNING"
+                         implementationClass="com.setdef.parakeet.InkoBooleanMethodNameInspection"/>
+        <localInspection language="Inko" shortName="InkoRedundantNamedArgument" displayName="Redundant argument name"
+                         groupName="Inko" enabledByDefault="true" level="WEAK WARNING"
+                         implementationClass="com.setdef.parakeet.InkoRedundantNamedArgumentInspection"/>
+        <localInspection language="Inko" shortName="InkoEmptyParentheses" displayName="Parentheses in a call without arguments"
+                         groupName="Inko" enabledByDefault="true" level="WEAK WARNING"
+                         implementationClass="com.setdef.parakeet.InkoEmptyParenthesesInspection"/>
+        <lang.inspectionSuppressor language="Inko" implementationClass="com.setdef.parakeet.InkoInspectionSuppressor"/>
         <formattingService implementation="com.setdef.parakeet.InkoFormattingService"/>
         <platform.backend.documentation.psiTargetProvider implementation="com.setdef.parakeet.InkoDocumentationTargetProvider"/>
         <gotoClassContributor implementation="com.setdef.parakeet.InkoGotoClassContributor"/>

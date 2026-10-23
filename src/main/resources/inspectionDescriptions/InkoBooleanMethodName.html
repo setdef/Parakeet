@@ -1,0 +1,7 @@
+<html><body>
+Reports methods returning <code>Bool</code> whose names don't end in <code>?</code>, and methods prefixed with
+<code>is_</code>, as <a href="https://docs.inko-lang.org/manual/latest/references/style/">Inko's style guide</a> asks:
+<pre><code>fn allowed? -&gt; Bool</code></pre>
+<p><code>mut</code> and <code>move</code> methods are skipped: like the standard library's <code>insert -&gt; Bool</code>,
+they're actions whose result reports success. The quick fix renames the method and its uses.</p>
+</body></html>

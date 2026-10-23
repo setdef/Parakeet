@@ -99,6 +99,9 @@
         <lang.smartEnterProcessor language="Inko" implementationClass="com.setdef.parakeet.InkoSmartEnterProcessor"/>
         <callHierarchyProvider language="Inko" implementationClass="com.setdef.parakeet.InkoCallHierarchyProvider"/>
         <codeInsight.daemonBoundCodeVisionProvider implementation="com.setdef.parakeet.InkoUsagesCodeVisionProvider"/>
+        <internalFileTemplate name="Inko Module"/>
+        <internalFileTemplate name="Inko Test"/>
+        <internalFileTemplate name="Inko Program"/>
         <lang.findUsagesProvider language="Inko" implementationClass="com.setdef.parakeet.InkoFindUsagesProvider"/>
         <referencesSearch implementation="com.setdef.parakeet.InkoModuleReferencesSearcher"/>
         <usageTypeProvider implementation="com.setdef.parakeet.InkoUsageTypeProvider"/>
@@ -134,6 +137,9 @@
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </group>
+        <action id="Parakeet.NewInkoFile" class="com.setdef.parakeet.InkoNewFileAction">
+            <add-to-group group-id="NewGroup" anchor="before" relative-to-action="NewFromTemplate"/>
+        </action>
         <group id="Parakeet.InkoManifestToolbar">
             <reference ref="Parakeet.SyncDependencies"/>
         </group>

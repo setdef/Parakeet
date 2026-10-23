@@ -3,6 +3,7 @@ package com.setdef.parakeet
 import com.intellij.navigation.ChooseByNameContributorEx
 import com.intellij.navigation.ItemPresentation
 import com.intellij.navigation.NavigationItem
+import com.intellij.openapi.application.smartReadAction
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectRootManager
@@ -43,8 +44,10 @@ object InkoProjectRoots {
 /** Indexes every Inko project when the IDE project opens, so Go to Class/Symbol has results right away. */
 class InkoIndexOnStartup : ProjectActivity {
     override suspend fun execute(project: Project) {
+        // Finding projects uses the IDE's file name index, which needs a read action once indexing is done.
+        val roots = smartReadAction(project) { InkoProjectRoots.find(project) }
         val index = InkoDocIndex.getInstance(project)
-        InkoProjectRoots.find(project).forEach { index.symbols(it) }
+        roots.forEach { index.symbols(it) }
     }
 }
 

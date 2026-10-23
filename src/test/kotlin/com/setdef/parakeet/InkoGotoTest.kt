@@ -1,6 +1,7 @@
 package com.setdef.parakeet
 
 import com.intellij.navigation.NavigationItem
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.GlobalSearchScope
@@ -8,6 +9,8 @@ import com.intellij.testFramework.PsiTestUtil
 import com.intellij.util.indexing.FindSymbolParameters
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.runBlocking
 
 /** Go to Class/Symbol, with `inko doc` output supplied by a fake. */
 class InkoGotoTest : InkoTestCase(onDisk = true) {
@@ -73,6 +76,15 @@ class InkoGotoTest : InkoTestCase(onDisk = true) {
         } finally {
             PsiTestUtil.removeContentEntry(module, root)
         }
+    }
+
+    // Regression: startup searched the file name index without a read action, which the
+    // IDE rejects on its background threads ("Read access is allowed from inside read-action only").
+    fun testIndexesOnStartupFromABackgroundThread() {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            runBlocking { InkoIndexOnStartup().execute(project) }
+        }.get(60, TimeUnit.SECONDS)
+        assertNotEmpty(InkoDocIndex.getInstance(project).symbols(Path.of(myFixture.tempDirPath))!!.named("Helper"))
     }
 
     fun testClassesAreTypesAndTraits() {

@@ -130,6 +130,10 @@
         <moveFileHandler implementation="com.setdef.parakeet.InkoMoveFileHandler"/>
         <refactoring.moveHandler implementation="com.setdef.parakeet.InkoMoveDeclarationHandler" id="inko.declaration" order="first"/>
         <copyPastePostProcessor implementation="com.setdef.parakeet.InkoPasteImportsProcessor"/>
+        <postStartupActivity implementation="com.setdef.parakeet.InkoProjectCheckOnStartup"/>
+        <localInspection language="Inko" shortName="InkoCompiler" displayName="Inko compiler errors and warnings"
+                         groupName="Inko" enabledByDefault="true" level="ERROR"
+                         implementationClass="com.setdef.parakeet.InkoCompilerInspection"/>
         <codeInsight.typeInfo language="Inko" implementationClass="com.setdef.parakeet.InkoExpressionTypeProvider"/>
         <intentionAction>
             <language>Inko</language>

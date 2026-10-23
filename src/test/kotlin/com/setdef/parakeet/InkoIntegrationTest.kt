@@ -128,6 +128,17 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     fun testSpecifiedTypeStillCompiles() =
         intentionCompiles("fn pub area(width: Int, height: Int) -> Int {\n  let <caret>total = width * height\n  total\n}\n", "Specify type explicitly")
 
+    fun testProjectCheckFindsErrorsInUnopenedModules() {
+        putTempDirInProjectContent()
+        myFixture.addFileToProject("src/app/fine.inko", "fn pub fine -> Int {\n  1\n}\n")
+        myFixture.addFileToProject("src/app/broken.inko", "fn pub broken -> Int {\n  nope\n}\n")
+        FileDocumentManager.getInstance().saveAllDocuments()
+        val root = Path.of(myFixture.tempDirPath)
+        val result = InkoProjectCheck.getInstance(project).check(root)!!
+        assertEquals(setOf(root.resolve("src/app/broken.inko")), result.diagnostics.keys)
+        assertEquals("the symbol 'nope' is undefined", result.diagnostics.values.single().single().message)
+    }
+
     fun testMovedDeclarationsStillCompile() {
         putTempDirInProjectContent()
         myFixture.addFileToProject("src/app/util.inko", "import std.stdio (Stdout)\n\nlet pub LIMIT = 10\n\ntype pub Helper {\n  let @count: Int\n}\n\nimpl Helper {\n  fn pub show {\n    Stdout.new.print(LIMIT.to_string)\n  }\n}\n\nfn pub make -> Helper {\n  Helper(count: LIMIT)\n}\n")

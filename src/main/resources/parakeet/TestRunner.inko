@@ -10,7 +10,19 @@ import std.time (Duration)
 # reads, with paths mapped from Parakeet's mirror back to the project.
 type ParakeetReporter {
   let @out: Stdout
+
+  # Suites (test files) seen in this run.
   let @suites: Array[String]
+
+  # Suites this run announced, and so finishes.
+  let @started: Array[String]
+
+  # Suites already announced by whatever started this run (when rerunning
+  # failed tests, one run per test), each between line breaks.
+  let @announced: String
+
+  # A prefix for this run's test node IDs, unique for each rerun.
+  let @run: String
   let mut @failures: Int
 
   fn escape(value: String) -> String {
@@ -35,33 +47,33 @@ type ParakeetReporter {
     @out.flush.get
   }
 
-  # The suite node for a test's file, announcing it the first time it's seen.
+  # The suite node for a test's file (named by its path, so separate runs
+  # agree), announcing it the first time it's seen unless it already was.
   fn mut suite(test: ref Test) -> String {
     let path = real(test.path.to_string)
-    let index = match @suites.index_of(path) {
-      case Some(index) -> index
-      case _ -> {
-        @suites.push(path)
 
-        let index = @suites.size - 1
+    if @suites.contains?(path) == false {
+      @suites.push(path)
+
+      if @announced.contains?('\n${path}\n') == false {
         let name = path.strip_prefix('{{ROOT}}/test/').or(path)
 
+        @started.push(path)
         message(
-          "testSuiteStarted nodeId='s${index}' parentNodeId='0' name='${escape(name)}' locationHint='inko://${escape(path)}'",
+          "testSuiteStarted nodeId='${escape('s:${path}')}' parentNodeId='0' name='${escape(name)}' locationHint='inko://${escape(path)}'",
         )
-        index
       }
     }
 
-    's${index}'
+    's:${path}'
   }
 
   fn mut started(test: ref Test) -> String {
     let parent = suite(test)
-    let id = 't${test.id}'
+    let id = 't${@run}${test.id}'
 
     message(
-      "testStarted nodeId='${id}' parentNodeId='${parent}' name='${escape(test.name)}' locationHint='inko://${escape(real(test.path.to_string))}:${test.line}'",
+      "testStarted nodeId='${id}' parentNodeId='${escape(parent)}' name='${escape(test.name)}' locationHint='inko://${escape(real(test.path.to_string))}:${test.line}'",
     )
     id
   }
@@ -91,8 +103,8 @@ impl Reporter for ParakeetReporter {
   }
 
   fn pub move finished(duration: Duration, seed: Int) -> Bool {
-    for index in 0.until(@suites.size) {
-      message("testSuiteFinished nodeId='s${index}'")
+    for path in @started.iter {
+      message("testSuiteFinished nodeId='${escape('s:${path}')}'")
     }
 
     @out.print('Seed: ${seed}').get
@@ -105,7 +117,15 @@ type async Main {
     let tests = Tests.new
 
 {{CALLS}}
-    tests.reporter = ParakeetReporter(out: Stdout.new, suites: [], failures: 0) as Reporter
+    tests.reporter = ParakeetReporter(
+      out: Stdout.new,
+      suites: [],
+      started: [],
+      announced: '\n${env.get('PARAKEET_ANNOUNCED_SUITES').or('')}\n',
+      run: env.get('PARAKEET_RUN').or(''),
+      failures: 0,
+    )
+      as Reporter
     tests.filter = Filter.from_string(env.arguments.get(0).or(''))
     tests.run
   }

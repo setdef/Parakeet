@@ -8,16 +8,20 @@ import com.intellij.execution.Location
 import com.intellij.execution.PsiLocation
 import com.intellij.execution.configurations.CommandLineState
 import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.execution.configurations.RunProfileState
 import com.intellij.execution.process.KillableColoredProcessHandler
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessTerminatedListener
 import com.intellij.execution.runners.ExecutionEnvironment
 import com.intellij.execution.runners.ProgramRunner
+import com.intellij.execution.testframework.AbstractTestProxy
+import com.intellij.execution.testframework.actions.AbstractRerunFailedTestsAction
 import com.intellij.execution.testframework.sm.SMTestRunnerConnectionUtil
 import com.intellij.execution.testframework.sm.runner.SMTRunnerConsoleProperties
 import com.intellij.execution.testframework.sm.runner.SMTestLocator
 import com.intellij.execution.ui.ConsoleView
 import com.intellij.openapi.application.PathManager
+import com.intellij.openapi.module.Module
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiManager
@@ -93,13 +97,23 @@ object InkoTestRuns {
     }
 }
 
+/** A test to rerun: its name and the (project) file it's in. */
+data class InkoFailedTest(val name: String, val path: String)
+
 /**
  * Runs a project's tests and shows them in the IDE's test runner: builds the
  * test program in a persistent mirror (so nothing is written to the project),
- * then runs it from the project root, where tests expect to run.
+ * then runs it from the project root, where tests expect to run. With
+ * [rerun], runs just those tests: the program takes one name filter, so it's
+ * built once and run once per name, with their files' suites announced around
+ * the runs so the tree shows each file once.
  */
-class InkoTestRunState(environment: ExecutionEnvironment, private val configuration: InkoRunConfiguration, private val root: Path) :
-    CommandLineState(environment) {
+class InkoTestRunState(
+    environment: ExecutionEnvironment,
+    private val configuration: InkoRunConfiguration,
+    private val root: Path,
+    private val rerun: List<InkoFailedTest>? = null,
+) : CommandLineState(environment) {
 
     fun commandLine(): GeneralCommandLine {
         val project = environment.project
@@ -119,9 +133,16 @@ class InkoTestRunState(environment: ExecutionEnvironment, private val configurat
         val filter = options.target?.takeIf { it.isNotBlank() }?.let { target ->
             Path.of(target).takeIf { it.isAbsolute && it.startsWith(root) && Files.isRegularFile(it) }?.let { mirror.toMirror(it).toString() } ?: target
         }
-        val script = """mirror="${'$'}1"; root="${'$'}2"; shift 2; cd "${'$'}mirror" && "${'$'}0" build --include test .parakeet/tests.inko && cd "${'$'}root" && exec "${'$'}mirror/build/debug/tests" "${'$'}@""""
-        return GeneralCommandLine(listOf("/bin/sh", "-c", script, inko, mirror.directory.toString(), root.toString()) +
-            listOfNotNull(filter) + ParametersListUtil.parse(options.arguments.orEmpty()))
+        val arguments = ParametersListUtil.parse(options.arguments.orEmpty())
+        val command = if (rerun != null) {
+            val script = mirror.directory.resolve(".parakeet").resolve("rerun.sh")
+            Files.writeString(script, InkoTestReruns.script(rerun, root))
+            listOf("/bin/sh", script.toString(), inko, mirror.directory.toString(), root.toString()) + arguments
+        } else {
+            val script = """mirror="${'$'}1"; root="${'$'}2"; shift 2; cd "${'$'}mirror" && "${'$'}0" build --include test .parakeet/tests.inko && cd "${'$'}root" && exec "${'$'}mirror/build/debug/tests" "${'$'}@""""
+            listOf("/bin/sh", "-c", script, inko, mirror.directory.toString(), root.toString()) + listOfNotNull(filter) + arguments
+        }
+        return GeneralCommandLine(command)
             .withWorkDirectory(root.toFile())
             .withEnvironment(options.environment)
             .withParentEnvironmentType(
@@ -151,6 +172,69 @@ class InkoTestConsoleProperties(configuration: InkoRunConfiguration, executor: E
     }
 
     override fun getTestLocator(): SMTestLocator = InkoTestLocator
+
+    override fun createRerunFailedTestsAction(consoleView: ConsoleView): AbstractRerunFailedTestsAction =
+        InkoRerunFailedTestsAction(consoleView, this)
+}
+
+/** The script that reruns failed tests: build once, then one run per test name. */
+object InkoTestReruns {
+    fun script(tests: List<InkoFailedTest>, root: Path): String {
+        val names = tests.map { it.name }.distinct()
+        val suites = tests.map { it.path }.distinct()
+        fun message(text: String) = "printf '%s\\n' ${sh("##teamcity[$text]")}"
+        return buildString {
+            appendLine("""inko="${'$'}1"; mirror="${'$'}2"; root="${'$'}3"; shift 3""")
+            appendLine("""cd "${'$'}mirror" && "${'$'}inko" build --include test .parakeet/tests.inko || exit ${'$'}?""")
+            appendLine("""cd "${'$'}root" || exit ${'$'}?""")
+            for (path in suites) {
+                val name = path.removePrefix("$root/test/")
+                appendLine(message("testSuiteStarted nodeId='${teamcity("s:$path")}' parentNodeId='0' name='${teamcity(name)}' locationHint='inko://${teamcity(path)}'"))
+            }
+            appendLine("status=0")
+            for ((index, name) in names.withIndex()) {
+                append("PARAKEET_ANNOUNCED_SUITES=${sh(suites.joinToString("\n"))} PARAKEET_RUN=${sh("r$index-")} ")
+                appendLine(""""${'$'}mirror/build/debug/tests" ${sh(name)} "${'$'}@" || status=1""")
+            }
+            for (path in suites) appendLine(message("testSuiteFinished nodeId='${teamcity("s:$path")}'"))
+            appendLine("""exit ${'$'}status""")
+        }
+    }
+
+    /** Quotes [text] for a POSIX shell. */
+    private fun sh(text: String) = "'" + text.replace("'", "'\\''") + "'"
+
+    /** Escapes a TeamCity service message value. */
+    private fun teamcity(text: String) = text.replace("|", "||").replace("'", "|'").replace("\n", "|n").replace("\r", "|r")
+        .replace("[", "|[").replace("]", "|]")
+}
+
+/** Rerun Failed Tests: runs the failed tests again, by name. */
+class InkoRerunFailedTestsAction(consoleView: ConsoleView, properties: InkoTestConsoleProperties) : AbstractRerunFailedTestsAction(consoleView) {
+    init {
+        init(properties)
+    }
+
+    override fun getRunProfile(environment: ExecutionEnvironment): MyRunProfile? {
+        val configuration = myConsoleProperties.configuration as? InkoRunConfiguration ?: return null
+        val root = configuration.projectRoot() ?: return null
+        val failed = failedTests(getFailedTests(configuration.project))
+        if (failed.isEmpty()) return null
+        return object : MyRunProfile(configuration) {
+            override fun getModules(): Array<Module> = Module.EMPTY_ARRAY
+
+            override fun getState(executor: Executor, environment: ExecutionEnvironment): RunProfileState =
+                InkoTestRunState(environment, configuration, root, failed)
+        }
+    }
+
+    companion object {
+        /** Each failed test's name, and its file (from its `inko://path:line` location). */
+        fun failedTests(proxies: List<AbstractTestProxy>): List<InkoFailedTest> = proxies.filter { it.isLeaf }.mapNotNull { test ->
+            val path = test.locationUrl?.removePrefix("inko://")?.substringBeforeLast(':') ?: return@mapNotNull null
+            InkoFailedTest(test.name, path)
+        }
+    }
 }
 
 /** Finds the source of `inko://path` (a test file) and `inko://path:line` (a test) locations. */

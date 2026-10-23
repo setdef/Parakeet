@@ -95,4 +95,42 @@ class InkoTestRunnerTest : InkoTestCase(onDisk = true) {
         useFakeInko(FakeInkoCli())
         assertEquals("adds numbers", testState("adds numbers").commandLine().parametersList.list[5])
     }
+
+    // The rerun script, run for real against a fake `inko` whose "tests" program reports how it was run.
+    fun testRerunsBuildOnceAndRunEachFailedTestByName() {
+        val dir = Files.createTempDirectory("rerun")
+        val mirror = Files.createDirectories(dir.resolve("mirror"))
+        val root = Files.createDirectories(dir.resolve("project"))
+        val inko = dir.resolve("inko")
+        Files.writeString(inko, "#!/bin/sh\necho built >> \"\$PWD/../builds\"\nmkdir -p build/debug\nprintf '#!/bin/sh\\necho \"run [\$PARAKEET_RUN] [\$1] [\$2]\"\\nexit 1\\n' > build/debug/tests\nchmod +x build/debug/tests\n")
+        inko.toFile().setExecutable(true)
+        val tests = listOf(
+            InkoFailedTest("it's odd", "$root/test/test_a.inko"),
+            InkoFailedTest("adds", "$root/test/test_b.inko"),
+            InkoFailedTest("adds", "$root/test/test_b.inko"),
+        )
+        val script = Files.writeString(dir.resolve("rerun.sh"), InkoTestReruns.script(tests, root))
+        val process = ProcessBuilder("/bin/sh", script.toString(), inko.toString(), mirror.toString(), root.toString(), "--extra")
+            .redirectErrorStream(true).start()
+        val output = process.inputStream.bufferedReader().readText()
+        assertEquals("a failed test fails the rerun", 1, process.waitFor())
+        assertEquals("built\n", Files.readString(dir.resolve("builds")))
+        assertEquals(
+            listOf(
+                "##teamcity[testSuiteStarted nodeId='s:$root/test/test_a.inko' parentNodeId='0' name='test_a.inko' locationHint='inko://$root/test/test_a.inko']",
+                "##teamcity[testSuiteStarted nodeId='s:$root/test/test_b.inko' parentNodeId='0' name='test_b.inko' locationHint='inko://$root/test/test_b.inko']",
+                "run [r0-] [it's odd] [--extra]",
+                "run [r1-] [adds] [--extra]",
+                "##teamcity[testSuiteFinished nodeId='s:$root/test/test_a.inko']",
+                "##teamcity[testSuiteFinished nodeId='s:$root/test/test_b.inko']",
+            ),
+            output.lines().filter { it.isNotBlank() },
+        )
+    }
+
+    fun testTheProgramSkipsSuitesAlreadyAnnounced() {
+        val source = InkoTestProgram.source(listOf("test_a"), Path.of("/m"), Path.of("/r"), reportsSkipped = false)
+        assertTrue(source.contains("env.get('PARAKEET_ANNOUNCED_SUITES')"))
+        assertTrue(source.contains("env.get('PARAKEET_RUN')"))
+    }
 }

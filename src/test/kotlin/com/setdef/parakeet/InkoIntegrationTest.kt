@@ -137,6 +137,42 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(before, Files.walk(Path.of(myFixture.tempDirPath)).use { it.toList().toSet() })
     }
 
+    fun testRerunsOnlyTheFailedTests() {
+        myFixture.addFileToProject("src/math.inko", "fn pub add(a: Int, b: Int) -> Int {\n  a + b\n}\n")
+        myFixture.addFileToProject("test/test_a.inko", "import math (add)\nimport std.test (Tests)\n\nfn pub tests(t: mut Tests) {\n" +
+            "  t.test('a passes', fn (t) { t.equal(add(1, 1), 2) })\n  t.test('a fails', fn (t) { t.equal(add(1, 1), 3) })\n}\n")
+        myFixture.addFileToProject("test/test_b.inko", "import math (add)\nimport std.test (Tests)\n\nfn pub tests(t: mut Tests) {\n" +
+            "  t.test(\"b's failure\", fn (t) { t.equal(add(2, 2), 5) })\n}\n")
+        val configuration = InkoRunConfigurationType.getInstance().configurationFactories[0].createTemplateConfiguration(project) as InkoRunConfiguration
+        configuration.options.command = InkoCommand.TEST.cli
+        configuration.options.workingDirectory = myFixture.tempDirPath
+
+        /** Runs [state] and returns the test tree's leaves, as "file > name: passed|failed". */
+        fun run(state: (com.intellij.execution.runners.ExecutionEnvironment) -> InkoTestRunState): Pair<List<String>, List<com.intellij.execution.testframework.AbstractTestProxy>> {
+            val environment = ExecutionEnvironmentBuilder.create(DefaultRunExecutor.getRunExecutorInstance(), configuration).build()
+            val result = state(environment).execute(environment.executor, environment.runner)
+            val console = result.executionConsole as com.intellij.execution.testframework.sm.runner.ui.SMTRunnerConsoleView
+            try {
+                result.processHandler!!.startNotify()
+                assertTrue("tests timed out", result.processHandler!!.waitFor(180_000))
+                com.intellij.util.ui.UIUtil.dispatchAllInvocationEvents()
+                val root = console.resultsViewer.testsRootNode
+                val leaves = root.children.flatMap { suite -> suite.children.map { "${suite.name} > ${it.name}: ${if (it.isDefect) "failed" else "passed"}" } }
+                return leaves.sorted() to root.allTests.filter { it.isLeaf && it.isDefect }
+            } finally {
+                com.intellij.openapi.util.Disposer.dispose(console)
+            }
+        }
+
+        val (first, failed) = run { configuration.getState(it.executor, it) as InkoTestRunState }
+        assertEquals(listOf("test_a.inko > a fails: failed", "test_a.inko > a passes: passed", "test_b.inko > b's failure: failed"), first)
+
+        val rerun = InkoRerunFailedTestsAction.failedTests(failed)
+        val (second, _) = run { InkoTestRunState(it, configuration, Path.of(myFixture.tempDirPath), rerun) }
+        // Only the failed tests, each file once.
+        assertEquals(listOf("test_a.inko > a fails: failed", "test_b.inko > b's failure: failed"), second)
+    }
+
     fun testCreatesAProjectWithInkoInit() {
         val directory = Files.createDirectories(Path.of(myFixture.tempDirPath, "From IntelliJ"))
         InkoProjectGenerator.generate(project, directory, InkoNewProjectSettings(github = true, moduleName = "from_intellij"))

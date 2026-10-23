@@ -7,10 +7,10 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.testFramework.PsiTestUtil
 import com.intellij.util.indexing.FindSymbolParameters
+import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.runBlocking
 
 /** Go to Class/Symbol, with `inko doc` output supplied by a fake. */
 class InkoGotoTest : InkoTestCase(onDisk = true) {

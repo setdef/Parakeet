@@ -5,8 +5,8 @@ import com.intellij.execution.PsiLocation
 import com.intellij.execution.actions.ConfigurationContext
 import com.intellij.execution.actions.RunConfigurationProducer
 import com.intellij.execution.executors.DefaultRunExecutor
-import com.intellij.execution.runners.ExecutionEnvironmentBuilder
 import com.intellij.execution.filters.OpenFileHyperlinkInfo
+import com.intellij.execution.runners.ExecutionEnvironmentBuilder
 import com.intellij.psi.PsiElement
 import java.nio.file.Files
 import java.nio.file.Path

@@ -13,7 +13,6 @@ import com.intellij.lang.annotation.AnnotationHolder
 import com.intellij.lang.annotation.Annotator
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.lexer.LexerBase
-import com.intellij.openapi.editor.DefaultLanguageHighlighterColors as Colors
 import com.intellij.openapi.editor.colors.TextAttributesKey
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.LanguageFileType
@@ -30,6 +29,7 @@ import com.intellij.psi.tree.IElementType
 import com.intellij.psi.tree.IFileElementType
 import com.intellij.psi.tree.TokenSet
 import javax.swing.Icon
+import com.intellij.openapi.editor.DefaultLanguageHighlighterColors as Colors
 
 object InkoManifestLanguage : Language("InkoManifest") {
     private fun readResolve(): Any = InkoManifestLanguage

@@ -21,8 +21,8 @@ import com.intellij.refactoring.rename.RenameInputValidator
 import com.intellij.refactoring.rename.RenamePsiElementProcessor
 import com.intellij.usages.impl.rules.UsageType
 import com.intellij.usages.impl.rules.UsageTypeProvider
-import com.intellij.util.Processor
 import com.intellij.util.ProcessingContext
+import com.intellij.util.Processor
 
 /** Find Usages (⌥F7 / Alt+F7) for Inko declarations and modules. */
 class InkoFindUsagesProvider : FindUsagesProvider {

@@ -203,11 +203,11 @@ class CuttleboneQueries(private val project: Project) {
 
     /**
      * Whether the server has this file's current text: IntelliJ syncs the files
-     * open in editors (once it has sent `didOpen`), and Cuttlebone reads saved
-     * files from disk.
+     * open in editors (once it has had time to send `didOpen`), and Cuttlebone
+     * reads saved files from disk.
      */
     private fun isSynced(file: VirtualFile): Boolean =
-        (FileEditorManager.getInstance(project).isFileOpen(file) && CuttleboneService.getInstance(project).isOpened(file)) ||
+        (FileEditorManager.getInstance(project).isFileOpen(file) && CuttleboneService.getInstance(project).editorsSynced()) ||
             !FileDocumentManager.getInstance().isFileModified(file)
 
     /** Where [location] points, as Parakeet's own element: the declaration's name, or a module's file. */

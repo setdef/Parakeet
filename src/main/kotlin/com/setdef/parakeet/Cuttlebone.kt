@@ -13,7 +13,6 @@ import com.intellij.platform.lsp.api.Lsp4jClient
 import com.intellij.platform.lsp.api.LspServer
 import com.intellij.platform.lsp.api.LspServerListener
 import com.intellij.platform.lsp.api.LspServerManager
-import com.intellij.platform.lsp.api.LspServerManagerListener
 import com.intellij.platform.lsp.api.LspServerNotificationsHandler
 import com.intellij.platform.lsp.api.LspServerState
 import com.intellij.platform.lsp.api.LspServerSupportProvider
@@ -138,6 +137,8 @@ class CuttleboneDescriptor(project: Project) : ProjectWideLspServerDescriptor(pr
 
     override val lspServerListener: LspServerListener = object : LspServerListener {
         override fun serverInitialized(params: InitializeResult) = CuttleboneService.getInstance(project).initialized(params)
+
+        override fun serverStopped(shutdownNormally: Boolean) = CuttleboneService.getInstance(project).stopped(shutdownNormally)
     }
 
     /**
@@ -196,11 +197,16 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
     /** Latest `cuttlebone/status` per (method, URI), taken by the response that follows it. */
     val statuses = ConcurrentHashMap<Pair<String, String>, CuttleboneStatus>()
 
-    /** Files the running server was sent `didOpen` for: it has their text, saved or not. */
-    private val opened: MutableSet<VirtualFile> = ConcurrentHashMap.newKeySet()
+    /** When the running server initialized (System.nanoTime), or 0. */
+    @Volatile private var initializedAt = 0L
 
-    /** Whether the server has [file]'s text from IntelliJ (it was opened there), rather than from disk. */
-    fun isOpened(file: VirtualFile): Boolean = file in opened
+    /**
+     * Whether IntelliJ has sent the server the text of the files open in editors.
+     * It does so right after `initialize`, and then as files open, but reports
+     * that only through internal API, so this allows it [SYNC_GRACE_MS].
+     */
+    fun editorsSynced(): Boolean =
+        initializedAt != 0L && System.nanoTime() - initializedAt > TimeUnit.MILLISECONDS.toNanos(SYNC_GRACE_MS)
 
     @Volatile var status: Cuttlebone.Status? = null
         private set
@@ -211,21 +217,6 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
     @Volatile private var generation = 0
     @Volatile private var everInitialized = false
     @Volatile private var restarts = 0
-
-    init {
-        // The default project (new-project settings) has no LSP servers.
-        if (!project.isDefault) LspServerManager.getInstance(project).addLspServerManagerListener(object : LspServerManagerListener {
-            override fun serverStateChanged(lspServer: LspServer) {
-                if (lspServer.providerClass != CuttleboneSupportProvider::class.java) return
-                if (lspServer.state != LspServerState.Running) opened.clear()
-                stateChanged(lspServer.state)
-            }
-
-            override fun fileOpened(lspServer: LspServer, file: VirtualFile) {
-                if (lspServer.providerClass == CuttleboneSupportProvider::class.java) opened += file
-            }
-        }, this, true)
-    }
 
     /** Whether to start the server now. The first call runs the precheck in the background and starts it afterwards. */
     fun canStart(): Boolean {
@@ -270,19 +261,21 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         everInitialized = false
         restarts = 0
         statuses.clear()
-        opened.clear()
+        initializedAt = 0
         if (!project.isDefault) LspServerManager.getInstance(project).stopServers(CuttleboneSupportProvider::class.java)
     }
 
     fun initialized(result: InitializeResult) {
+        initializedAt = System.nanoTime()
         everInitialized = true
         restarts = 0
         val info = result.serverInfo
         report(Cuttlebone.Status.Running(listOfNotNull(info?.name ?: "cuttlebone", info?.version).joinToString(" ")))
     }
 
-    private fun stateChanged(state: LspServerState) {
-        if (state != LspServerState.ShutdownUnexpectedly) return
+    fun stopped(normally: Boolean) {
+        initializedAt = 0
+        if (normally) return
         statuses.clear()
         // A server that never initialized refused the session (or couldn't start): retrying won't help.
         if (!everInitialized) {
@@ -320,6 +313,7 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         private val LOG = logger<CuttleboneService>()
         const val MAX_RESTARTS = 5
         const val BACKOFF_MS = 1000L
+        const val SYNC_GRACE_MS = 1000L
 
         fun getInstance(project: Project): CuttleboneService = project.service()
     }

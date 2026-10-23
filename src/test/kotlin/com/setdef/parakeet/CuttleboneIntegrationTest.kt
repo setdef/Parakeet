@@ -57,7 +57,7 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     private fun open(text: String = main) {
         myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/main.inko", text).virtualFile)
         PlatformTestUtil.waitWithEventsDispatching({ "Cuttlebone didn't start: ${CuttleboneService.getInstance(project).status?.message}" }, {
-            CuttleboneService.getInstance(project).server() != null && CuttleboneService.getInstance(project).isOpened(myFixture.file.virtualFile)
+            CuttleboneService.getInstance(project).server() != null && CuttleboneService.getInstance(project).editorsSynced()
         }, 60)
     }
 

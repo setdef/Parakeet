@@ -62,7 +62,7 @@ abstract class CuttleboneTestCase : InkoTestCase(onDisk = true) {
     /** Waits for the server to start, and to have the open file's text. */
     protected fun runningServer(waitForOpen: Boolean = true): LspServer {
         waitFor("Cuttlebone to start") { CuttleboneService.getInstance(project).server() != null }
-        if (waitForOpen) waitFor("didOpen") { CuttleboneService.getInstance(project).isOpened(myFixture.file.virtualFile) }
+        if (waitForOpen) waitFor("the editors' text to be synced") { CuttleboneService.getInstance(project).editorsSynced() }
         return CuttleboneService.getInstance(project).server()!!
     }
 

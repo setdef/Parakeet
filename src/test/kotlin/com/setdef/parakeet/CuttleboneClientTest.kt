@@ -42,13 +42,13 @@ class CuttleboneClientTest : CuttleboneTestCase() {
     fun testAnEditReachesTheServerBeforeTheNextQuery() {
         useFake(answered())
         open("src/main.inko", text)
-        runningServer()
-        val file = myFixture.file.virtualFile
-        // Edited before IntelliJ sent didOpen: the server only has the file on disk, so no question is asked.
+        runningServer(waitForOpen = false)
+        // Edited right after the server started, before IntelliJ may have sent didOpen:
+        // the server might only have the file on disk, so no question is asked.
         com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) { myFixture.editor.document.insertString(0, "\n") }
         com.intellij.psi.PsiDocumentManager.getInstance(project).commitAllDocuments()
-        if (!CuttleboneService.getInstance(project).isOpened(file)) assertNull(query(marker = "x ="))
-        waitFor("didOpen") { CuttleboneService.getInstance(project).isOpened(file) }
+        if (!CuttleboneService.getInstance(project).editorsSynced()) assertNull(query(marker = "x ="))
+        waitFor("the editors' text to be synced") { CuttleboneService.getInstance(project).editorsSynced() }
         com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) { myFixture.editor.document.deleteString(0, 1) }
         com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) {
             myFixture.editor.document.replaceString(text.indexOf("1\n"), text.indexOf("1\n") + 1, "42")
@@ -56,6 +56,7 @@ class CuttleboneClientTest : CuttleboneTestCase() {
         com.intellij.psi.PsiDocumentManager.getInstance(project).commitAllDocuments()
         query()
         val methods = messages().mapNotNull { it.get("method")?.asString }
+        assertTrue(methods.toString(), methods.indexOf("textDocument/didOpen") in 0 until methods.indexOf(definition))
         assertTrue(methods.toString(), methods.lastIndexOf("textDocument/didChange") in 0 until methods.indexOf(definition))
     }
 

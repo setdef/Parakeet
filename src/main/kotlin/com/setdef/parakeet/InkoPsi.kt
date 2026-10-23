@@ -130,8 +130,12 @@ object InkoDeclarations {
                     else -> return null
                 }
             }
+        return wholeLines(text, span)
+    }
+
+    /** [span] widened to whole lines, with the comment lines directly above it (its documentation). */
+    fun wholeLines(text: String, span: TextRange): TextRange {
         var start = text.lastIndexOf('\n', span.startOffset - 1) + 1
-        // Comment lines directly above go with it (its documentation).
         while (start > 0) {
             val previousStart = text.lastIndexOf('\n', start - 2) + 1
             if (!text.substring(previousStart, start).trimStart().startsWith("#")) break

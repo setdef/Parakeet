@@ -42,6 +42,9 @@ object InkoImportEdits {
         val start = document.getLineStartOffset(line)
         val end = minOf(document.getLineEndOffset(document.getLineNumber(import.range.endOffset)) + 1, document.textLength)
         document.deleteString(start, end)
+        // The last import at the top of the file takes the blank line after it along.
+        val text = document.charsSequence
+        if (start == 0 && text.startsWith("\n")) document.deleteString(0, 1)
     }
 }
 

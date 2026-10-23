@@ -128,6 +128,15 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     fun testSpecifiedTypeStillCompiles() =
         intentionCompiles("fn pub area(width: Int, height: Int) -> Int {\n  let <caret>total = width * height\n  total\n}\n", "Specify type explicitly")
 
+    fun testMovedDeclarationsStillCompile() {
+        putTempDirInProjectContent()
+        myFixture.addFileToProject("src/app/util.inko", "import std.stdio (Stdout)\n\nlet pub LIMIT = 10\n\ntype pub Helper {\n  let @count: Int\n}\n\nimpl Helper {\n  fn pub show {\n    Stdout.new.print(LIMIT.to_string)\n  }\n}\n\nfn pub make -> Helper {\n  Helper(count: LIMIT)\n}\n")
+        myFixture.addFileToProject("src/main.inko", "import app.util (Helper, make)\n\ntype async Main {\n  fn async main {\n    let h: Helper = make\n    h.show\n  }\n}\n")
+        assertCompiles()
+        InkoMoveDeclarationProcessor(project, declaration("src/app/util.inko", "Helper"), "app.helpers").run()
+        assertCompiles()
+    }
+
     fun testGeneratedConstructorAndTraitImplCompile() {
         putTempDirInProjectContent()
         val text = "type pub Point {\n  let @x: Int\n  let pub @label: String\n}\n"

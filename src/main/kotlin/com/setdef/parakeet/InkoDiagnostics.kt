@@ -13,6 +13,8 @@ data class InkoDiagnostic(
     val columnStart: Int,
     val columnEnd: Int,
     val message: String,
+    /** The compiler's diagnostic ID, e.g. `invalid-symbol` or `unused-symbol`. */
+    val id: String = "",
 ) {
     val isWarning: Boolean get() = level == "warning"
 }
@@ -55,6 +57,7 @@ object InkoCheck {
                 columnStart = columns[0].asInt,
                 columnEnd = columns[1].asInt,
                 message = obj.get("message")?.asString ?: "",
+                id = obj.get("id")?.asString ?: "",
             )
         }
     }

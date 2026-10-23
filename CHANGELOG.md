@@ -5,6 +5,7 @@
 ### Added
 
 - Inko code style (Settings | Editor | Code Style | Inko), defaulting to two-space indentation like `inko fmt`, and smart indentation when typing: Enter indents inside blocks (including between braces), and closing brackets line up with the line that opened them.
+- Auto-import: on "the symbol 'X' is undefined", Alt+Enter offers to import `X` from each module that defines it (your project's first, then dependencies, then the standard library), adding to an existing import of that module when there is one.
 - Local variables and parameters (including closure parameters and `case` bindings): Go to Declaration and completion, scoped by blocks.
 - Method calls on a local with a written or obvious type (`x: Foo`, `let x = Foo.new`, `Foo(…)`), or on `self`, now complete and navigate to that type's methods and fields, instead of every type's.
 - A banner when `inko.pkg` requires a newer Inko (`require inko X`) than the project uses, offering to switch to an installed ivm version that's new enough, or to install one.

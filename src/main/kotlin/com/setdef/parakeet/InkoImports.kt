@@ -6,7 +6,8 @@ import com.intellij.openapi.util.TextRange
 class InkoImport(
     val module: String,
     val range: TextRange,
-    private val symbolsRange: TextRange?,
+    /** The text inside the parentheses, if any. */
+    val symbolsRange: TextRange?,
     /** Local name to original name; `self` refers to the module itself. */
     val symbols: Map<String, String>,
 ) {

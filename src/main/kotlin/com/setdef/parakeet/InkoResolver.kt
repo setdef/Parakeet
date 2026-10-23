@@ -17,6 +17,10 @@ class InkoReference(element: InkoName) :
         InkoResolver.resolve(element).map { PsiElementResolveResult(it) }.toTypedArray()
 
     override fun getVariants(): Array<Any> = emptyArray()
+
+    // A renamed module file (`util.inko`) renames the module in import paths (`util`).
+    override fun handleElementRename(newElementName: String): PsiElement =
+        element.rename(newElementName.removeSuffix(".${Inko.EXTENSION}"))
 }
 
 /**
@@ -30,13 +34,15 @@ class InkoResolver private constructor(
     private val module: String?,
     private val imports: InkoImports,
     private val file: PsiFile,
+    /** Where the name being resolved is. */
+    private val offset: Int,
 ) {
     fun definitions(context: InkoNameContext): List<InkoDefinition> = when (context) {
         is InkoNameContext.ImportPath -> listOfNotNull(symbols.module(context.module))
         is InkoNameContext.ImportedSymbol -> inModule(context.module, context.name)
         is InkoNameContext.ModuleMember -> inModule(context.module, context.name)
         is InkoNameContext.ModuleReference -> listOfNotNull(symbols.module(context.module))
-        is InkoNameContext.Field -> preferringThisModule(symbols.named(context.name, Kind.FIELD))
+        is InkoNameContext.Field -> field(context.name)
         is InkoNameContext.StaticMember -> staticMember(context.type, context.name)
         is InkoNameContext.InstanceMember -> instanceMember(context.name, context.receiverType)
         is InkoNameContext.Local -> emptyList() // Resolved from the file itself; see [localDeclaration].
@@ -81,6 +87,13 @@ class InkoResolver private constructor(
         return methods.filter { it.owner in inScope }.ifEmpty { methods }
     }
 
+    /** `@name` means the enclosing type's field (fields are private to their type). */
+    private fun field(name: String): List<InkoDefinition> {
+        val fields = preferringThisModule(symbols.named(name, Kind.FIELD))
+        val owner = InkoLocals.selfType(file.text, offset) ?: return fields
+        return fields.filter { it.owner == owner }.ifEmpty { fields }
+    }
+
     private fun function(name: String): List<InkoDefinition> =
         symbols.named(name, Kind.MODULE_METHOD).filter { it.module == module }.ifEmpty { imported(name) }
 
@@ -103,7 +116,7 @@ class InkoResolver private constructor(
             val path = Inko.pathOf(file.virtualFile) ?: return emptyList()
             val symbols = InkoDocIndex.getInstance(name.project).symbols(Inko.projectRoot(path)) ?: return emptyList()
             val imports = InkoImports.parse(file.text)
-            val resolver = InkoResolver(symbols, symbols.moduleOf(path) ?: Inko.moduleName(path), imports, file)
+            val resolver = InkoResolver(symbols, symbols.moduleOf(path) ?: Inko.moduleName(path), imports, file, name.textRange.startOffset)
             return resolver.definitions(InkoNameContext.of(name, imports)).distinct().mapNotNull { definition ->
                 toPsi(file, definition)?.let { definition to it }
             }

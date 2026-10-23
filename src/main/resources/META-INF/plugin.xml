@@ -78,6 +78,14 @@
                                               isEnabledByDefault="true" group="PARAMETERS_GROUP"
                                               providerId="parakeet.inko.parameters" bundle="messages.ParakeetBundle"
                                               nameKey="inlay.parameters.name" descriptionKey="inlay.parameters.description"/>
+        <lang.findUsagesProvider language="Inko" implementationClass="com.setdef.parakeet.InkoFindUsagesProvider"/>
+        <referencesSearch implementation="com.setdef.parakeet.InkoModuleReferencesSearcher"/>
+        <usageTypeProvider implementation="com.setdef.parakeet.InkoUsageTypeProvider"/>
+        <lang.namesValidator language="Inko" implementationClass="com.setdef.parakeet.InkoNamesValidator"/>
+        <renameInputValidator implementation="com.setdef.parakeet.InkoRenameInputValidator"/>
+        <renamePsiElementProcessor implementation="com.setdef.parakeet.InkoInstanceMethodRenameProcessor" order="first"/>
+        <vetoRenameCondition implementation="com.setdef.parakeet.InkoRenameVeto"/>
+        <lang.refactoringSupport language="Inko" implementationClass="com.setdef.parakeet.InkoRefactoringSupportProvider"/>
         <highlightUsagesHandlerFactory implementation="com.setdef.parakeet.InkoHighlightUsagesHandlerFactory"/>
         <errorHandler implementation="com.setdef.parakeet.InkoErrorReportSubmitter"/>
         <codeInsight.lineMarkerProvider language="Inko" implementationClass="com.setdef.parakeet.InkoTraitLineMarkerProvider"/>

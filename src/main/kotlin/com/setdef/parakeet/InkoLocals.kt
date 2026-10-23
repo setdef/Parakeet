@@ -20,6 +20,9 @@ object InkoLocals {
     /** Locals visible at [offset]: declared before it, in blocks still open there. Later declarations shadow earlier ones. */
     fun visibleAt(text: CharSequence, offset: Int): List<InkoLocal> = scan(text, offset).first
 
+    /** Every local declared in [text] (in any scope). */
+    fun declarations(text: CharSequence): List<InkoLocal> = scan(text, text.length).second
+
     /** The local declared by the name at [offset], if it declares one (in any scope). */
     fun declaredAt(text: CharSequence, offset: Int): InkoLocal? = scan(text, text.length).second.firstOrNull { it.offset == offset }
 

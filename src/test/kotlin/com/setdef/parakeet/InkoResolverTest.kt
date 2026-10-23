@@ -3,6 +3,7 @@ package com.setdef.parakeet
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.psi.util.PsiTreeUtil
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -111,5 +112,12 @@ class InkoResolverTest : InkoTestCase(onDisk = true) {
 
     fun testLocalVariablesResolveToTheirDeclaration() = assertEquals(listOf("main.inko:6:h"), targetsAt("h.value"))
 
-    fun testDefinitionsDoNotResolve() = assertEmpty(targetsAt("main {"))
+    // A definition's name is a declaration (what usages resolve to), not a reference.
+    fun testDefinitionsAreDeclarationsNotReferences() {
+        val file = myFixture.addFileToProject("src/main.inko", main)
+        myFixture.configureFromExistingVirtualFile(file.virtualFile)
+        val name = PsiTreeUtil.getParentOfType(myFixture.file.findElementAt(main.indexOf("main {")), InkoName::class.java, false)
+        assertTrue(name is InkoDeclaration)
+        assertNull(name!!.reference)
+    }
 }

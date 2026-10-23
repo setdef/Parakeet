@@ -63,7 +63,7 @@ object InkoSourceDefinitions {
     }
 
     /** Enum constructors: `case Name` directly in a type's body, not in its methods' `match`es. */
-    private fun constructors(text: CharSequence, type: InkoOutline.Node): List<Pair<String, Int>> {
+    fun constructors(text: CharSequence, type: InkoOutline.Node): List<Pair<String, Int>> {
         val methods = type.children.filter { it.kind == InkoOutline.Kind.METHOD }.map { it.range }
         return Regex("\\bcase\\s+([A-Z]\\w*)").findAll(text.subSequence(0, type.range.endOffset))
             .filter { it.range.first >= type.range.startOffset && methods.none { r -> r.containsOffset(it.range.first) } }

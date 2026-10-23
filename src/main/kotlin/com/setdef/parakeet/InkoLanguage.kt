@@ -6,6 +6,9 @@ import com.intellij.openapi.util.IconLoader
 import javax.swing.Icon
 
 object InkoLanguage : Language("Inko") {
+    // Inko is case-sensitive (`Helper` and `helper` are different names); word search relies on this.
+    override fun isCaseSensitive(): Boolean = true
+
     private fun readResolve(): Any = InkoLanguage
 }
 

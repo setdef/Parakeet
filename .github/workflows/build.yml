@@ -57,6 +57,12 @@ jobs:
           persist-credentials: false
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          # Only "Build and unit tests" (and one macOS job) write Gradle caches; the
+          # others restore them, since setup-gradle shares cached dependencies across
+          # jobs by content. Writing from every job overflowed GitHub's 10 GB cache
+          # budget, evicting the small but slow-to-rebuild Inko installs.
+          cache-read-only: true
       - name: Verify against the oldest and newest supported IDEs
         run: ./gradlew verifyPlugin
       - name: Upload verifier reports
@@ -82,6 +88,9 @@ jobs:
           persist-credentials: false
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          # macOS needs its own (macOS) IDE download cached, so one macOS job writes it.
+          cache-read-only: ${{ !(matrix.os == 'macos-15' && matrix.inko == 'latest') }}
       - name: Resolve Inko version
         id: inko
         env:

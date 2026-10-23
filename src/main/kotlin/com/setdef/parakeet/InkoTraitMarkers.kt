@@ -29,13 +29,17 @@ class InkoTraitLineMarkerProvider : RelatedItemLineMarkerProvider() {
 }
 
 /** What a trait marker on a name token links to. */
-class InkoTraitLink(val icon: Icon, val tooltip: String, val targets: List<InkoDefinition>)
+class InkoTraitLink(val icon: Icon, val tooltip: String, val targets: List<InkoDefinition>) {
+    /** Whether this leads down to implementations (rather than up to a trait). */
+    val toImplementations: Boolean get() = icon === AllIcons.Gutter.ImplementedMethod
+}
 
 object InkoTraitLinks {
-    fun of(token: PsiElement): InkoTraitLink? {
+    /** The link for [token], using [symbols] (by default, the index of the token's own project). */
+    fun of(token: PsiElement, symbols: InkoSymbols? = null): InkoTraitLink? {
         val file = token.containingFile ?: return null
         val path = Inko.pathOf(file.virtualFile) ?: return null
-        val symbols = InkoDocIndex.getInstance(file.project).symbols(Inko.projectRoot(path)) ?: return null
+        val symbols = symbols ?: InkoDocIndex.getInstance(file.project).symbols(Inko.projectRoot(path)) ?: return null
         val imports = InkoImports.parse(file.text)
         val previous = token.previousToken()
         val name = token.text

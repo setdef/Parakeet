@@ -121,7 +121,7 @@ object InkoPostfixExpressions {
         lexer.start(text, 0, text.length, 0)
         while (lexer.tokenType != null) {
             if (lexer.tokenStart < offset && offset < lexer.tokenEnd) {
-                return lexer.tokenType == InkoTokens.STRING || lexer.tokenType == InkoTokens.COMMENT
+                return lexer.tokenType in InkoTokens.STRINGS || lexer.tokenType == InkoTokens.COMMENT
             }
             if (lexer.tokenStart >= offset) return false
             lexer.advance()

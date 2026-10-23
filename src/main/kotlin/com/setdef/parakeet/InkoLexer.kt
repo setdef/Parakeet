@@ -12,7 +12,14 @@ object InkoTokens {
     @JvmField val CONSTANT = InkoTokenType("CONSTANT")
     @JvmField val FIELD = InkoTokenType("FIELD")
     @JvmField val KEYWORD = InkoTokenType("KEYWORD")
+    /** A string without interpolation, quotes included. */
     @JvmField val STRING = InkoTokenType("STRING")
+
+    // A string with `${…}` is split around the code in it, as Inko's lexer does: `'a ${` (STRING_START), the
+    // code's tokens, `} b ${` (STRING_MIDDLE), more code, and `} c'` (STRING_END).
+    @JvmField val STRING_START = InkoTokenType("STRING_START")
+    @JvmField val STRING_MIDDLE = InkoTokenType("STRING_MIDDLE")
+    @JvmField val STRING_END = InkoTokenType("STRING_END")
     @JvmField val NUMBER = InkoTokenType("NUMBER")
     @JvmField val COMMENT = InkoTokenType("COMMENT")
     @JvmField val DOT = InkoTokenType(".")
@@ -29,7 +36,7 @@ object InkoTokens {
 
     @JvmField val NAMES = TokenSet.create(IDENTIFIER, CONSTANT, FIELD)
     @JvmField val COMMENTS = TokenSet.create(COMMENT)
-    @JvmField val STRINGS = TokenSet.create(STRING)
+    @JvmField val STRINGS = TokenSet.create(STRING, STRING_START, STRING_MIDDLE, STRING_END)
 
     // From the Inko compiler's lexer (ast/src/lexer.rs).
     val KEYWORDS = setOf(
@@ -41,8 +48,12 @@ object InkoTokens {
 }
 
 /**
- * A small, stateless lexer that splits Inko source into tokens, so names can be
- * navigated and run markers placed. Colors come from the TextMate grammar.
+ * A small lexer that splits Inko source into tokens, so names can be navigated
+ * and run markers placed. Colors come from the TextMate grammar.
+ *
+ * Its state is how many interpolations (`${`) are open: code inside one is
+ * lexed as code, as Inko's lexer does (ast/src/lexer.rs, `string_expression`
+ * and `curly_close`), so lexing only restarts outside strings.
  */
 class InkoLexer : LexerBase() {
     private var buffer: CharSequence = ""
@@ -51,14 +62,20 @@ class InkoLexer : LexerBase() {
     private var tokenEnd = 0
     private var tokenType: IElementType? = null
 
+    /** For each open interpolation, innermost last: its string's quote, and the `{`s opened inside it. */
+    private class Interpolation(val quote: Char, var braces: Int)
+
+    private val interpolations = ArrayDeque<Interpolation>()
+
     override fun start(buffer: CharSequence, startOffset: Int, endOffset: Int, initialState: Int) {
         this.buffer = buffer
         this.end = endOffset
         this.tokenEnd = startOffset
+        interpolations.clear()
         advance()
     }
 
-    override fun getState(): Int = 0
+    override fun getState(): Int = interpolations.size
     override fun getTokenType(): IElementType? = tokenType
     override fun getTokenStart(): Int = tokenStart
     override fun getTokenEnd(): Int = tokenEnd
@@ -83,8 +100,25 @@ class InkoLexer : LexerBase() {
                 InkoTokens.COMMENT
             }
             c == '"' || c == '\'' -> {
-                i = skipString(i)
-                InkoTokens.STRING
+                val (stop, opensCode) = skipStringText(i + 1, c)
+                i = stop
+                if (opensCode) InkoTokens.STRING_START.also { interpolations.addLast(Interpolation(c, 0)) } else InkoTokens.STRING
+            }
+            c == '{' && interpolations.isNotEmpty() -> {
+                interpolations.last().braces++
+                i++
+                InkoTokens.LBRACE
+            }
+            c == '}' && interpolations.isNotEmpty() && interpolations.last().braces > 0 -> {
+                interpolations.last().braces--
+                i++
+                InkoTokens.RBRACE
+            }
+            // The `}` closing an interpolation, and the string's text up to the next `${` or its end.
+            c == '}' && interpolations.isNotEmpty() -> {
+                val (stop, opensCode) = skipStringText(i + 1, interpolations.last().quote)
+                i = stop
+                if (opensCode) InkoTokens.STRING_MIDDLE else InkoTokens.STRING_END.also { interpolations.removeLast() }
             }
             c.isDigit() -> {
                 i++
@@ -154,36 +188,21 @@ class InkoLexer : LexerBase() {
         }
     }
 
-    // Skips a string, including `${...}` interpolation (which may nest strings).
-    private fun skipString(from: Int): Int {
-        val quote = buffer[from]
-        var i = from + 1
+    /**
+     * Skips string text from [from] to just past its closing [quote], or past
+     * the `${` that starts code in it (then the second value is true), or to
+     * the end. Escapes (including `\${`) are skipped whole.
+     */
+    private fun skipStringText(from: Int, quote: Char): Pair<Int, Boolean> {
+        var i = from
         while (i < end) {
             when (buffer[i]) {
                 '\\' -> i += 2
-                quote -> return i + 1
-                '$' -> if (i + 1 < end && buffer[i + 1] == '{') {
-                    i = skipInterpolation(i + 2)
-                } else {
-                    i++
-                }
+                quote -> return i + 1 to false
+                '$' -> if (i + 1 < end && buffer[i + 1] == '{') return i + 2 to true else i++
                 else -> i++
             }
         }
-        return end
-    }
-
-    private fun skipInterpolation(from: Int): Int {
-        var depth = 1
-        var i = from
-        while (i < end && depth > 0) {
-            when (buffer[i]) {
-                '{' -> { depth++; i++ }
-                '}' -> { depth--; i++ }
-                '"', '\'' -> i = skipString(i)
-                else -> i++
-            }
-        }
-        return i
+        return minOf(i, end) to false
     }
 }

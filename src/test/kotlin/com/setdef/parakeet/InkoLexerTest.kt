@@ -22,9 +22,13 @@ class InkoLexerTest : TestCase() {
         )
     }
 
-    fun testStringsWithInterpolationAreOneToken() {
+    // A `}` in a string nested in an interpolation doesn't end the interpolation (AUDIT.md finding 1.1: the code is tokens).
+    fun testStringsWithInterpolationSplitAroundTheirCode() {
         assertEquals(
-            listOf("KEYWORD" to "let", "IDENTIFIER" to "a", "OPERATOR" to "=", "STRING" to "\"x \${f(\"}\")} y\"", "NUMBER" to "1_000"),
+            listOf(
+                "KEYWORD" to "let", "IDENTIFIER" to "a", "OPERATOR" to "=", "STRING_START" to "\"x \${", "IDENTIFIER" to "f",
+                "(" to "(", "STRING" to "\"}\"", ")" to ")", "STRING_END" to "} y\"", "NUMBER" to "1_000",
+            ),
             tokens("let a = \"x \${f(\"}\")} y\" 1_000"),
         )
     }

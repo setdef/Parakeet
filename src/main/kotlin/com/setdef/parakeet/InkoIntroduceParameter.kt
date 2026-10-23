@@ -84,6 +84,7 @@ object InkoIntroduceParameter {
             first.type == InkoTokens.NUMBER -> return if ('.' in first.text && !first.text.startsWith("0x")) "Float" else "Int"
             first.isKeyword("true", "false") -> return "Bool"
         }
+        if (first.type == InkoTokens.STRING_START && tokens.last().type == InkoTokens.STRING_END && depthReturnsToZeroOnlyAtEnd(tokens)) return "String"
         if (tokens.size == 2 && first.isOperator("-") && tokens[1].type == InkoTokens.NUMBER) return inferType(tokens.drop(1))
         if (first.type == InkoTokens.CONSTANT) {
             val second = tokens.getOrNull(1)

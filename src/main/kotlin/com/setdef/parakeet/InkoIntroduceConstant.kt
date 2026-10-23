@@ -42,7 +42,7 @@ object InkoIntroduceConstant {
                 InkoTokens.OPERATOR, InkoTokens.COMMA, InkoTokens.LBRACKET, InkoTokens.RBRACKET, InkoTokens.LPAREN, InkoTokens.RPAREN -> true
                 else -> false
             }
-            if (!allowed) return if (token.type == InkoTokens.STRING) "$invalid, and their strings can't use \${…}." else "$invalid, not `${token.text}`."
+            if (!allowed) return if (token.isString) "$invalid, and their strings can't use \${…}." else "$invalid, not `${token.text}`."
             // `(…)` only groups: a call like `Foo(…)` isn't a constant.
             if (token.type == InkoTokens.LPAREN && index > 0 && tokens[index - 1].end == token.start && tokens[index - 1].type == InkoTokens.CONSTANT) {
                 return "$invalid, not `${tokens[index - 1].text}(…)`."

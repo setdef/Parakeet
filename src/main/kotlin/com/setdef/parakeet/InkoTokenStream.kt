@@ -11,8 +11,12 @@ class InkoToken(val type: IElementType, val text: String, val start: Int, val en
 
     fun isKeyword(vararg texts: String) = type == InkoTokens.KEYWORD && text in texts
 
-    val opens: Boolean get() = type == InkoTokens.LPAREN || type == InkoTokens.LBRACKET || type == InkoTokens.LBRACE
-    val closes: Boolean get() = type == InkoTokens.RPAREN || type == InkoTokens.RBRACKET || type == InkoTokens.RBRACE
+    // An interpolated string (`'a ${x} b'`) pairs up like brackets: its first part opens it, and its last closes it.
+    val opens: Boolean get() = type == InkoTokens.LPAREN || type == InkoTokens.LBRACKET || type == InkoTokens.LBRACE || type == InkoTokens.STRING_START
+    val closes: Boolean get() = type == InkoTokens.RPAREN || type == InkoTokens.RBRACKET || type == InkoTokens.RBRACE || type == InkoTokens.STRING_END
+
+    /** Any part of a string literal: a whole string, or a part of an interpolated one. */
+    val isString: Boolean get() = type in InkoTokens.STRINGS
 }
 
 /**
@@ -33,11 +37,19 @@ class InkoTokenStream(val text: CharSequence) {
     }
 
     // Pairs each closer with the nearest unclosed opener of its kind; openers left in between stay unmatched (-1).
+    // A STRING_MIDDLE is matched to its string's STRING_START, which stays open.
     private val matches: IntArray = IntArray(tokens.size) { -1 }.also { matches ->
         val open = ArrayDeque<Int>()
         tokens.forEachIndexed { index, token ->
             when {
                 token.opens -> open.addLast(index)
+                token.type == InkoTokens.STRING_MIDDLE -> {
+                    val opener = open.indexOfLast { tokens[it].type == InkoTokens.STRING_START }
+                    if (opener >= 0) {
+                        while (open.size > opener + 1) open.removeLast()
+                        matches[index] = open[opener]
+                    }
+                }
                 token.closes -> {
                     val opener = open.indexOfLast { pairs(tokens[it], token) }
                     if (opener >= 0) {
@@ -54,9 +66,10 @@ class InkoTokenStream(val text: CharSequence) {
     private fun pairs(open: InkoToken, close: InkoToken): Boolean =
         (open.type == InkoTokens.LPAREN && close.type == InkoTokens.RPAREN) ||
             (open.type == InkoTokens.LBRACKET && close.type == InkoTokens.RBRACKET) ||
-            (open.type == InkoTokens.LBRACE && close.type == InkoTokens.RBRACE)
+            (open.type == InkoTokens.LBRACE && close.type == InkoTokens.RBRACE) ||
+            (open.type == InkoTokens.STRING_START && close.type == InkoTokens.STRING_END)
 
-    /** The index of the bracket matching the one at [index], or -1. */
+    /** The index of the bracket matching the one at [index] (for a STRING_MIDDLE, its STRING_START), or -1. */
     fun match(index: Int): Int = matches.getOrElse(index) { -1 }
 
     /** The index of the first token starting at or after [offset]. */

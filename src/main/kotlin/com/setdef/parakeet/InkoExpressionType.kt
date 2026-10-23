@@ -75,6 +75,7 @@ object InkoExpressionTypes {
         if (head.opens && stream.match(first) == last) {
             val inner = TextRange(head.end, all[last].start)
             return when (head.type) {
+                InkoTokens.STRING_START -> "String"
                 InkoTokens.LPAREN -> of(file, inner, depth + 1)
                 InkoTokens.LBRACKET -> firstElement(stream, first, last)?.let { of(file, it, depth + 1) }?.let { "Array[$it]" }
                 else -> null

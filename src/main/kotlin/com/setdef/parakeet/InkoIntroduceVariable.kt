@@ -31,7 +31,8 @@ object InkoIntroduceVariable {
         val last = stream.tokens.indexOf(tokens.last())
         // The selection must not cut a token in half.
         if (stream.tokens.any { it.start < selection.endOffset && it.end > selection.startOffset && !selection.contains(it.range) }) return null
-        if ((first..last).any { i -> stream.tokens[i].let { t -> (t.opens || t.closes) && stream.match(i) !in first..last } }) return null
+        // Brackets, and an interpolated string's parts, must all be in the selection.
+        if ((first..last).any { i -> stream.tokens[i].let { t -> (t.opens || t.closes || t.type == InkoTokens.STRING_MIDDLE) && stream.match(i) !in first..last } }) return null
         val head = stream.tokens[first]
         val tail = stream.tokens[last]
         if (head.type == InkoTokens.DOT || head.type == InkoTokens.COMMA || head.isOperator("=") || tail.isOperator() || tail.type == InkoTokens.DOT || tail.type == InkoTokens.COMMA) return null
@@ -73,8 +74,10 @@ object InkoIntroduceVariable {
     /** The expressions around [offset], innermost first: `foo`, `foo.bar`, `foo.bar(1).baz`. */
     fun candidatesAt(stream: InkoTokenStream, offset: Int): List<TextRange> {
         val tokens = stream.tokens
-        var at = tokens.indexOfFirst { offset in it.start..it.end && isOperand(it) }
+        var at = tokens.indexOfFirst { offset in it.start..it.end && (isOperand(it) || it.isString) }
         if (at < 0) return emptyList()
+        // In an interpolated string's text, the expression is the string.
+        if (tokens[at].type == InkoTokens.STRING_MIDDLE || tokens[at].type == InkoTokens.STRING_END) at = stream.match(at).takeIf { it >= 0 } ?: return emptyList()
         // A call's own name means the call: extend to its arguments.
         val start = chainStart(stream, at)
         val ends = mutableListOf<Int>()
@@ -89,11 +92,12 @@ object InkoIntroduceVariable {
     }
 
     private fun isOperand(token: InkoToken) = token.type in setOf(
-        InkoTokens.IDENTIFIER, InkoTokens.CONSTANT, InkoTokens.FIELD, InkoTokens.STRING, InkoTokens.NUMBER,
+        InkoTokens.IDENTIFIER, InkoTokens.CONSTANT, InkoTokens.FIELD, InkoTokens.STRING, InkoTokens.STRING_START, InkoTokens.NUMBER,
     ) || token.isKeyword("self", "true", "false", "nil")
 
     /** The last token of the operand at [index], with its call or index arguments: `foo`, `foo(1)`, `Foo(a: 1)`. */
     private fun segmentEnd(stream: InkoTokenStream, index: Int): Int {
+        if (stream.tokens[index].type == InkoTokens.STRING_START) return stream.match(index).takeIf { it > index } ?: index
         val next = stream.tokens.getOrNull(index + 1)
         if (next != null && (next.type == InkoTokens.LPAREN || next.type == InkoTokens.LBRACKET) && next.start == stream.tokens[index].end) {
             val close = stream.match(index + 1)
@@ -180,6 +184,7 @@ object InkoIntroduceVariable {
             InkoTokens.STRING -> return "string"
             InkoTokens.NUMBER -> return if ('.' in first.text) "float" else "number"
         }
+        if (first.type == InkoTokens.STRING_START && stream.match(stream.tokens.indexOf(first)) == stream.tokens.indexOf(tokens.last())) return "string"
         if (first.type == InkoTokens.LBRACKET) return "values"
         // The last name outside any brackets: the method called, or the type constructed.
         var depth = 0

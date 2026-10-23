@@ -31,6 +31,15 @@ object InkoSelections {
         }
 
         for ((open, close) in enclosingBrackets(stream, offset)) {
+            // An interpolated string: the code at the offset, then the string's contents, then the string.
+            if (tokens[open].type == InkoTokens.STRING_START) {
+                val parts = listOf(open) + (open + 1 until close).filter { tokens[it].type == InkoTokens.STRING_MIDDLE && stream.match(it) == open } + close
+                parts.zipWithNext().firstOrNull { (a, b) -> tokens[a].end <= offset && offset <= tokens[b].start }
+                    ?.let { (a, b) -> trimmed(text, TextRange(tokens[a].end, tokens[b].start))?.let { ranges += it } }
+                ranges += TextRange(tokens[open].start + 1, tokens[close].end - 1)
+                ranges += TextRange(tokens[open].start, tokens[close].end)
+                continue
+            }
             val inner = TextRange(tokens[open].end, tokens[close].start)
             // The argument (or array element) the offset is in, for `(` and `[`.
             if (tokens[open].type != InkoTokens.LBRACE) argumentAt(stream, open, close, offset)?.let { ranges += it }

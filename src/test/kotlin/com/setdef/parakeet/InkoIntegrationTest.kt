@@ -207,6 +207,12 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         )
     }
 
+    // AUDIT.md finding 1.1: names in `${…}` are inputs like any other.
+    fun testExtractingInterpolatedCodeStillCompiles() = extractAndCompile(
+        "src/app/greet.inko",
+        "fn pub greet(name: String) -> String {\n  let greeting: String = 'Hello'\n  <selection>'\${greeting}, \${name}!'</selection>\n}\n",
+    )
+
     fun testInlinedMethodsStillCompile() {
         putTempDirInProjectContent()
         myFixture.addFileToProject(

@@ -34,19 +34,25 @@ class InkoBraceMatcher : PairedBraceMatcher {
  * grammar, so this lexes the document with [InkoLexer] to find strings.
  */
 class InkoQuoteHandler : QuoteHandler {
+    /**
+     * The whole string literal whose text (not interpolated code) holds
+     * [offset]: from its opening quote through its closing one (or the end of
+     * the file, when it isn't closed).
+     */
     private fun stringAt(iterator: HighlighterIterator, offset: Int): TextRange? {
-        val text = iterator.document.charsSequence
-        val lexer = InkoLexer()
-        lexer.start(text, 0, text.length, 0)
-        while (lexer.tokenType != null && lexer.tokenEnd <= offset) lexer.advance()
-        if (lexer.tokenType != InkoTokens.STRING || lexer.tokenStart > offset) return null
-        return TextRange(lexer.tokenStart, lexer.tokenEnd)
+        val stream = InkoTokenStream(iterator.document.charsSequence)
+        val tokens = stream.tokens
+        val at = tokens.indexOfFirst { it.start <= offset && offset < it.end }.takeIf { it >= 0 && tokens[it].isString } ?: return null
+        val first = if (tokens[at].type == InkoTokens.STRING || tokens[at].type == InkoTokens.STRING_START) at else stream.match(at)
+        if (first < 0) return null
+        val last = if (tokens[first].type == InkoTokens.STRING) first else stream.match(first)
+        return TextRange(tokens[first].start, if (last < 0) stream.text.length else tokens[last].end)
     }
 
     private fun isClosed(text: CharSequence, range: TextRange): Boolean =
         range.length >= 2 && text[range.endOffset - 1] == text[range.startOffset] && text[range.endOffset - 2] != '\\'
 
-    override fun isClosingQuote(iterator: HighlighterIterator, offset: Int): Boolean {
+override fun isClosingQuote(iterator: HighlighterIterator, offset: Int): Boolean {
         val range = stringAt(iterator, offset) ?: return false
         return range.length >= 2 && offset == range.endOffset - 1
     }

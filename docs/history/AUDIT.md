@@ -32,6 +32,12 @@ Findings are ranked by user impact:
 
 ### 1.1 Names inside string interpolation are invisible (High)
 
+**Status: confirmed and fixed in <commit:1.1>.** `InkoInterpolationTest` failed
+before the fix (6 of its 7 tests). The lexer now splits an interpolated
+string around its code, as Inko's lexer does (`STRING_START`, the code's
+tokens, `STRING_MIDDLE`, `STRING_END`), so names in `${…}` are PSI names. See
+[SESSION-audit-fixes.md](SESSION-audit-fixes.md).
+
 **What Parakeet assumes.** A string, including any `${…}` inside it, is one
 opaque `STRING` token (`P/InkoLexer.kt:84-87` and `P/InkoLexer.kt:158-190`).
 Only `NAMES` tokens become `InkoName` PSI (`P/InkoPsi.kt`, `InkoParser`).

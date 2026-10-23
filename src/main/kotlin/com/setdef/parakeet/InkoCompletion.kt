@@ -67,9 +67,10 @@ sealed class InkoCompletionContext {
 }
 
 /**
- * Basic completion: keywords and names in scope, module paths and symbols in
- * imports, members after `.`, and fields after `@`. Names come from the file's
- * own outline (so unsaved declarations count) and the `inko doc` index.
+ * Basic completion: keywords, local variables, and names in scope, module paths
+ * and symbols in imports, members after `.` (narrowed to the receiver's type
+ * when it's known), and fields after `@`. Names come from the file's own tokens
+ * (so unsaved declarations count) and the `inko doc` index.
  */
 class InkoCompletionContributor : CompletionContributor() {
     override fun fillCompletionVariants(parameters: CompletionParameters, result: CompletionResultSet) {

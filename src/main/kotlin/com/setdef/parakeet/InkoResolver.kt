@@ -20,9 +20,10 @@ class InkoReference(element: InkoName) :
 }
 
 /**
- * Resolves names to definitions from the `inko doc` index. Locations are exact;
- * which of several same-named methods is meant can't be known without types, so
- * method calls may resolve to several candidates.
+ * Resolves names to definitions from the `inko doc` index (locals come from the
+ * file itself). Locations are exact. Types aren't inferred, so a method call
+ * resolves to the receiver type's method when that type is written or obvious
+ * (a typed local, or `self`), and otherwise to every candidate it can't rule out.
  */
 class InkoResolver private constructor(
     private val symbols: InkoSymbols,

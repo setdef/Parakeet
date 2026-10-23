@@ -1,17 +1,22 @@
 # Parakeet for Inko
 
 Parakeet is unofficial, community-made support for the
-[Inko](https://inko-lang.org) programming language in JetBrains IDEs (IntelliJ
-IDEA, RubyMine, WebStorm, RustRover, etc.).
+[Inko](https://inko-lang.org) programming language in JetBrains IDEs. It's
+tested in IntelliJ IDEA, and should work in the others (RubyMine, WebStorm,
+RustRover, etc.), though they haven't been tried yet.
 
 This plugin is not affiliated with or endorsed by the Inko project. Please don't
-report problems with this plugin to the Inko project; open an issue here instead.
+report problems with this plugin to the Inko project; open an
+[issue here](https://github.com/setdef/Parakeet/issues) instead. When Parakeet
+causes an error, the IDE's error dialog can do that for you: **Open a GitHub
+Issue** opens one in your browser, filled in with the error and your versions,
+for you to review and submit.
 
 ## How this code came to exist
 
 I use three words for how code comes to exist. Code I wrote, I typed by hand, with nothing generated. Code I wrought, an AI agent generated while I iterated with it, and I reviewed every change before committing it, so I own every diff. Code I requested, an agent built with little or no review from me, the way a dark factory runs without lights.
 
-**Versions 0.1.0 through 0.5.0 are requested.**
+**Versions 0.1.0 through 0.6.0 are requested.**
 
 ## Features
 
@@ -74,23 +79,29 @@ compiler, so it always agrees with your installed Inko version.
   project into a temporary directory (symlinking every source file) with your
   unsaved text in place of the file, then runs `inko check` there, so imports in
   both directions and dependencies resolve.
-- **Go to definition, quick documentation, Go to Class/Symbol, and
-  completion** use the definitions `inko doc --private --dependencies`
-  reports, rebuilt in the background when you save. `inko doc` only works on
-  saved files in a project that compiles, so files you've edited since (saved
-  or not) are read from source, and when the project doesn't compile, the
-  standard library and dependencies are still documented while your own files
-  are read from source. Locations are exact, but the plugin doesn't infer types: a method call like `x.to_string` narrows to `x`'s
+- **Go to definition, quick documentation, Go to Class/Symbol, completion,
+  parameter info and hints, and trait gutter icons** use the definitions
+  `inko doc --private --dependencies` reports, rebuilt in the background when
+  you save. `inko doc` only works on saved files in a project that compiles,
+  so files you've edited since (saved or not) are read from source, and when
+  the project doesn't compile, the standard library and dependencies are still
+  documented while your own files are read from source.
+- **Types aren't inferred.** A method call like `x.to_string` narrows to `x`'s
   type when it's written or obvious (`x: Foo`, `let x = Foo.new`, `self`), and
   otherwise offers every `to_string` it can't rule out, preferring types
-  mentioned in the file. Local variables and parameters are found from the
+  mentioned in the file. Parameter-name hints only appear when exactly one
+  parameter list fits. Local variables and parameters are found from the
   file's own tokens.
+- **Quick fixes** act on the diagnostic IDs `inko check` reports
+  (`invalid-symbol`, `unused-symbol`, `unused-result`); auto-import finds
+  candidates in the `inko doc` definitions.
 - **Tests** run the way `inko test` does (from the project root), but through
   a program Parakeet generates that reports each test to the IDE. It's built in
   a mirror of the project in the IDE's system directory (with its own build
   cache), so nothing is added to your project.
-- **The Structure view, breadcrumbs, and folding** come from the file's own
-  tokens, so they follow unsaved edits and work without `inko`.
+- **The Structure view, breadcrumbs, folding, indentation, and usage
+  highlighting** come from the file's own tokens, so they follow unsaved edits
+  and work without `inko`.
 
 ## Requirements
 

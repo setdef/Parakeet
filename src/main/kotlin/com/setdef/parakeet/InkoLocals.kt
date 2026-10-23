@@ -18,8 +18,15 @@ object InkoLocals {
     private val TYPE_MODIFIERS = setOf("ref", "mut", "uni", "move")
 
     /** Locals visible at [offset]: declared before it, in blocks still open there. Later declarations shadow earlier ones. */
-    fun visibleAt(text: CharSequence, offset: Int): List<InkoLocal> {
-        val tokens = tokens(text, offset)
+    fun visibleAt(text: CharSequence, offset: Int): List<InkoLocal> = scan(text, offset).first
+
+    /** The local declared by the name at [offset], if it declares one (in any scope). */
+    fun declaredAt(text: CharSequence, offset: Int): InkoLocal? = scan(text, text.length).second.firstOrNull { it.offset == offset }
+
+    /** Locals visible at [end], and every local declared before it. */
+    private fun scan(text: CharSequence, end: Int): Pair<List<InkoLocal>, List<InkoLocal>> {
+        val tokens = tokens(text, end)
+        val declared = mutableListOf<InkoLocal>()
         val scopes = ArrayDeque<MutableList<InkoLocal>>().apply { addLast(mutableListOf()) }
         var pendingParameters: List<InkoLocal>? = null
         var i = 0
@@ -62,6 +69,7 @@ object InkoLocals {
             val t = tokens[i]
             when {
                 t.type == InkoTokens.LBRACE -> {
+                    declared += pendingParameters.orEmpty()
                     scopes.addLast(pendingParameters.orEmpty().toMutableList())
                     pendingParameters = null
                     i++
@@ -98,8 +106,9 @@ object InkoLocals {
                                 else -> null
                             }
                             scopes.last() += InkoLocal(name.text, name.start, type)
+                            declared += scopes.last().last()
                         }
-                        InkoTokens.LPAREN -> scopes.last() += parameters(j).first.map { it.copy(type = null) }
+                        InkoTokens.LPAREN -> parameters(j).first.map { it.copy(type = null) }.let { scopes.last() += it; declared += it }
                         else -> {}
                     }
                     i = j + 1
@@ -111,7 +120,10 @@ object InkoLocals {
                         !(at(j)!!.type == InkoTokens.KEYWORD && at(j)!!.text == "if")) {
                         val token = at(j)!!
                         val afterDot = at(j - 1)?.type == InkoTokens.DOT
-                        if (token.type == InkoTokens.IDENTIFIER && token.text != "_" && !afterDot) scopes.last() += InkoLocal(token.text, token.start, null)
+                        if (token.type == InkoTokens.IDENTIFIER && token.text != "_" && !afterDot) {
+                            scopes.last() += InkoLocal(token.text, token.start, null)
+                            declared += scopes.last().last()
+                        }
                         j++
                     }
                     i = j
@@ -119,7 +131,7 @@ object InkoLocals {
                 else -> i++
             }
         }
-        return scopes.flatten().associateBy { it.name }.values.sortedBy { it.offset }
+        return scopes.flatten().associateBy { it.name }.values.sortedBy { it.offset } to declared
     }
 
     /** Tokens before [end], without whitespace and comments. */

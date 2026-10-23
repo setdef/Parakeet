@@ -75,6 +75,7 @@
                                               isEnabledByDefault="true" group="PARAMETERS_GROUP"
                                               providerId="parakeet.inko.parameters" bundle="messages.ParakeetBundle"
                                               nameKey="inlay.parameters.name" descriptionKey="inlay.parameters.description"/>
+        <highlightUsagesHandlerFactory implementation="com.setdef.parakeet.InkoHighlightUsagesHandlerFactory"/>
         <codeInsight.lineMarkerProvider language="Inko" implementationClass="com.setdef.parakeet.InkoTraitLineMarkerProvider"/>
         <runLineMarkerContributor language="Inko" implementationClass="com.setdef.parakeet.InkoRunLineMarkerContributor"/>
 

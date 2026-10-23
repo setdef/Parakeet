@@ -10,14 +10,17 @@
             <li>Bracket matching, auto-closing pairs, and surrounding pairs</li>
             <li>Two-space indentation as you type, like <code>inko fmt</code></li>
             <li>Compiler errors and warnings as you type, from <code>inko check</code>, with quick fixes: auto-import, fixes for unused imports, locals, and results, missing fields, methods, and traits, and unreachable code</li>
+            <li>Errors across the whole project after saves, in the Project view, Problems, and Inspect Code</li>
+            <li>Intentions: flip comparisons, invert <code>if</code>, <code>if</code> &#8644; <code>match</code>, add or remove argument names, and specify or remove a <code>let</code>'s type</li>
             <li>Inspections for Inko's style guide: naming, Bool methods ending in <code>?</code>, redundant argument names, and empty parentheses</li>
             <li>Reformat Code (and format on save) with <code>inko fmt</code></li>
-            <li>Go to definition, quick documentation, Go to Class/Symbol, and completion, using the definitions <code>inko doc</code> reports, plus local variables and parameters</li>
+            <li>Go to definition, quick documentation, Go to Class/Symbol, and completion (including names from modules not yet imported, imported as you choose them), using the definitions <code>inko doc</code> reports, plus local variables and parameters</li>
+            <li>Imports added when pasting Inko code, and Expression Type where the code states the type</li>
             <li>Find Usages and Rename across the project, and highlight usages</li>
-            <li>Parameter info, parameter-name hints, trait gutter icons, Go to Implementation and Super Method, and Implement/Override Methods</li>
+            <li>Parameter info, parameter-name hints, trait gutter icons, Go to Implementation and Super Method, Implement/Override Methods, and Generate (constructor, trait implementation)</li>
             <li>Go to Test and Create Test</li>
             <li>Optimize Imports, removing unused imports and sorting the rest</li>
-            <li>Change Signature, Extract Method, Inline Method and Variable, Introduce Variable, Parameter, and Constant, Safe Delete, and moving files and renaming directories with their imports updated</li>
+            <li>Change Signature, Extract Method, Inline Method and Variable, Introduce Variable, Parameter, and Constant, Safe Delete, Move for declarations and files, and renaming directories, with imports updated</li>
             <li>Type and Call Hierarchies, and usage counts</li>
             <li>Surround With, Unwrap/Remove, Move Statement, Complete Current Statement, Extend Selection, and Copy Reference</li>
             <li>New Inko File templates, and standard library docs on docs.inko-lang.org (Shift+F1)</li>

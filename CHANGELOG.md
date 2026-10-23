@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-23
+
+### Added
+
+- Intentions on ⌥⏎ / Alt+Enter: flip a comparison, `==`, `!=`, `and`, or `or` (with parentheses where Inko's left-to-right grouping needs them); invert an `if` and swap its blocks; replace an `if`/`else if` chain comparing a name to literals with a `match` (adding `case _` where needed), and back; add or remove argument names, keeping the call valid; and specify a `let`'s type when the value's type is known, or remove it when it matches. Each is described with a before/after example in *Settings → Editor → Intentions → Inko*.
+- Move (F6) for a top-level type, trait, constant, or function, with the caret on or in it, to another module (created if new). A type takes its `impl` blocks along. Modules importing it import it from the new module (qualified `module.Name` uses become imports), the old module imports it if it still uses it, and the moved code brings the imports it needs. A private declaration used elsewhere, code needing the old module's private names, and a name the target already defines are reported first.
+- Generate (⌘N / Alt+Insert) inside a type: **Constructor** (`fn static new` taking every field, as the standard library writes it) and **Implement Trait** (pick a trait, get its `impl` with stubbed required methods and the import). Implement and Override Methods were already there inside an `impl`.
+- Expression Type (⌃⇧P / Ctrl+Shift+P): the type of the expression at the caret where the code states it: literals, comparisons, casts, arithmetic on numbers, annotated or assigned locals, `self`, fields, constructors, and the return types in method signatures. Otherwise it says the type is unknown rather than guess, including for methods called on a value of unknown type and return types using a type parameter.
+- Completion offers names from modules that aren't imported yet (their public types, traits, constants, and functions, below names in scope) and adds the import when you choose one.
+- Imports on paste: pasting Inko code into another module adds the imports it needs, following *Settings → Editor → General → Auto Import → Insert imports on paste* (always, ask with a checklist, or never).
+- Errors across the whole project: after saves and when a project opens, `inko check` runs on every module, marking files with errors as problem files for the Project view and Problems tool window. *Code → Inspect Code* lists every module's errors and warnings through the new "Inko compiler errors and warnings" inspection.
+
+### Fixed
+
+- Removing a file's last import (with Optimize Imports or a quick fix) no longer leaves a blank line at the top of the file.
+
 ## [0.10.0] - 2026-10-23
 
 ### Added

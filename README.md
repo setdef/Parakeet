@@ -16,7 +16,7 @@ for you to review and submit.
 
 I use three words for how code comes to exist. Code I wrote, I typed by hand, with nothing generated. Code I wrought, an AI agent generated while I iterated with it, and I reviewed every change before committing it, so I own every diff. Code I requested, an agent built with little or no review from me, the way a dark factory runs without lights.
 
-**Versions 0.1.0 through 0.10.0 are requested.**
+**Versions 0.1.0 through 0.11.0 are requested.**
 
 ## Features
 
@@ -31,6 +31,14 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   it, remove an unused import, rename an unused local to `_name`, discard an
   unused result with `let _ =`, add a missing field, implement missing methods
   or a missing required trait, and remove unreachable code
+- **Errors across the whole project**: after saves and when a project opens,
+  `inko check` runs on every module, so files with errors are marked in the
+  Project view and the Problems tool window even when they aren't open, and
+  *Code → Inspect Code* lists every module's errors and warnings
+- **Intentions** (Alt+Enter anywhere): flip a comparison, `==`, `!=`, `and`, or
+  `or`; invert an `if`; replace an `if`/`else if` chain over literals with a
+  `match`, and back; add or remove argument names; and specify or remove a
+  `let`'s type
 - **Style-guide inspections** for what `inko fmt` doesn't fix, with quick
   fixes: names in the wrong case, Bool methods not ending in `?` (or prefixed
   with `is_`), redundant argument names like `start: start`, and empty
@@ -54,6 +62,11 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   Ctrl+Alt+B) and **Go to Super Method** (⌘U / Ctrl+U)
 - **Implement Methods** (⌃I / Ctrl+I) and **Override Methods** (⌃O / Ctrl+O)
   in `impl Trait for Type`, stubbing the trait's methods
+- **Generate** (⌘N / Alt+Insert) in a type: a **Constructor** (`fn static new`
+  from every field) and **Implement Trait** (an `impl` for a chosen trait, with
+  its required methods stubbed and the trait imported)
+- **Expression Type** (⌃⇧P / Ctrl+Shift+P), for types the code states; others
+  are shown as unknown rather than guessed
 - **Go to Test** (⌘⇧T / Ctrl+Shift+T) between `src/app/util.inko` and
   `test/app/test_util.inko`, and Create Test
 - **Quick documentation** (F1, or hover): a definition's signature, where
@@ -70,7 +83,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   Ctrl+Alt+M), Inline Method and Inline Variable (⌥⌘N / Ctrl+Alt+N),
   Introduce Variable (⌥⌘V / Ctrl+Alt+V), Introduce Parameter (⌥⌘P /
   Ctrl+Alt+P), Introduce Constant (⌥⌘C / Ctrl+Alt+C), Safe Delete (⌘⌫ /
-  Alt+Delete), and moving files or directories and renaming directories
+  Alt+Delete), Move (F6) for a top-level type, trait, constant, or function
+  to another module, and moving files or directories and renaming directories
   (which updates their modules' imports)
 - **Type Hierarchy** (⌃H / Ctrl+H) for traits and the types implementing
   them, and **Call Hierarchy** (⌃⌥H / Ctrl+Alt+H) for callers and callees
@@ -91,7 +105,11 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   `inko.pkg` changes
 - **Completion** for keywords, local variables, names in scope, imports,
   members after `.` (narrowed to the receiver's type when it's known), and
-  fields after `@`
+  fields after `@`, plus names from modules that aren't imported yet, adding
+  the import when you choose one
+- **Imports on paste**: pasting Inko code into another module adds the imports
+  it needs (*Settings → Editor → General → Auto Import → Insert imports on
+  paste*)
 - **Live templates**: `fn`, `fnp`, `type`, `typep`, `trait`, `impl`, `match`,
   `main`, `tests`, and `test`, and **postfix completion**: `.if`, `.match`,
   `.let`, `.not`, `.return`, and `.par` after an expression
@@ -181,6 +199,26 @@ compiler, so it always agrees with your installed Inko version.
   a mirror of the project in the IDE's system directory (with its own build
   cache), so nothing is added to your project. It takes one name filter, so
   rerunning failed tests builds it once and runs it once per failed test.
+- **Errors across the whole project** come from running `inko check` with no
+  file, on a mirror of the saved project, after saves (once they pause for a
+  second) and when the project opens. Unsaved edits are checked as you type in
+  their own editor, as before.
+- **Intentions** work from the file's tokens with the same operator rules as
+  the refactorings. `if` ⇄ `match` only rewrites comparisons of a name or field
+  to literals (so the value is the same each time it's read), and argument
+  names are only removed when each named argument is in its parameter's
+  position, since Inko accepts named arguments in any order.
+- **Expression Type and "Specify type explicitly"** only use types the code
+  states: literals, annotations, constructors, `self`, fields, comparisons,
+  casts, and signatures' return types. A method's type is only trusted when its
+  receiver's type is known, and return types using type parameters aren't
+  filled in.
+- **Move** rewrites imports from the usages Find Usages finds, and adds the
+  imports the moved code needs the same way **imports on paste** does: copying
+  records the imported and module-level names the copied code uses, and
+  pasting adds the ones the target module lacks.
+- **Completing unimported names** only offers `pub` definitions, since Inko
+  can't import private ones, and ranks them below names already in scope.
 - **The Structure view, breadcrumbs, folding, indentation, usage
   highlighting, Extend Selection, Unwrap, and postfix completion** come from
   the file's own tokens, so they follow unsaved edits and work without `inko`.
@@ -249,7 +287,7 @@ Dependabot proposes weekly updates to Gradle dependencies and GitHub Actions.
 
 ### Releasing
 
-Pushing a tag like `v0.10.0` (matching `version` in `gradle.properties`) runs
+Pushing a tag like `v0.11.0` (matching `version` in `gradle.properties`) runs
 [`release.yml`](.github/workflows/release.yml): the full build above, then it
 signs the plugin and creates a GitHub Release with the signed zip and
 `updatePlugins.xml` (the plugin repository file IDEs check for updates). If a

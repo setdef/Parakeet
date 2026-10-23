@@ -391,6 +391,13 @@ at the reported start use the same wrong offset, for example
 
 ### 1.9 `import a.b (self)` is taken to bind the name `self` (Medium–Low)
 
+**Status: confirmed and fixed in <commit:1.9>.** `InkoImportSelfTest`
+failed before the fix (2 of its 3 tests; the third checks that editing the
+import keeps `(self)` as written). A bare `self` now binds the module's last
+name, as `compiler/src/type_check/imports.rs` does.
+`InkoIntegrationTest.testNavigatesThroughASelfImport` resolves `fmt.fmt`
+through the real `inko doc` index.
+
 **What Parakeet assumes.** The module alias is the local name of the `self`
 entry (`P/InkoImports.kt:15-18`). For a bare `(self)`, that local name is
 `"self"`.

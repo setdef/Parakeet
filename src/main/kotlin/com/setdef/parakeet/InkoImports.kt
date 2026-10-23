@@ -14,7 +14,7 @@ class InkoImport(
     val range: TextRange,
     /** The text inside the parentheses, if any. */
     val symbolsRange: TextRange?,
-    /** Local name to original name; `self` refers to the module itself. */
+    /** Local name to original name; `self` refers to the module itself (`fmt` to `self` for `import std.fmt (self)`). */
     val symbols: Map<String, String>,
     /** `if tag and tag`, if the import has build tags. */
     val tagsRange: TextRange? = null,
@@ -57,14 +57,17 @@ class InkoImports(private val imports: List<InkoImport>) {
 
         fun parse(text: CharSequence): InkoImports = InkoImports(IMPORT.findAll(text).map { match ->
             val symbolsGroup = match.groups[2]
+            val module = match.groupValues[1]
             val symbols = symbolsGroup?.value?.split(',')?.mapNotNull { part ->
                 val pieces = part.trim().split(AS)
                 val original = pieces.first().trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                (pieces.getOrNull(1)?.trim() ?: original) to original
+                // `self` without `as` imports the module under its last name (compiler/src/type_check/imports.rs).
+                val local = pieces.getOrNull(1)?.trim() ?: if (original == "self") module.substringAfterLast('.') else original
+                local to original
             }?.toMap().orEmpty()
             val tags = match.groups[3]
             InkoImport(
-                module = match.groupValues[1],
+                module = module,
                 range = TextRange(match.range.first, match.range.last + 1),
                 symbolsRange = symbolsGroup?.range?.let { TextRange(it.first, it.last + 1) },
                 symbols = symbols,

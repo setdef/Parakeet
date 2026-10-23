@@ -260,6 +260,16 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertCompiles()
     }
 
+    // AUDIT.md finding 1.9: `(self)` imports the module under its last name.
+    fun testNavigatesThroughASelfImport() {
+        val text = "import std.fmt (self, Format)\n\nfn pub show(v: Int) -> String {\n  fmt.fmt(v)\n}\n"
+        open("src/app/show.inko", text)
+        myFixture.editor.caretModel.moveToOffset(text.indexOf("fmt(v)"))
+        val target = (myFixture.getReferenceAtCaretPositionWithAssertion() as InkoReference).multiResolve(false).single().element!!
+        assertEquals("fmt.inko:fmt", "${target.containingFile.name}:${target.text}")
+        assertCompiles()
+    }
+
     fun testInlinedMethodsStillCompile() {
         putTempDirInProjectContent()
         myFixture.addFileToProject(

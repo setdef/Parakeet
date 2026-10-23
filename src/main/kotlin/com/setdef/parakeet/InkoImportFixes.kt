@@ -33,7 +33,10 @@ object InkoImportEdits {
         val remaining = import.symbols.filterKeys { it != local }
         val symbols = import.symbolsRange
         if (symbols == null || remaining.isEmpty()) return removeStatement(document, import)
-        val text = remaining.entries.joinToString(", ") { (localName, original) -> if (localName == original) original else "$original as $localName" }
+        val text = remaining.entries.joinToString(", ") { (localName, original) ->
+            val written = if (original == "self") import.module.substringAfterLast('.') else original
+            if (localName == written) original else "$original as $localName"
+        }
         document.replaceString(symbols.startOffset, symbols.endOffset, text)
     }
 

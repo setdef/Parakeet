@@ -36,4 +36,15 @@ class InkoLexerTest : TestCase() {
     fun testQuestionMarkOperatorsAreNotPartOfNames() {
         assertEquals("IDENTIFIER" to "a", tokens("a ?? b").first())
     }
+
+    // From Inko's syntax reference: identifiers may contain `$`, and setters end in `=`.
+    fun testNamesMayContainDollarSigns() {
+        assertEquals("IDENTIFIER" to "readdir\$INODE64", tokens("readdir\$INODE64(dir)").first())
+    }
+
+    fun testSetterNamesEndInEquals() {
+        assertEquals(listOf("KEYWORD" to "fn", "KEYWORD" to "pub", "IDENTIFIER" to "value=", "{" to "{", "}" to "}"), tokens("fn pub value= {}"))
+        assertEquals(listOf("IDENTIFIER" to "a", "OPERATOR" to "=", "NUMBER" to "1"), tokens("a=1"))
+        assertEquals(listOf("IDENTIFIER" to "a", "OPERATOR" to "=", "OPERATOR" to "=", "NUMBER" to "1"), tokens("a==1"))
+    }
 }

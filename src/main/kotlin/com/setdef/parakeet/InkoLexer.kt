@@ -125,12 +125,33 @@ class InkoLexer : LexerBase() {
 
     private fun isNameStart(c: Char) = c == '_' || c.isLetter()
 
-    // Names may end in a single `?` (e.g. `empty?`), as long as it's not `?=` or `??`.
+    // Names may contain `$` (for C functions like `readdir$INODE64`) and end in a single `?` (e.g. `empty?`), as
+    // long as it's not `?=` or `??`. A method's name may end in `=` (a setter, `fn value=`), which is only taken
+    // as part of the name right after `fn`, so `a=1` is still `a`, `=`, `1`.
     private fun skipName(from: Int): Int {
         var i = from
-        while (i < end && (buffer[i] == '_' || buffer[i].isLetterOrDigit())) i++
-        if (i < end && buffer[i] == '?' && (i + 1 >= end || buffer[i + 1] != '=' && buffer[i + 1] != '?')) i++
+        while (i < end && (buffer[i] == '_' || buffer[i] == '$' || buffer[i].isLetterOrDigit())) i++
+        if (i < end && buffer[i] == '?' && (i + 1 >= end || buffer[i + 1] != '=' && buffer[i + 1] != '?')) {
+            i++
+        } else if (i < end && buffer[i] == '=' && (i + 1 >= end || buffer[i + 1] != '=') && followsFn(from)) {
+            i++
+        }
         return i
+    }
+
+    /** Whether the name at [start] comes right after `fn` (and any modifiers, like `fn pub mut`). */
+    private fun followsFn(start: Int): Boolean {
+        var i = start
+        while (true) {
+            while (i > 0 && buffer[i - 1].isWhitespace()) i--
+            val wordEnd = i
+            while (i > 0 && (buffer[i - 1].isLetter() || buffer[i - 1] == '_')) i--
+            when (buffer.subSequence(i, wordEnd).toString()) {
+                "fn" -> return true
+                "pub", "mut", "move", "static", "inline", "noinline", "async" -> continue
+                else -> return false
+            }
+        }
     }
 
     // Skips a string, including `${...}` interpolation (which may nest strings).

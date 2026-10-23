@@ -132,6 +132,8 @@ class InkoRefactoringSupportProvider : RefactoringSupportProvider() {
 
     override fun getChangeSignatureHandler(): ChangeSignatureHandler = InkoChangeSignatureHandler()
 
+    override fun getIntroduceParameterHandler(): RefactoringActionHandler = InkoIntroduceParameterHandler()
+
     // Safe Delete (⌘⌫ / Alt+Delete) warns about usages, then deletes the whole declaration. Not parameters:
     // removing one would mean editing every call.
     override fun isSafeDeleteAvailable(element: PsiElement): Boolean = element is InkoDeclaration && InkoDeclarations.extent(element) != null

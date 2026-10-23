@@ -50,8 +50,9 @@ object FakeInkoDoc {
         types: List<Map<String, Any>> = emptyList(),
         docs: String = "",
         traits: List<Map<String, Any>> = emptyList(),
+        constants: List<Map<String, Any>> = emptyList(),
     ) = gson.toJson(
-        mapOf("name" to name, "file" to file.toString(), "documentation" to docs, "constants" to emptyList<Any>(),
+        mapOf("name" to name, "file" to file.toString(), "documentation" to docs, "constants" to constants,
             "methods" to methods, "types" to types, "traits" to traits),
     )
 

@@ -103,7 +103,9 @@ object InkoChangeSignature {
 /**
  * Change Signature for an Inko method: rewrites its header, renames parameters
  * in its body, and updates every call. With [replacements] and [replacement]
- * (Introduce Parameter), also replaces those ranges in the body.
+ * (Introduce Parameter), also replaces those ranges in the body, and makes
+ * sure each file with a call imports [imports] (module, name) where it can't
+ * already see them.
  */
 class InkoChangeSignatureProcessor(
     project: Project,
@@ -112,6 +114,9 @@ class InkoChangeSignatureProcessor(
     private val replacements: List<TextRange> = emptyList(),
     private val replacement: String = "",
     private val commandName: String = "Change Signature",
+    private val imports: List<Pair<String, String>> = emptyList(),
+    /** Names in [imports] that are private to their module, so calls from other modules can't use them. */
+    private val privateImports: Set<String> = emptySet(),
 ) : BaseRefactoringProcessor(project) {
     private val signature: InkoSignature = InkoSignatures.at(method.containingFile.text, method.textRange.startOffset)
         ?: throw IllegalArgumentException("Not a method: ${method.text}")
@@ -164,6 +169,17 @@ class InkoChangeSignatureProcessor(
                 conflicts.putValue(method, "There's already a method named `${change.name}` here.")
             }
         }
+        // Calls from other modules that would need a private name.
+        if (privateImports.isNotEmpty()) {
+            val module = Inko.pathOf(file.virtualFile)?.let(Inko::moduleName)
+            val elsewhere = refUsages.get().mapNotNull { it.element?.containingFile }.distinct()
+                .filter { it != file && Inko.pathOf(it.virtualFile)?.let(Inko::moduleName) != module }
+            for (other in elsewhere) {
+                for (name in privateImports.sorted()) {
+                    conflicts.putValue(other, "`$name` is private to ${module ?: "its module"}, so the calls in ${other.name} can't use it. Make it public (`pub`) first, or the code won't compile.")
+                }
+            }
+        }
         // Calls that can't be rewritten.
         for (usage in refUsages.get()) {
             val element = usage.element ?: continue
@@ -209,6 +225,7 @@ class InkoChangeSignatureProcessor(
         manager.commitDocument(document)
 
         // Each call, one at a time (calls can be nested in each other's arguments).
+        val callFiles = mutableSetOf<com.intellij.psi.PsiFile>()
         for (pointer in pointers) {
             val element = pointer.element ?: continue
             val name = PsiTreeUtil.getParentOfType(element, InkoName::class.java, false) ?: continue
@@ -220,9 +237,27 @@ class InkoChangeSignatureProcessor(
                 val call = InkoSignatures.callAt(callDocument.charsSequence, name.textRange.startOffset) ?: continue
                 val arguments = InkoChangeSignature.newArguments(call, signature.parameters, change).getOrNull() ?: continue
                 callDocument.replaceString(call.range.startOffset, call.range.endOffset, InkoChangeSignature.renderCall(call, change.name, arguments))
+                callFiles += name.containingFile
             }
             manager.commitDocument(callDocument)
         }
+        for (callFile in callFiles) addImports(callFile)
+    }
+
+    /** Imports what new arguments name into [callFile], unless it's the method's own module or already sees them. */
+    private fun addImports(callFile: com.intellij.psi.PsiFile) {
+        if (imports.isEmpty() || callFile == method.containingFile) return
+        val manager = PsiDocumentManager.getInstance(myProject)
+        val document = manager.getDocument(callFile) ?: return
+        val module = Inko.pathOf(callFile.virtualFile)?.let(Inko::moduleName)
+        for ((from, name) in imports) {
+            if (from == module) continue
+            val text = document.charsSequence
+            if (InkoImports.parse(text).symbol(name) != null) continue
+            if (InkoOutline.of(text).roots.any { it.label == name }) continue
+            InkoImportEdits.add(document, from, name)
+        }
+        manager.commitDocument(document)
     }
 
     private fun newParameters(): List<InkoParameter> = change.parameters.map { parameter ->

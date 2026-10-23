@@ -74,6 +74,18 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertTrue(PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/main.inko"))!!.text.contains("rectangle(3, 2, 1) + rectangle(tall: rectangle(1, 1, 1), wide: 4, scale: 1)"))
     }
 
+    fun testIntroducedParametersStillCompile() {
+        putTempDirInProjectContent()
+        val util = "let pub LIMIT = 10\n\nfn pub clamp(value: Int) -> Int {\n  if value > LIMIT * 2 { LIMIT * 2 } else { value }\n}\n"
+        myFixture.addFileToProject("src/app/util.inko", util)
+        myFixture.addFileToProject("src/main.inko", "import app.util (clamp)\n\nfn total -> Int {\n  clamp(5) + clamp(value: 7)\n}\n")
+        val file = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/app/util.inko"))!!
+        val start = util.indexOf("LIMIT * 2")
+        val plan = InkoIntroduceParameter.plan(file, com.intellij.openapi.util.TextRange(start, start + "LIMIT * 2".length)).getOrThrow()
+        InkoIntroduceParameter.processor(project, plan, "limit", "Int", replaceAll = true).run()
+        assertCompiles()
+    }
+
     fun testQuickFixesUseTheCompilersDiagnostics() {
         open("src/app/util.inko", "import std.stdio (Stdout, Stderr)\n\nfn pub helper {\n  Stdout.new\n}\n")
         myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Remove unused import 'Stderr'" })

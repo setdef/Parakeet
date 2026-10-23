@@ -1,0 +1,223 @@
+package com.setdef.parakeet
+
+import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.options.ConfigurationException
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.TextRange
+import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
+import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.refactoring.IntroduceTargetChooser
+import com.intellij.refactoring.RefactoringActionHandler
+import com.intellij.refactoring.introduce.IntroduceTarget
+import com.intellij.refactoring.ui.RefactoringDialog
+import com.intellij.refactoring.util.CommonRefactoringUtil
+import com.intellij.ui.components.JBCheckBox
+import com.intellij.ui.components.JBTextField
+import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.panel
+import javax.swing.JComponent
+import com.setdef.parakeet.InkoDefinitionKind as Kind
+
+/**
+ * Introduce Parameter: an expression in a method becomes a new parameter, and
+ * every call passes that expression instead. Built on Change Signature.
+ */
+object InkoIntroduceParameter {
+    class Plan(
+        val method: InkoDeclaration,
+        val expression: TextRange,
+        /** Where the same expression appears in the method (including [expression]). */
+        val occurrences: List<TextRange>,
+        val name: String,
+        /** The parameter's type, when it can be worked out from the expression. */
+        val type: String?,
+        /** What callers in other modules must import to evaluate the expression: (module, name). */
+        val imports: List<Pair<String, String>>,
+        /** Of those, names private to this module, which other modules can't import. */
+        val privateNames: Set<String> = emptySet(),
+    ) {
+        fun expressionText(): String = method.containingFile.text.substring(expression.startOffset, expression.endOffset)
+    }
+
+    fun plan(file: PsiFile, expression: TextRange): Result<Plan> {
+        fun fail(message: String) = Result.failure<Plan>(IllegalStateException(message))
+        val text = file.text
+        val node = file.inkoOutline.enclosing(expression.startOffset).lastOrNull { it.kind == InkoOutline.Kind.METHOD }
+            ?: return fail("Only expressions inside a method can become parameters.")
+        val method = PsiTreeUtil.getParentOfType(file.findElementAt(node.nameOffset), InkoDeclaration::class.java, false)
+            ?: return fail("Only expressions inside a method can become parameters.")
+        InkoChangeSignature.unsupported(method)?.let { return fail(it) }
+        val signature = InkoSignatures.at(text, node.nameOffset) ?: return fail("`${method.name}`'s signature couldn't be read.")
+        if (expression.startOffset < signature.headerRange.endOffset) return fail("Select an expression in the method's body.")
+
+        val stream = InkoTokenStream(text)
+        val tokens = stream.tokens.filter { expression.contains(it.range) }
+        tokens.firstOrNull { it.isKeyword("self") }?.let { return fail("The expression uses `self`, which callers don't have.") }
+        tokens.firstOrNull { it.type == InkoTokens.FIELD }?.let { return fail("The expression uses `${it.text}`, which callers can't see.") }
+
+        val module = Inko.pathOf(file.virtualFile)?.let(Inko::moduleName)
+        val imports = InkoImports.parse(text)
+        val needed = mutableListOf<Pair<String, String>>()
+        val private = mutableSetOf<String>()
+        val names = PsiTreeUtil.findChildrenOfType(file, InkoName::class.java).filter { expression.contains(it.textRange) }
+        for (name in names) {
+            val context = InkoNameContext.of(name, imports)
+            if (context is InkoNameContext.Local) return fail("The expression uses `${name.text}`, a variable callers don't have.")
+            if (name.previousToken().isToken(InkoTokens.DOT)) continue
+            val resolved = InkoResolver.resolveDefinitions(name)
+            val definitions = resolved.map { it.first }
+            if (definitions.any { it.kind == Kind.INSTANCE_METHOD || it.kind == Kind.STATIC_METHOD }) {
+                return fail("The expression calls `${name.text}` on `self`, which callers don't have.")
+            }
+            // What callers need imported: an imported name the same way, or one defined in this module.
+            imports.symbol(name.text)?.let { (from, original) -> needed += from to original; continue }
+            val definition = definitions.firstOrNull { it.kind in setOf(Kind.TYPE, Kind.TRAIT, Kind.CONSTANT, Kind.MODULE_METHOD) } ?: continue
+            if (module != null && definition.module == module) {
+                needed += module to name.text
+                val site = resolved.first { it.first == definition }.second
+                if (!isPublic(site)) private += name.text
+            }
+        }
+
+        val occurrences = InkoIntroduceVariable.occurrences(stream, expression).ifEmpty { listOf(expression) }
+        val taken = signature.parameters.map { it.name }.toSet() +
+            InkoLocals.declarations(text).filter { node.range.contains(it.offset) }.map { it.name }
+        val suggested = InkoIntroduceVariable.suggestName(stream, expression)
+        val name = if (suggested !in taken) suggested else generateSequence(2) { it + 1 }.map { "$suggested$it" }.first { it !in taken }
+        return Result.success(Plan(method, expression, occurrences, name, inferType(tokens), needed.distinct(), private))
+    }
+
+    /** Whether the declaration named at [site] is `pub` (`let pub X`, `fn pub x`, `type pub X`). */
+    private fun isPublic(site: PsiElement): Boolean {
+        var token = site.previousToken()
+        while (token.isToken(InkoTokens.KEYWORD)) {
+            if (token!!.text == "pub") return true
+            token = token.previousToken()
+        }
+        return false
+    }
+
+    /** A type for an expression when it's obvious: a literal, or `Type(…)`/`Type.new(…)`. */
+    fun inferType(tokens: List<InkoToken>): String? {
+        val first = tokens.firstOrNull() ?: return null
+        if (tokens.size == 1) when {
+            first.type == InkoTokens.STRING -> return "String"
+            first.type == InkoTokens.NUMBER -> return if ('.' in first.text && !first.text.startsWith("0x")) "Float" else "Int"
+            first.isKeyword("true", "false") -> return "Bool"
+        }
+        if (tokens.size == 2 && first.isOperator("-") && tokens[1].type == InkoTokens.NUMBER) return inferType(tokens.drop(1))
+        if (first.type == InkoTokens.CONSTANT) {
+            val second = tokens.getOrNull(1)
+            // `Type(…)` as the whole expression, or `Type.new` / `Type.new(…)`.
+            if (second?.type == InkoTokens.LPAREN && tokens.last().type == InkoTokens.RPAREN && depthReturnsToZeroOnlyAtEnd(tokens.drop(1))) return first.text
+            if (second?.type == InkoTokens.DOT && tokens.getOrNull(2)?.text == "new" &&
+                (tokens.size == 3 || (tokens[3].type == InkoTokens.LPAREN && tokens.last().type == InkoTokens.RPAREN && depthReturnsToZeroOnlyAtEnd(tokens.drop(3))))) {
+                return first.text
+            }
+        }
+        return null
+    }
+
+    private fun depthReturnsToZeroOnlyAtEnd(tokens: List<InkoToken>): Boolean {
+        var depth = 0
+        tokens.forEachIndexed { index, token ->
+            if (token.opens) depth++ else if (token.closes) depth--
+            if (depth == 0 && index < tokens.size - 1) return false
+        }
+        return depth == 0
+    }
+
+    /** The refactoring for [plan]: append parameter [name] of [type], passed the expression by every call. */
+    fun processor(project: Project, plan: Plan, name: String, type: String, replaceAll: Boolean): InkoChangeSignatureProcessor {
+        val signature = InkoSignatures.at(plan.method.containingFile.text, plan.method.textRange.startOffset)!!
+        val change = InkoSignatureChange(
+            signature.name,
+            signature.parameters.mapIndexed { index, it -> InkoParameterChange(index, it.name, it.type) } +
+                InkoParameterChange(-1, name, type, plan.expressionText()),
+            signature.returnType,
+        )
+        return InkoChangeSignatureProcessor(
+            project, plan.method, change,
+            replacements = if (replaceAll) plan.occurrences else listOf(plan.expression),
+            replacement = name,
+            commandName = "Introduce Parameter",
+            imports = plan.imports,
+            privateImports = plan.privateNames,
+        )
+    }
+}
+
+/** Introduce Parameter (⌥⌘P / Ctrl+Alt+P). */
+class InkoIntroduceParameterHandler : RefactoringActionHandler {
+    override fun invoke(project: Project, editor: Editor, file: PsiFile, dataContext: DataContext?) {
+        val stream = InkoTokenStream(editor.document.immutableCharSequence)
+        val selection = editor.selectionModel
+        val candidates = if (selection.hasSelection()) {
+            listOfNotNull(InkoIntroduceVariable.selected(stream, TextRange(selection.selectionStart, selection.selectionEnd)))
+        } else {
+            InkoIntroduceVariable.candidatesAt(stream, editor.caretModel.offset)
+        }
+        when {
+            candidates.isEmpty() -> CommonRefactoringUtil.showErrorHint(project, editor, "Select an expression to turn into a parameter.", TITLE, null)
+            candidates.size == 1 -> introduce(project, editor, file, candidates.single())
+            else -> IntroduceTargetChooser.showIntroduceTargetChooser(
+                editor, candidates.map { ExpressionTarget(file, it) }, { introduce(project, editor, file, it.textRange) }, "Expressions", 0,
+            )
+        }
+    }
+
+    private fun introduce(project: Project, editor: Editor, file: PsiFile, expression: TextRange) {
+        val plan = InkoIntroduceParameter.plan(file, expression).getOrElse {
+            return CommonRefactoringUtil.showErrorHint(project, editor, it.message.orEmpty(), TITLE, null)
+        }
+        InkoIntroduceParameterDialog(project, plan).show()
+    }
+
+    override fun invoke(project: Project, elements: Array<out PsiElement>, dataContext: DataContext?) {}
+
+    private class ExpressionTarget(private val file: PsiFile, private val range: TextRange) : IntroduceTarget {
+        override fun getTextRange(): TextRange = range
+        override fun getPlace(): PsiElement? = file.findElementAt(range.startOffset)
+        override fun render(): String = file.text.substring(range.startOffset, range.endOffset).replace(Regex("\\s+"), " ")
+        override fun isValid(): Boolean = file.isValid
+    }
+
+    private companion object {
+        const val TITLE = "Introduce Parameter"
+    }
+}
+
+/** The new parameter's name and type, and whether to replace every occurrence. */
+class InkoIntroduceParameterDialog(project: Project, private val plan: InkoIntroduceParameter.Plan) : RefactoringDialog(project, true) {
+    private val nameField = JBTextField(plan.name)
+    private val typeField = JBTextField(plan.type.orEmpty())
+    private val replaceAll = JBCheckBox("Replace all ${plan.occurrences.size} occurrences in `${plan.method.name}`", true)
+
+    init {
+        title = "Introduce Parameter"
+        init()
+    }
+
+    override fun createCenterPanel(): JComponent = panel {
+        row("Name:") { cell(nameField).align(AlignX.FILL) }
+        row("Type:") {
+            cell(typeField).align(AlignX.FILL).comment(if (plan.type == null) "Inko needs a type for every parameter, and this one couldn't be worked out." else "")
+        }
+        if (plan.occurrences.size > 1) row { cell(replaceAll) }
+        row { comment("Every call to `${plan.method.name}` passes <code>${plan.expressionText().replace("<", "&lt;")}</code>.") }
+    }
+
+    override fun getPreferredFocusedComponent(): JComponent = if (plan.type == null) typeField else nameField
+
+    override fun canRun() {
+        val name = nameField.text.trim()
+        if (!Regex("[a-z_][A-Za-z0-9_]*").matches(name) || name in InkoTokens.KEYWORDS) throw ConfigurationException("`$name` isn't a valid parameter name.")
+        if (typeField.text.isBlank()) throw ConfigurationException("Enter the parameter's type.")
+    }
+
+    override fun doAction() {
+        invokeRefactoring(InkoIntroduceParameter.processor(project, plan, nameField.text.trim(), typeField.text.trim(), replaceAll.isSelected))
+    }
+}

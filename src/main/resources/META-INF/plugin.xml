@@ -129,6 +129,7 @@
         <typeHierarchyProvider language="Inko" implementationClass="com.setdef.parakeet.InkoTypeHierarchyProvider"/>
         <moveFileHandler implementation="com.setdef.parakeet.InkoMoveFileHandler"/>
         <copyPastePostProcessor implementation="com.setdef.parakeet.InkoPasteImportsProcessor"/>
+        <codeInsight.typeInfo language="Inko" implementationClass="com.setdef.parakeet.InkoExpressionTypeProvider"/>
         <statementUpDownMover implementation="com.setdef.parakeet.InkoStatementMover"/>
         <lang.smartEnterProcessor language="Inko" implementationClass="com.setdef.parakeet.InkoSmartEnterProcessor"/>
         <callHierarchyProvider language="Inko" implementationClass="com.setdef.parakeet.InkoCallHierarchyProvider"/>

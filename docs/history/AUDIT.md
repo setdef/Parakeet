@@ -328,6 +328,12 @@ Compiles. Consequences:
 
 ### 1.7 `type ref` types disappear, and their methods become module functions (Medium)
 
+**Status: confirmed and fixed in <commit:1.7>.** `InkoRefTypeTest` failed
+before the fix (all 3 tests). The outline now skips exactly the modifiers
+Inko's `define_type` allows (`pub`, `inline`/`copy`/`ref`,
+`async`/`enum`/`builtin`/`extern`), so a `ref` type is a type and its
+methods are its own. `let` has its own modifier set (`pub`, `mut`).
+
 **What Parakeet assumes.** After `type`, the outline skips modifiers from a
 set that doesn't include `ref` (`P/InkoOutline.kt:49` and
 `P/InkoOutline.kt:98-101`). So the name isn't found, no type node is opened,
@@ -651,7 +657,7 @@ up `\u{…}` escapes.
   a binding (`P/InkoLocals.kt:124-128`), because only the name after the dot
   is excluded.
 - **`noinline` and keyword method names** (see 1.4), and **`type ref`**
-  (see 1.7). *Status: the first half was fixed with 1.4, in <commit:1.4>.*
+  (see 1.7). *Status: fixed with 1.4 (<commit:1.4>) and 1.7 (<commit:1.7>).*
 - **Field signatures from `inko doc` include `mut`.** The format is
   `let pub mut @x: T` (`compiler/src/docs.rs:626`). `InkoCalls.parameters`
   strips `let ` and `pub ` but not `mut ` (`P/InkoParameterInfo.kt:49`). So

@@ -46,7 +46,12 @@ class InkoOutline private constructor(val roots: List<Node>) {
     }
 
     companion object {
-        private val MODIFIERS = setOf("pub", "async", "inline", "enum", "builtin", "copy", "extern", "static", "move", "mut")
+        // `type [pub] [inline|copy|ref] [async|enum|builtin|extern] Name` (ast/src/parser.rs, define_type);
+        // `trait [pub] Name`.
+        private val TYPE_MODIFIERS = setOf("pub", "inline", "copy", "ref", "async", "enum", "builtin", "extern")
+
+        // `let [pub] [mut] NAME`.
+        private val LET_MODIFIERS = setOf("pub", "mut")
 
         private class Token(val type: com.intellij.psi.tree.IElementType, val text: String, val start: Int, val end: Int)
 
@@ -97,7 +102,7 @@ class InkoOutline private constructor(val roots: List<Node>) {
                     inFunctionBody || token.type != InkoTokens.KEYWORD -> i++
                     token.text == "type" || token.text == "trait" -> {
                         var j = i + 1
-                        while (j < tokens.size && tokens[j].type == InkoTokens.KEYWORD && tokens[j].text in MODIFIERS) j++
+                        while (j < tokens.size && tokens[j].type == InkoTokens.KEYWORD && tokens[j].text in TYPE_MODIFIERS) j++
                         val name = tokens.getOrNull(j)?.takeIf { it.type == InkoTokens.CONSTANT }
                         i = if (name == null) j else open(Node(if (token.text == "type") Kind.TYPE else Kind.TRAIT, name.text, name.start, token.start), j + 1)
                     }
@@ -128,7 +133,7 @@ class InkoOutline private constructor(val roots: List<Node>) {
                     }
                     token.text == "let" -> {
                         var j = i + 1
-                        while (j < tokens.size && tokens[j].type == InkoTokens.KEYWORD && tokens[j].text in MODIFIERS) j++
+                        while (j < tokens.size && tokens[j].type == InkoTokens.KEYWORD && tokens[j].text in LET_MODIFIERS) j++
                         val name = tokens.getOrNull(j)
                         val inType = open.lastOrNull()?.first?.kind == Kind.TYPE
                         when {

@@ -60,7 +60,12 @@ class InkoDocumentationTarget(private val element: PsiElement, private val defin
 
     override fun computeDocumentationHint(): String = header()
 
-    override fun computeDocumentation(): DocumentationResult = DocumentationResult.documentation(html())
+    // ⇧F1 (External Documentation) opens standard library definitions on docs.inko-lang.org, for the project's Inko.
+    override fun computeDocumentation(): DocumentationResult {
+        val documentation = DocumentationResult.documentation(html())
+        val url = InkoStdDocs.url(definition, InkoCli.getInstance(element.project).version()) ?: return documentation
+        return documentation.externalUrl(url)
+    }
 
     fun html(): String = buildString {
         append(header())
@@ -93,3 +98,18 @@ val InkoDefinition.icon: Icon
         Kind.CONSTRUCTOR -> AllIcons.Nodes.Enum
         Kind.FIELD -> AllIcons.Nodes.Field
     }
+
+/** Where idoc publishes the standard library's documentation (see idoc's module_name.inko and page/search.inko). */
+object InkoStdDocs {
+    fun url(definition: InkoDefinition, version: String?): String? {
+        if (definition.module != "std" && !definition.module.startsWith("std.")) return null
+        val module = "https://docs.inko-lang.org/std/${version?.let { "v$it" } ?: "latest"}/module/${definition.module.replace('.', '/')}/"
+        return when (definition.kind) {
+            Kind.MODULE -> module
+            Kind.TYPE, Kind.TRAIT, Kind.CONSTANT, Kind.MODULE_METHOD -> "$module${definition.name}/"
+            Kind.INSTANCE_METHOD, Kind.STATIC_METHOD -> definition.owner?.let { "$module$it/#method.${definition.name}" }
+            Kind.FIELD -> definition.owner?.let { "$module$it/#field.${definition.name}" }
+            Kind.CONSTRUCTOR -> definition.owner?.let { "$module$it/#constructor.${definition.name}" }
+        }
+    }
+}

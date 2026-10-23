@@ -155,6 +155,34 @@ class InkoTokenStream(val text: CharSequence) {
         return result
     }
 
+    /**
+     * Whether the `if` at [index] starts an `if` expression. In Inko's grammar
+     * (ast/src/parser.rs) an `if` is also a match arm's guard
+     * (`optional_match_guard`), an impl's bounds (`optional_type_bounds`), and
+     * an import's build tags (`build_tags`): those follow a `case`, `impl`, or
+     * `import` in the same statement.
+     */
+    fun startsIfExpression(index: Int): Boolean {
+        if (tokens.getOrNull(index)?.isKeyword("if") != true) return false
+        var i = index - 1
+        while (i >= 0) {
+            val token = tokens[i]
+            when {
+                token.isKeyword("case", "impl", "import") -> return false
+                // A statement or expression starts before here: after a line that doesn't continue, an opening
+                // bracket we're inside, an assignment, a match arm's `->`, or a keyword that takes an expression.
+                lineBreakBetween(i, i + 1) && !continues(i + 1) -> return true
+                token.opens -> return true
+                token.closes -> { i = match(i).let { if (it < 0) return true else it - 1 }; continue }
+                token.isOperator("=") || token.type == InkoTokens.COMMA -> return true
+                token.isOperator(">") && tokens.getOrNull(i - 1)?.let { it.isOperator("-") && it.end == token.start } == true -> return true
+                token.isKeyword("else", "return", "throw", "let", "and", "or", "try", "recover") -> return true
+            }
+            i--
+        }
+        return true
+    }
+
     /** Whether the line starting at token [index] continues the previous line's statement. */
     fun continues(index: Int): Boolean {
         val previous = tokens[index - 1]

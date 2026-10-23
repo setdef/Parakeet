@@ -104,6 +104,8 @@ object InkoUnwraps {
             }
             if (token.type == InkoTokens.LBRACE || token.type == InkoTokens.COMMA || token.type == InkoTokens.LPAREN || token.type == InkoTokens.LBRACKET) return null
             if (token.type == InkoTokens.KEYWORD) {
+                // A match guard's or an impl's `if` doesn't make the block an `if`'s.
+                if (token.text == "if" && !stream.startsIfExpression(i)) return null
                 if (token.text in CONSTRUCTS) return token
                 if (token.text in setOf("fn", "type", "trait", "impl", "let", "match", "case", "return")) return null
             }

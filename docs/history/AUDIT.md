@@ -450,6 +450,13 @@ missing. That contradicts what the README promises.
 
 ### 1.11 Unwrap/Remove treats match guards and conditional impls as `if` statements (Low–Medium)
 
+**Status: confirmed and fixed in <commit:1.11>.** `InkoIfKindsTest` failed
+before the fix (its 3 Unwrap tests). `InkoTokenStream.startsIfExpression`
+now tells an `if` expression from a match guard, an impl's bounds, and an
+import's build tags (an `if` after `case`, `impl`, or `import` in the same
+statement), and Unwrap only offers `if` blocks that are `if` expressions.
+1.12 uses the same check.
+
 **What Parakeet assumes.** `governingKeyword` walks back from a `{` to the
 nearest keyword in `CONSTRUCTS`, which includes `if`
 (`P/InkoUnwrap.kt:56` and `P/InkoUnwrap.kt:93-115`).

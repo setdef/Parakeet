@@ -51,6 +51,9 @@ class InkoSymbols(definitions: List<InkoDefinition>) {
 
     val names: Set<String> get() = byName.keys
 
+    /** Every definition of [kind] (e.g. every trait). */
+    fun ofKind(kind: InkoDefinitionKind): List<InkoDefinition> = byName.values.flatten().filter { it.kind == kind }
+
     fun named(name: String, vararg kinds: InkoDefinitionKind): List<InkoDefinition> =
         byName[name].orEmpty().filter { kinds.isEmpty() || it.kind in kinds }
 

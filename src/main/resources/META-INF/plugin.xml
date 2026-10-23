@@ -97,6 +97,8 @@
         <moveFileHandler implementation="com.setdef.parakeet.InkoMoveFileHandler"/>
         <statementUpDownMover implementation="com.setdef.parakeet.InkoStatementMover"/>
         <lang.smartEnterProcessor language="Inko" implementationClass="com.setdef.parakeet.InkoSmartEnterProcessor"/>
+        <callHierarchyProvider language="Inko" implementationClass="com.setdef.parakeet.InkoCallHierarchyProvider"/>
+        <codeInsight.daemonBoundCodeVisionProvider implementation="com.setdef.parakeet.InkoUsagesCodeVisionProvider"/>
         <lang.findUsagesProvider language="Inko" implementationClass="com.setdef.parakeet.InkoFindUsagesProvider"/>
         <referencesSearch implementation="com.setdef.parakeet.InkoModuleReferencesSearcher"/>
         <usageTypeProvider implementation="com.setdef.parakeet.InkoUsageTypeProvider"/>

@@ -21,6 +21,14 @@ class InkoReference(element: InkoName) :
     // A renamed module file (`util.inko`) renames the module in import paths (`util`).
     override fun handleElementRename(newElementName: String): PsiElement =
         element.rename(newElementName.removeSuffix(".${Inko.EXTENSION}"))
+
+    // A moved module file changes its module path: an import names it anew; `util.helper` (by its last name) stays.
+    override fun bindToElement(target: PsiElement): PsiElement {
+        val file = target as? InkoFile ?: return element
+        val module = Inko.pathOf(file.virtualFile)?.let(Inko::moduleName) ?: return element
+        InkoModuleImports.rewrite(element, module)
+        return element
+    }
 }
 
 /**

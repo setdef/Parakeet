@@ -6,6 +6,7 @@ import java.nio.file.Path
 /** Implement Methods (⌃I), Override Methods (⌃O), and the quick fix, with inko doc and inko check supplied by a fake. */
 class InkoImplementMethodsTest : InkoTestCase(onDisk = true) {
     private var reportMissing = false
+    private var reportMissingTrait = false
 
     override fun setUp() {
         super.setUp()
@@ -30,6 +31,12 @@ class InkoImplementMethodsTest : InkoTestCase(onDisk = true) {
         }
         useFakeInko(FakeInkoCli { call ->
             if (call.args.first() != "check") return@FakeInkoCli doc.run(call.args, call.workingDirectory)!!
+            if (reportMissingTrait) {
+                // Like the compiler: an impl of a trait requiring Show[Int], which Thing lacks.
+                val copy = Path.of(call.args.last())
+                val line = Files.readAllLines(copy).indexOfFirst { it.startsWith("impl Walk") } + 1
+                return@FakeInkoCli FakeInkoCli.ok(stderr = """[{"id": "missing-trait", "level": "error", "file": "$copy", "lines": [$line, ${line + 1}], "columns": [1, 1], "message": "the trait 'Show[Int]' isn't implemented for type 'Thing'"}]""")
+            }
             if (!reportMissing) return@FakeInkoCli FakeInkoCli.ok(stderr = "[]")
             // Like the compiler: an error at the impl for each missing method.
             val copy = Path.of(call.args.last())
@@ -89,6 +96,20 @@ class InkoImplementMethodsTest : InkoTestCase(onDisk = true) {
         myFixture.doHighlighting()
         myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Implement missing methods" })
         assertTrue(myFixture.editor.document.text, "fn pub show(value: Int) -> String {\n    panic('not implemented')" in myFixture.editor.document.text)
+    }
+
+    fun testQuickFixForAMissingRequiredTrait() {
+        reportMissingTrait = true
+        val text = header + "trait Walk {}\n\nimpl Walk for Thing {\n}\n"
+        myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/main.inko", text).virtualFile)
+        myFixture.doHighlighting()
+        myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Implement 'Show[Int]' for 'Thing'" })
+        assertEquals(
+            text + "\nimpl Show[Int] for Thing {\n" +
+                "  fn pub show(value: Int) -> String {\n    panic('not implemented')\n  }\n\n" +
+                "  fn pub name -> String {\n    panic('not implemented')\n  }\n}\n",
+            myFixture.editor.document.text,
+        )
     }
 
     fun testRequiredMethodsFromUnsavedSource() {

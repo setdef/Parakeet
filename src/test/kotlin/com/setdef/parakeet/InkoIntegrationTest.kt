@@ -52,6 +52,22 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         myFixture.checkResult("import std.stdio (Stdout)\n\nfn pub helper {\n  Stdout.new\n}\n")
     }
 
+    fun testQuickFixesForMissingFieldsAndUnreachableCode() {
+        open("src/app/util.inko", "type pub Point {\n  let @x: Int\n  let @y: Int\n}\n\nfn pub point -> Point {\n  Point(x: 1)\n}\n")
+        myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Add field 'y'" })
+        myFixture.checkResult("type pub Point {\n  let @x: Int\n  let @y: Int\n}\n\nfn pub point -> Point {\n  Point(x: 1, y: <caret>)\n}\n")
+
+        open("src/app/early.inko", "fn pub early -> Int {\n  return 1\n  let a = 2\n  a + 3\n}\n")
+        myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Remove unreachable code" })
+        myFixture.checkResult("fn pub early -> Int {\n  return 1\n}\n")
+    }
+
+    fun testImplementsTheCompilersMissingMethods() {
+        open("src/app/shape.inko", "trait pub Shape {\n  fn pub area -> Int\n}\n\ntype pub Box {}\n\nimpl Shape for Box {}\n")
+        myFixture.launchAction(myFixture.getAllQuickFixes().first { it.text == "Implement missing methods" })
+        assertTrue(myFixture.editor.document.text, "  fn pub area -> Int {\n    panic('not implemented')\n  }" in myFixture.editor.document.text)
+    }
+
     fun testOptimizeImportsRemovesUnusedAndSorts() {
         open("src/app/util.inko", "import std.stdio (Stdout, Stderr)\nimport std.fmt (Format)\nimport std.array (Array)\n\nfn pub helper -> Array[Int] {\n  Stdout.new\n  []\n}\n")
         val runnable = InkoImportOptimizer().processFile(myFixture.file)

@@ -63,4 +63,27 @@ class InkoQuickFixesTest : InkoTestCase(onDisk = true) {
         )
         myFixture.checkResult("fn a {\n  let _ = Stdout.new.print('x')\n}\n")
     }
+
+    // Ranges and messages as the real compiler reports them (see InkoIntegrationTest).
+    fun testAddsAMissingField() {
+        fix("fn main {\n  let p = Point(x: 1)\n}\n", "Add field 'y'", Triple("missing-field", "Point(x: 1)", "the field 'y' must be assigned a value"))
+        myFixture.checkResult("fn main {\n  let p = Point(x: 1, y: <caret>)\n}\n")
+    }
+
+    fun testAddsAMissingFieldToEmptyParentheses() {
+        fix("fn main {\n  let p = Point()\n}\n", "Add field 'x'", Triple("missing-field", "Point()", "the field 'x' must be assigned a value"))
+        myFixture.checkResult("fn main {\n  let p = Point(x: <caret>)\n}\n")
+    }
+
+    fun testRemovesEverythingAfterAReturn() {
+        // The compiler flags only the first unreachable statement.
+        fix("fn early -> Int {\n  return 1\n  let a = 2\n  a + 3\n}\n", "Remove unreachable code", Triple("unreachable", "let a = 2", "this code is unreachable"))
+        myFixture.checkResult("fn early -> Int {\n  return 1\n}\n")
+    }
+
+    fun testRemovesAnUnreachableMatchArm() {
+        val text = "fn pick(value: Option[Int]) -> Int {\n  match value {\n    case _ -> 0\n    case Some(v) -> v\n  }\n}\n"
+        fix(text, "Remove unreachable code", Triple("unreachable", "case Some(v) -> v", "this code is unreachable"))
+        myFixture.checkResult("fn pick(value: Option[Int]) -> Int {\n  match value {\n    case _ -> 0\n  }\n}\n")
+    }
 }

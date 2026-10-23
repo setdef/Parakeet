@@ -49,7 +49,10 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   turn on *Settings → Tools → Actions on Save → Reformat code*.
 - **Go to definition** (⌘-click / Ctrl-click, ⌘B / Ctrl+B) for types, traits,
   constants, functions, methods, fields, modules, and local variables and
-  parameters, including the standard library and dependencies
+  parameters, including the standard library and dependencies. With
+  [Cuttlebone](#cuttlebone-optional), a method call goes to the method the
+  compiler calls.
+- **Go to Type Declaration** (⇧⌘B / Ctrl+Shift+B), with Cuttlebone
 - **Find Usages** (⌥F7 / Alt+F7) and **Rename** (⇧F6 / Shift+F6) across the
   project, including renaming a module's file; calls on values of unknown type
   are shown as possible usages
@@ -65,13 +68,15 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Generate** (⌘N / Alt+Insert) in a type: a **Constructor** (`fn static new`
   from every field) and **Implement Trait** (an `impl` for a chosen trait, with
   its required methods stubbed and the trait imported)
-- **Expression Type** (⌃⇧P / Ctrl+Shift+P), for types the code states; others
-  are shown as unknown rather than guessed
+- **Expression Type** (⌃⇧P / Ctrl+Shift+P): the compiler's type with
+  Cuttlebone, and otherwise types the code states; others are shown as
+  unknown rather than guessed
 - **Go to Test** (⌘⇧T / Ctrl+Shift+T) between `src/app/util.inko` and
   `test/app/test_util.inko`, and Create Test
 - **Quick documentation** (F1, or hover): a definition's signature, where
-  it's defined, and its doc comment; ⇧F1 opens standard library definitions
-  on docs.inko-lang.org
+  it's defined, and its doc comment, and with Cuttlebone the type at the
+  caret ("Type here"); ⇧F1 opens standard library definitions on
+  docs.inko-lang.org
 - **Go to Class / Go to Symbol** (⌘O / ⌥⌘O) and Search Everywhere for Inko
   types, traits, methods, and constants
 - **Structure view**, breadcrumbs, and sticky lines for each file's
@@ -104,7 +109,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   sync, update, add, and remove dependencies, and a Sync button when
   `inko.pkg` changes
 - **Completion** for keywords, local variables, names in scope, imports,
-  members after `.` (narrowed to the receiver's type when it's known), and
+  members after `.` (the compiler's list with Cuttlebone, else narrowed to
+  the receiver's type when it's known), and
   fields after `@`, plus names from modules that aren't imported yet, adding
   the import when you choose one
 - **Imports on paste**: pasting Inko code into another module adds the imports
@@ -148,12 +154,21 @@ compiler, so it always agrees with your installed Inko version.
   so files you've edited since (saved or not) are read from source, and when
   the project doesn't compile, the standard library and dependencies are still
   documented while your own files are read from source.
-- **Types aren't inferred.** A method call like `x.to_string` narrows to `x`'s
-  type when it's written or obvious (`x: Foo`, `let x = Foo.new`, `self`), and
-  otherwise offers every `to_string` it can't rule out, preferring types
-  mentioned in the file. Parameter-name hints only appear when exactly one
-  parameter list fits. Local variables and parameters are found from the
-  file's own tokens.
+- **Cuttlebone**, when it's installed, answers with the compiler's own types
+  and definitions; see [Cuttlebone](#cuttlebone-optional) for which features
+  ask it. Each question has a time budget (0.4 s for resolving a name, 1.5 s
+  for completion, documentation and Expression Type, 2 s for all of a file's
+  parameter hints together), and answers are kept until the code changes.
+  Highlighting never waits for it. Without a fresh answer (no Cuttlebone, a
+  file that doesn't parse, a declaration with an error, a timeout), Parakeet
+  falls back to its own reading of the code, below.
+- **Without Cuttlebone, types aren't inferred.** A method call like
+  `x.to_string` narrows to `x`'s type when it's written or obvious (`x: Foo`,
+  `let x = Foo.new`, `self`), and otherwise offers every `to_string` it can't
+  rule out, preferring types mentioned in the file. Parameter-name hints only
+  appear when exactly one parameter list fits. Local variables and parameters
+  are found from the file's own tokens. The same happens with Cuttlebone
+  whenever it has no answer, which includes any file with a syntax error.
 - **Find Usages and Rename** search the IDE's word index for each name, then
   keep the occurrences that resolve to the declaration. A method call whose
   receiver type isn't known resolves to every candidate, so it's listed as a
@@ -211,8 +226,10 @@ compiler, so it always agrees with your installed Inko version.
   to literals (so the value is the same each time it's read), and argument
   names are only removed when each named argument is in its parameter's
   position, since Inko accepts named arguments in any order.
-- **Expression Type and "Specify type explicitly"** only use types the code
-  states: literals, annotations, constructors, `self`, fields, comparisons,
+- **Expression Type** uses Cuttlebone's type when hover's range is exactly
+  the chosen expression. Otherwise, it and **"Specify type explicitly"** (which
+  writes the type into the code, so never uses Cuttlebone's) only use types
+  the code states: literals, annotations, constructors, `self`, fields, comparisons,
   casts, and signatures' return types. A method's type is only trusted when its
   receiver's type is known, and return types using type parameters aren't
   filled in.
@@ -228,12 +245,15 @@ compiler, so it always agrees with your installed Inko version.
 
 ## Requirements
 
-- A JetBrains IDE, version 2025.2 or newer
+- A JetBrains IDE, version 2025.3 or newer
 - The bundled **TextMate Bundles** plugin enabled (it is by default)
 - The `inko` executable. By default the plugin uses `inko` on `PATH`, then
   [ivm](https://github.com/inko-lang/ivm)'s default version. To pick an
   ivm-installed version or another executable for a project, use
   *Settings → Languages & Frameworks → Inko*.
+
+- Optionally, [Cuttlebone](#cuttlebone-optional), for the compiler's types
+  and definitions
 
 ## Installing
 
@@ -255,6 +275,47 @@ Plugins → ⚙️ → Install Plugin from Disk…* (without automatic updates).
 local build, run `./gradlew buildPlugin` and install
 `build/distributions/parakeet-<version>.zip` the same way.
 
+## Cuttlebone (optional)
+
+Cuttlebone is a language server for Inko that type checks with Inko's own
+compiler. Parakeet works without it, guessing types from the code; with it,
+Parakeet asks it first.
+
+### Setting it up
+
+1. Build and install Cuttlebone following its README (it needs Rust and
+   LLVM 18), so that `cuttlebone` is on your `PATH` (Parakeet also checks Cargo's `bin`
+   directory, where `cargo install` puts it).
+2. Use the Inko version Cuttlebone links: `cuttlebone --version` prints it
+   (e.g. `cuttlebone 0.1.0 (Inko 0.21.1)`), and it refuses other versions.
+   The project's toolchain is in *Settings → Languages & Frameworks → Inko*.
+3. Open an Inko file. Parakeet starts one `cuttlebone` per project, through
+   IntelliJ's own LSP support, and stops it when the project closes.
+
+To use another executable, set *Settings → Languages & Frameworks → Inko →
+Cuttlebone → Executable*. The same page says whether Cuttlebone is running,
+and if not, why: not found, a different Inko version, or stopped after
+crashing. Parakeet says so there (and in `idea.log`) and nowhere else: no
+popups. It restarts a crashed Cuttlebone up to 5 times in a row, waiting
+1, 2, 4, 8 and 16 s, and IntelliJ's language services widget in the status
+bar can restart it by hand.
+
+### What asks Cuttlebone
+
+| Feature | With a fresh answer | Without one |
+|---|---|---|
+| Go to definition, and everything built on references (Find Usages, Rename, Call Hierarchy, inspections, …) | `textDocument/definition`: the declaration the compiler resolves | Parakeet's guess |
+| Completion after `.` | `textDocument/completion` on the real buffer | Parakeet's guess |
+| Parameter info and parameter-name hints | the method the call resolves to | Parakeet's guess |
+| Quick documentation | the resolved definition, plus hover's type at the caret | the definition Parakeet resolves |
+| Expression Type | hover's type, when its range is the expression | the types the code states |
+| Go to Type Declaration | `textDocument/typeDefinition`, through IntelliJ's LSP support | not available |
+
+Errors and warnings still come from `inko check`, since Cuttlebone doesn't
+report diagnostics. Cuttlebone answers from each open file's unsaved text,
+and from saved text for the rest. In code that doesn't parse, or has an error
+in a declaration, it has no answer, and Parakeet guesses.
+
 ## Development
 
 Tools are managed with [mise](https://mise.jdx.dev) (`mise install`).
@@ -262,11 +323,11 @@ Tools are managed with [mise](https://mise.jdx.dev) (`mise install`).
 | Command | What it does |
 |---|---|
 | `./gradlew runIde` | Launch a sandbox IDE with the plugin loaded |
-| `./gradlew test` | Run all headless IDE tests, including integration tests against your installed `inko` |
-| `./gradlew test -PunitOnly` | Run only the unit tests, which use a fake `inko` and need nothing installed |
+| `./gradlew test` | Run all headless IDE tests, including integration tests against your installed `inko` and `cuttlebone` (`-PnoCuttlebone` skips the latter) |
+| `./gradlew test -PunitOnly` | Run only the unit tests, which use a fake `inko` and a fake Cuttlebone and need nothing installed |
 | `./gradlew verifyPlugin` | Check compatibility with the oldest and newest supported IDEs |
 | `./gradlew buildPlugin` | Build the installable zip |
-| `scripts/check.sh [--full]` | Every check a commit must pass (`--full` adds the Plugin Verifier); see AGENTS.md |
+| `scripts/check.sh [--full]` | Every check a commit must pass (`--full` adds the Plugin Verifier); see AGENTS.md. Cuttlebone's integration tests use `$CUTTLEBONE` or `cuttlebone` on PATH, and are skipped (with a message) without one; `--full` requires it |
 | `scripts/install-hooks.sh` | Run `scripts/check.sh` on what's staged before each commit |
 
 The files in `bundles/inko/` are copied unchanged from inko-lang/vscode
@@ -286,7 +347,8 @@ GitHub Actions runs [`build.yml`](.github/workflows/build.yml) on every push to
 - **Integration tests** on Linux and macOS, each against the newest Inko release
   and the oldest supported one (0.20.0), installed with ivm by
   [`ci/install-inko.sh`](ci/install-inko.sh). ivm builds Inko from source, so
-  installed versions are cached.
+  installed versions are cached. Cuttlebone isn't installed there, so its
+  integration tests only run locally (`scripts/check.sh`).
 
 Dependabot proposes weekly updates to Gradle dependencies and GitHub Actions.
 
@@ -332,6 +394,7 @@ Audits and session reports, oldest first:
 - [Audit against Inko v0.21.1](docs/history/AUDIT.md)
 - [Guardrails, and trusting the compiler's output](docs/history/SESSION-guardrails-and-compiler-output.md)
 - [Fixing the rest of the audit](docs/history/SESSION-audit-fixes.md)
+- [Connecting to Cuttlebone](docs/history/SESSION-cuttlebone-integration.md)
 
 ## Icon
 

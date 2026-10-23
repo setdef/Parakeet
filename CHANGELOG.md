@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Cuttlebone**, a language server for Inko, gives the compiler's own answers where Parakeet guessed. With `cuttlebone` installed (on PATH, or set in *Settings → Languages & Frameworks → Inko*), Parakeet starts it per project through IntelliJ's LSP support and asks it first: a method call like `x.size` resolves to the method the compiler calls (for go to definition, the documentation popup, parameter info and hints, Find Usages and everything else built on references), member completion after `.` lists exactly the receiver's members, the documentation popup shows the type at the caret ("Type here"), and Expression Type shows types the code doesn't state. When Cuttlebone has no answer (code that doesn't parse, say), Parakeet guesses as before. Without Cuttlebone, nothing changes.
+- **Go to Type Declaration** (⇧⌘B / Ctrl+Shift+B), from IntelliJ's LSP support, when Cuttlebone is installed.
+
+### Changed
+
+- Requires IntelliJ 2025.3 or newer (the first with the LSP API in every IDE).
+
 ## [0.11.0] - 2026-10-23
 
 ### Added

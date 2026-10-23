@@ -30,6 +30,7 @@
             <li>Live templates, postfix completion, TODO highlighting, and spell checking</li>
             <li>Run and test from the gutter, with run configurations for <code>inko run</code>, <code>test</code>, <code>build</code>, and <code>check</code>, with release builds, other targets, and static linking, and a test runner that reruns failed tests</li>
             <li>New Project wizard using <code>inko init</code></li>
+            <li>Optionally, the compiler's own types and definitions from Cuttlebone, a language server for Inko: go to definition, completion after <code>.</code>, parameter info and hints, the type at the caret in quick documentation and Expression Type, and Go to Type Declaration</li>
             <li>Per-project toolchain: <code>inko</code> on PATH, ivm's default, or any ivm-installed version, with banners when Inko is missing or older than <code>inko.pkg</code> requires</li>
         </ul>
         <p>Requires the <code>inko</code> executable, found on <code>PATH</code>, in ivm's install

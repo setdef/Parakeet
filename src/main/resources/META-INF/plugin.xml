@@ -15,11 +15,15 @@
             <li>Find Usages and Rename across the project, and highlight usages</li>
             <li>Parameter info, parameter-name hints, and trait gutter icons</li>
             <li>Optimize Imports, removing unused imports and sorting the rest</li>
+            <li>Introduce and Inline Variable, Safe Delete, and moving files with their imports updated</li>
+            <li>Type and Call Hierarchies, and usage counts</li>
+            <li>Surround With, Move Statement, and Complete Current Statement</li>
+            <li>New Inko File templates, and standard library docs on docs.inko-lang.org (Shift+F1)</li>
             <li>The standard library and dependencies under External Libraries</li>
             <li><code>inko.pkg</code> highlighting and errors, and syncing, updating, adding, and removing dependencies</li>
             <li>Structure view, breadcrumbs, and code folding</li>
             <li>Live templates, TODO highlighting, and spell checking</li>
-            <li>Run and test from the gutter, with run configurations for <code>inko run</code>, <code>test</code>, <code>build</code>, and <code>check</code>, and a test runner that reruns failed tests</li>
+            <li>Run and test from the gutter, with run configurations for <code>inko run</code>, <code>test</code>, <code>build</code>, and <code>check</code>, with release builds, other targets, and static linking, and a test runner that reruns failed tests</li>
             <li>New Project wizard using <code>inko init</code></li>
             <li>Per-project toolchain: <code>inko</code> on PATH, ivm's default, or any ivm-installed version, with banners when Inko is missing or older than <code>inko.pkg</code> requires</li>
         </ul>

@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-22
+
+### Added
+
+- Introduce Variable (⌥⌘V / Ctrl+Alt+V): puts a selected expression, or one of the chains at the caret (`foo`, `foo.bar(1)`, `foo.bar(1).baz`), in a `let`, optionally replacing its other uses in the method, named in Inko's style and renamed in place.
+- Inline Variable (⌥⌘N / Ctrl+Alt+N), following Inko's syntax: the value is parenthesized where its operators would otherwise change meaning (Inko's binary operators share one precedence, and `and`/`or` bind tighter). Patterns, `let … else`, `let _`, and reassigned variables aren't inlined, and inlining a variable used more than once asks first.
+- Type Hierarchy (⌃H / Ctrl+H): a type's traits, and a trait's required traits, requiring traits, and implementing types.
+- Moving an Inko file or directory updates the imports of the modules it moves, and warns when a module would leave `src/` and `test/`.
+- Surround With (⌥⌘T / Ctrl+Alt+T): `if`, `if`/`else`, `if !`, `while`, `loop`, `for … in`, `match`, a closure, `recover`, a block, or parentheses.
+- Move Statement Up/Down (⇧⌘↑/↓ / Ctrl+Shift+↑/↓), moving whole statements, blocks, and declarations (with their comments) within their block.
+- Complete Current Statement (⇧⌘⏎ / Ctrl+Shift+Enter): closes brackets and adds a body after `if`, `while`, `fn`, `type`, and the like.
+- Safe Delete (⌘⌫ / Alt+Delete): warns about usages, then deletes the whole declaration with its comments.
+- Call Hierarchy (⌃⌥H / Ctrl+Alt+H): a method's callers and callees.
+- "N usages" above declarations, in the IDE's shared Usages code vision.
+- External Documentation (⇧F1) opens standard library definitions on docs.inko-lang.org for the project's Inko version.
+- File | New | Inko File: a module, a test file, or a program with `Main`.
+- Run configurations have Release build (`--release`), Target (`--target`, listing `inko targets`), and Statically link C libraries (`--static`), for the commands that accept them, including test runs.
+- Inko in Markdown code fences (```` ```inko ````) is now tested (the Markdown plugin already supported it).
+
+### Fixed
+
+- Names with `$` (for C functions, like `readdir$INODE64`) and setter names ending in `=` (`fn value=`) are now one name.
+- An unclosed `(` or `[` no longer pairs with a later `}`.
+- The Sync button no longer stays on `inko.pkg` files with Windows line endings.
+
 ## [0.7.0] - 2026-10-22
 
 ### Added

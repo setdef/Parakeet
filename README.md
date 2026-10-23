@@ -16,7 +16,7 @@ for you to review and submit.
 
 I use three words for how code comes to exist. Code I wrote, I typed by hand, with nothing generated. Code I wrought, an AI agent generated while I iterated with it, and I reviewed every change before committing it, so I own every diff. Code I requested, an agent built with little or no review from me, the way a dark factory runs without lights.
 
-**Versions 0.1.0 through 0.7.0 are requested.**
+**Versions 0.1.0 through 0.8.0 are requested.**
 
 ## Features
 
@@ -45,7 +45,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Trait gutter icons** linking traits, their implementations, and the
   methods that implement them
 - **Quick documentation** (F1, or hover): a definition's signature, where
-  it's defined, and its doc comment
+  it's defined, and its doc comment; ⇧F1 opens standard library definitions
+  on docs.inko-lang.org
 - **Go to Class / Go to Symbol** (⌘O / ⌥⌘O) and Search Everywhere for Inko
   types, traits, methods, and constants
 - **Structure view**, breadcrumbs, and sticky lines for each file's
@@ -53,6 +54,17 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Code folding** for blocks, comment runs, and imports
 - **Optimize Imports** (⌃⌥O / Ctrl+Alt+O): removes unused imports and sorts
   the rest
+- **Refactorings**: Introduce Variable (⌥⌘V / Ctrl+Alt+V), Inline Variable
+  (⌥⌘N / Ctrl+Alt+N), Safe Delete (⌘⌫ / Alt+Delete), and moving files or
+  directories (which updates their modules' imports)
+- **Type Hierarchy** (⌃H / Ctrl+H) for traits and the types implementing
+  them, and **Call Hierarchy** (⌃⌥H / Ctrl+Alt+H) for callers and callees
+- **Usage counts** ("N usages") above declarations
+- **Surround With** (⌥⌘T / Ctrl+Alt+T), **Move Statement** (⇧⌘↑/↓ /
+  Ctrl+Shift+↑/↓), and **Complete Current Statement** (⇧⌘⏎ /
+  Ctrl+Shift+Enter)
+- **New Inko File** (*File → New → Inko File*): a module, a test, or a program
+- Inko highlighting in Markdown ```` ```inko ```` code fences
 - **External Libraries**: the standard library and each project's
   dependencies, browsable and searchable, with `dep` and `build` excluded from
   the project
@@ -71,7 +83,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Run and test from the gutter**: ▶ next to `fn async main`, next to
   `fn pub tests` in test files, and next to each `t.test('…')`
 - **Run configurations** for `inko run`, `inko test`, `inko build`, and
-  `inko check`, with clickable `file.inko:line` links in the output
+  `inko check`, with release builds, other targets, and static linking, and
+  clickable `file.inko:line` links in the output
 - **New Project wizard** (*File → New → Project → Inko*) using `inko init`,
   optionally as a library or with a GitHub Actions workflow. The main module
   gets a valid module name (e.g. `from_intellij` for a project named
@@ -110,6 +123,12 @@ compiler, so it always agrees with your installed Inko version.
   possible usage.
 - **Dependencies need syncing** when `dep/hash` isn't the BLAKE3 hash of
   `inko.pkg`, which is how `inko` itself decides.
+- **Introduce and Inline Variable, Move Statement, and Smart Enter** work from
+  the file's tokens, following Inko's syntax reference: statements end at a
+  line break unless the next line continues them (e.g. starts with `.`), and
+  inlining parenthesizes values whose operators would otherwise bind
+  differently (Inko's binary operators share one precedence, and `and`/`or`
+  bind tighter).
 - **Quick fixes** act on the diagnostic IDs `inko check` reports
   (`invalid-symbol`, `unused-symbol`, `unused-result`); auto-import finds
   candidates in the `inko doc` definitions.

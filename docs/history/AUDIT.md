@@ -32,7 +32,7 @@ Findings are ranked by user impact:
 
 ### 1.1 Names inside string interpolation are invisible (High)
 
-**Status: confirmed and fixed in <commit:1.1>.** `InkoInterpolationTest` failed
+**Status: confirmed and fixed in e6de6af.** `InkoInterpolationTest` failed
 before the fix (6 of its 7 tests). The lexer now splits an interpolated
 string around its code, as Inko's lexer does (`STRING_START`, the code's
 tokens, `STRING_MIDDLE`, `STRING_END`), so names in `${…}` are PSI names. See
@@ -71,7 +71,7 @@ fn greet(name: String) -> String {
 
 ### 1.2 `for` loop variables and destructuring `let` patterns aren't locals (High)
 
-**Status: confirmed and fixed in <commit:1.2>, with 1.3 and section 3's
+**Status: confirmed and fixed in 7479d15, with 1.3 and section 3's
 module-qualified constant patterns.** `InkoLocalPatternsTest` failed before
 the fix (all 8 tests). `InkoLocals` now reads `let`, `for` and `match` arm
 patterns with one scanner that follows Inko's `pattern()`, and a `for`
@@ -121,7 +121,7 @@ Parakeet, so:
 
 ### 1.3 Enum constructors turn the next method into a "local variable" (High)
 
-**Status: confirmed and fixed in <commit:1.2>, by the same change as 1.2.**
+**Status: confirmed and fixed in 7479d15, by the same change as 1.2.**
 `case` only binds names inside a `match` block; in a type's body it defines
 a constructor, which binds nothing. `InkoLocalPatternsTest` covers both.
 
@@ -162,7 +162,7 @@ constructors (31 std files define enums).
 
 ### 1.4 Keyword-named methods and keyword names after `.` don't exist for Parakeet (High)
 
-**Status: confirmed and fixed in <commit:1.4>.** `InkoKeywordNamesTest`
+**Status: confirmed and fixed in bc9a46f.** `InkoKeywordNamesTest`
 failed before the fix (all 7 tests), and
 `InkoIntegrationTest.testImplementMethodsSeesKeywordNamedMethods` showed the
 real `inko doc` index offering `next` again. The lexer now gives a keyword
@@ -238,7 +238,7 @@ Compiles. Consequences:
 
 ### 1.5 Adding an import breaks files that use build tags or `import extern` (Medium–High)
 
-**Status: confirmed and fixed in <commit:1.5>.** `InkoImportFormsTest`
+**Status: confirmed and fixed in 81e590a.** `InkoImportFormsTest`
 failed before the fix (all 5 tests that could run on the old code). An
 import's range now includes its build tags, `import extern "…"` is its own
 form that imports no module, and new names are never added to a tagged
@@ -284,7 +284,7 @@ new name under that tag.
 
 ### 1.6 Setter methods (`fn value=`) are disconnected from their calls (Medium)
 
-**Status: confirmed and fixed in <commit:1.6>.** `InkoSetterTest` failed
+**Status: confirmed and fixed in 0f5f5da.** `InkoSetterTest` failed
 before the fix (all 4 tests). `recv.name = x` (with or without spaces) now
 resolves to the setter `name=`, as Inko's `assign_setter` does, and to the
 field only when there's no setter. A references searcher finds a setter's
@@ -328,7 +328,7 @@ Compiles. Consequences:
 
 ### 1.7 `type ref` types disappear, and their methods become module functions (Medium)
 
-**Status: confirmed and fixed in <commit:1.7>.** `InkoRefTypeTest` failed
+**Status: confirmed and fixed in 767367f.** `InkoRefTypeTest` failed
 before the fix (all 3 tests). The outline now skips exactly the modifiers
 Inko's `define_type` allows (`pub`, `inline`/`copy`/`ref`,
 `async`/`enum`/`builtin`/`extern`), so a `ref` type is a type and its
@@ -391,7 +391,7 @@ at the reported start use the same wrong offset, for example
 
 ### 1.9 `import a.b (self)` is taken to bind the name `self` (Medium–Low)
 
-**Status: confirmed and fixed in <commit:1.9>.** `InkoImportSelfTest`
+**Status: confirmed and fixed in de4f8e2.** `InkoImportSelfTest`
 failed before the fix (2 of its 3 tests; the third checks that editing the
 import keeps `(self)` as written). A bare `self` now binds the module's last
 name, as `compiler/src/type_check/imports.rs` does.
@@ -425,7 +425,7 @@ Compiles. Consequences:
 
 ### 1.10 Type Hierarchy can't find required traits from `inko doc` (Medium–Low)
 
-**Status: confirmed and fixed in <commit:1.10>.** `InkoRequiredTraitsTest`
+**Status: confirmed and fixed in 8ec0fa4.** `InkoRequiredTraitsTest`
 (with `inko doc`'s real shape, `trait pub Debug` at line 1, column 1)
 failed before the fix, and so did
 `InkoIntegrationTest.testTypeHierarchyShowsRequiredTraitsFromInkoDoc`
@@ -450,7 +450,7 @@ missing. That contradicts what the README promises.
 
 ### 1.11 Unwrap/Remove treats match guards and conditional impls as `if` statements (Low–Medium)
 
-**Status: confirmed and fixed in <commit:1.11>.** `InkoIfKindsTest` failed
+**Status: confirmed and fixed in 46cb169.** `InkoIfKindsTest` failed
 before the fix (its 3 Unwrap tests). `InkoTokenStream.startsIfExpression`
 now tells an `if` expression from a match guard, an impl's bounds, and an
 import's build tags (an `if` after `case`, `impl`, or `import` in the same
@@ -486,7 +486,7 @@ and the braces.
 
 ### 1.12 Complete Current Statement adds a body after the wrong `if` (Low)
 
-**Status: confirmed and fixed in <commit:1.12>, partly by 1.11's fix.**
+**Status: confirmed and fixed in dd99a81, partly by 1.11's fix.**
 `InkoSmartEnterKindsTest` failed before the fix (all three failing inputs
 below). Smart Enter now uses `startsIfExpression` from 1.11, so build tags
 and guards get no body, and it doesn't give `fn extern` a body, since
@@ -508,7 +508,7 @@ and guards get no body, and it doesn't give `fn extern` a body, since
 
 ### 1.13 Statement boundaries disagree with the parser in three cases (Low)
 
-**Status: confirmed and fixed in <commit:1.13>.** `InkoStatementBoundariesTest`
+**Status: confirmed and fixed in 603a055.** `InkoStatementBoundariesTest`
 failed before the fix (4 of 5 tests; the fifth checks that binary
 operators, `!=` and `throw` still continue a line). The lexer reads `-`
 before a digit as part of the number, as Inko's does, a line starting with
@@ -544,7 +544,7 @@ Inline Method's body statements, and Smart Enter.
 
 ### 1.14 Constant types from `inko doc` are never recognised (Low)
 
-**Status: confirmed and fixed in <commit:1.14>.** `InkoConstantTypeTest`
+**Status: confirmed and fixed in 8902b2b.** `InkoConstantTypeTest`
 (with `inko doc`'s `let pub LIMIT: Int`) failed before the fix. A
 constant's type now comes from the annotation in `inko doc`'s signature,
 and from the literal value for definitions read from source.
@@ -572,7 +572,7 @@ fn twice -> Int {
 
 ### 1.15 Two number-literal forms lex differently (Low)
 
-**Status: confirmed and fixed in <commit:1.15>.** `InkoNumberLiteralsTest`
+**Status: confirmed and fixed in a09d610.** `InkoNumberLiteralsTest`
 failed before the fix (all 4 tests). The lexer now follows Inko's `number`
 and `digits`: after a `.` only digits, signed exponents, and no letters
 other than an exponent's `e` (so `10e` is `10` and `e`).
@@ -601,7 +601,7 @@ on those wrong tokens.
 
 ### 1.16 The Bool-method inspection flags names std uses on purpose (Low)
 
-**Status: confirmed and fixed in <commit:1.16>.** `InkoBoolActionsTest`
+**Status: confirmed and fixed in 8332859.** `InkoBoolActionsTest`
 failed before the fix on std's own three examples. The inspection already
 treated `mut` and `move` methods as actions that report success. It now
 treats two more kinds the same way: methods of `ref` types, which change
@@ -705,34 +705,34 @@ up `\u{…}` escapes.
   (`ast/src/lexer.rs:772-782`). Parakeet requires a letter or `_`
   (`P/InkoLexer.kt:95`), so `@0` lexes as two operator and number tokens.
   These fields aren't fields to the outline, completion, or
-  `InkoDefinitionSite`. *Status: confirmed and fixed in <commit:3.fields>
+  `InkoDefinitionSite`. *Status: confirmed and fixed in ee15a32
   (`InkoNumericFieldsTest` failed before the fix). The lexer takes digits
   after `@`, as Inko's `field` does.*
 - **Constant patterns with a module qualifier.** *Status: confirmed and fixed
-  in <commit:1.2>, by the fix for 1.2 (`testModuleQualifiedConstantPatternsBindNothing`).* `case mod.CONST ->`
+  in 7479d15, by the fix for 1.2 (`testModuleQualifiedConstantPatternsBindNothing`).* `case mod.CONST ->`
   (`ast/src/parser.rs:2803-2817`). Parakeet's `case` scan declares `mod` as
   a binding (`P/InkoLocals.kt:124-128`), because only the name after the dot
   is excluded.
 - **`noinline` and keyword method names** (see 1.4), and **`type ref`**
-  (see 1.7). *Status: fixed with 1.4 (<commit:1.4>) and 1.7 (<commit:1.7>).*
+  (see 1.7). *Status: fixed with 1.4 (bc9a46f) and 1.7 (767367f).*
 - **Field signatures from `inko doc` include `mut`.** The format is
   `let pub mut @x: T` (`compiler/src/docs.rs:626`). `InkoCalls.parameters`
   strips `let ` and `pub ` but not `mut ` (`P/InkoParameterInfo.kt:49`). So
   `Type(…)` parameter info shows `mut @count: Int`, and the derived names
-  keep `@`. *Status: confirmed and fixed in <commit:3.mut>
+  keep `@`. *Status: confirmed and fixed in 43dc848
   (`InkoFieldSignaturesTest` failed before the fix). Parameter info strips
   `let`, `pub`, `mut` and `@` from inko doc's field signatures.*
 - **Compiler-internal enum fields under `--private`.** `inko doc --private`
   lists them, for example `let @tag: Uint8` and `let @1: <unknown>` on
   `type enum Shape` (seen in the scratch run). Parakeet indexes them as real
-  fields. *Status: confirmed and fixed in <commit:3.enum>
+  fields. *Status: confirmed and fixed in 44eee33
   (`InkoEnumFieldsTest`, with inko doc 0.21.1's real output, failed before
   the fix). Fields of a type with constructors aren't indexed, since enums
   can't define fields. The `kind` code can't be used for this: a `copy enum`
   is 4, like any copy type.*
 - **Invalid code sample.** The Code Style preview calls `Iter.each`
   (`P/InkoCodeStyle.kt:42`), which doesn't exist in v0.21.1
-  (`std/src/std/iter.inko`). *Status: confirmed and fixed in <commit:3.sample>
+  (`std/src/std/iter.inko`). *Status: confirmed and fixed in f47a97e
   (`InkoIntegrationTest.testTheCodeStyleSampleCompiles` failed before the
   fix with "the method 'each' isn't defined for type 'Iter[Int]'"). The
   sample uses a `for` loop.*

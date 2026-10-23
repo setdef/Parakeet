@@ -3,6 +3,8 @@ package com.setdef.parakeet
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.vfs.VirtualFile
 import java.nio.file.Files
+import java.text.BreakIterator
+import java.util.Locale
 import java.nio.file.Path
 
 object Inko {
@@ -48,12 +50,31 @@ object Inko {
     /**
      * The offset of a compiler location (1-based [line] and [column]) in
      * [document], clamped to that line so stale locations stay in range.
+     *
+     * Inko's lexer counts columns in extended grapheme clusters
+     * (`graphemes(true)` in ast/src/lexer.rs), so `👩‍👩‍👦` or `é` written as
+     * `e` and a combining accent is one column, however many UTF-16 units it
+     * takes here. A tab is one column, as is any other character.
      */
     fun offsetOf(document: Document, line: Int, column: Int): Int {
         val lineIndex = (line - 1).coerceIn(0, maxOf(document.lineCount - 1, 0))
         val lineStart = document.getLineStartOffset(lineIndex)
         val lineEnd = document.getLineEndOffset(lineIndex)
-        return (lineStart + column - 1).coerceIn(lineStart, lineEnd)
+        return lineStart + graphemeOffset(document.charsSequence.subSequence(lineStart, lineEnd), column - 1)
+    }
+
+    /** The UTF-16 offset in [text] after its first [graphemes] grapheme clusters (clamped to [text]). */
+    fun graphemeOffset(text: CharSequence, graphemes: Int): Int {
+        if (graphemes <= 0) return 0
+        val clusters = BreakIterator.getCharacterInstance(Locale.ROOT)
+        clusters.setText(text.toString())
+        var offset = 0
+        repeat(graphemes) {
+            val next = clusters.next()
+            if (next == BreakIterator.DONE) return text.length
+            offset = next
+        }
+        return offset
     }
 
     /** The minimum Inko version a project's `inko.pkg` requires (`require inko X`), if any. */

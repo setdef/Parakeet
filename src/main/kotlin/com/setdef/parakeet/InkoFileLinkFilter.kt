@@ -2,8 +2,12 @@ package com.setdef.parakeet
 
 import com.intellij.execution.filters.Filter
 import com.intellij.execution.filters.OpenFileHyperlinkInfo
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.editor.Document
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VirtualFile
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -24,11 +28,23 @@ class InkoFileLinkFilter(private val project: Project, private val workingDirect
                 .firstOrNull { resolve(line.substring(it, pathEnd)) != null } ?: return@mapNotNull null
             val file = resolve(line.substring(start, pathEnd)) ?: return@mapNotNull null
             val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(file) ?: return@mapNotNull null
-            val lineNumber = match.groupValues[1].toInt() - 1
-            val column = match.groupValues[2].toIntOrNull()?.minus(1) ?: 0
-            Filter.ResultItem(lineStart + start, lineStart + match.range.last + 1, OpenFileHyperlinkInfo(project, virtualFile, lineNumber, column))
+            val lineNumber = match.groupValues[1].toInt()
+            val column = match.groupValues[2].toIntOrNull() ?: 1
+            Filter.ResultItem(lineStart + start, lineStart + match.range.last + 1, link(virtualFile, lineNumber, column))
         }.toList()
         return if (items.isEmpty()) null else Filter.Result(items)
+    }
+
+    /**
+     * A link to a compiler location. Its column counts grapheme clusters (see
+     * [Inko.offsetOf]), so it's converted to the line's UTF-16 column here.
+     */
+    private fun link(file: VirtualFile, line: Int, column: Int): OpenFileHyperlinkInfo {
+        val document = ApplicationManager.getApplication().runReadAction<Document?> { FileDocumentManager.getInstance().getDocument(file) }
+            ?: return OpenFileHyperlinkInfo(project, file, line - 1, column - 1)
+        val lineIndex = (line - 1).coerceIn(0, maxOf(document.lineCount - 1, 0))
+        val offset = ApplicationManager.getApplication().runReadAction<Int> { Inko.offsetOf(document, line, column) }
+        return OpenFileHyperlinkInfo(project, file, lineIndex, offset - document.getLineStartOffset(lineIndex))
     }
 
     private fun resolve(text: String): Path? {

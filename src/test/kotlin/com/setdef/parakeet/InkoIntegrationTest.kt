@@ -49,6 +49,13 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals("the symbol 'unsaved_only' is undefined", problems().single { it.severity == HighlightSeverity.ERROR }.description)
     }
 
+    // Compiler columns count grapheme clusters: the error is on `nope`, not a few UTF-16 units before it.
+    fun testHighlightsErrorsAfterEmojiAndCombiningAccents() {
+        open("src/app/wide.inko", "fn pub a -> Int {\n  let s = '\uD83D\uDC69\u200D\uD83D\uDC69\u200D\uD83D\uDC66 e\u0301' + nope\n  1\n}\n")
+        val error = problems().single { it.severity == HighlightSeverity.ERROR }
+        assertEquals("nope", myFixture.editor.document.getText(com.intellij.openapi.util.TextRange(error.startOffset, error.endOffset)))
+    }
+
     /** Saves every file, then checks the whole project with the real compiler. */
     private fun assertCompiles() {
         FileDocumentManager.getInstance().saveAllDocuments()

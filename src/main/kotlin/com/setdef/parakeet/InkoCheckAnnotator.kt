@@ -28,8 +28,9 @@ class InkoCheckAnnotator : ExternalAnnotator<InkoCheckAnnotator.Input, List<Inko
         val document = file.viewProvider.document ?: return
         for (diagnostic in diagnostics) {
             val severity = if (diagnostic.isWarning) HighlightSeverity.WARNING else HighlightSeverity.ERROR
-            val annotation = holder.newAnnotation(severity, diagnostic.message).range(rangeOf(document, diagnostic))
-            InkoImportFix.forDiagnostic(file, diagnostic).forEach { annotation.withFix(it) }
+            val range = rangeOf(document, diagnostic)
+            val annotation = holder.newAnnotation(severity, diagnostic.message).range(range)
+            InkoQuickFixes.forDiagnostic(file, diagnostic, range).forEach { annotation.withFix(it) }
             annotation.create()
         }
     }

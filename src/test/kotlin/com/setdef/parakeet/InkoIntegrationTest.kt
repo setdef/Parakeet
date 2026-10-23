@@ -45,6 +45,12 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals("the symbol 'unsaved_only' is undefined", problems().single { it.severity == HighlightSeverity.ERROR }.description)
     }
 
+    fun testQuickFixesUseTheCompilersDiagnostics() {
+        open("src/app/util.inko", "import std.stdio (Stdout, Stderr)\n\nfn pub helper {\n  Stdout.new\n}\n")
+        myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Remove unused import 'Stderr'" })
+        myFixture.checkResult("import std.stdio (Stdout)\n\nfn pub helper {\n  Stdout.new\n}\n")
+    }
+
     fun testFormatsWithInkoFmt() {
         open("src/main.inko", "fn   main   {\nlet a=1\n}\n")
         myFixture.performEditorAction(IdeActions.ACTION_EDITOR_REFORMAT)

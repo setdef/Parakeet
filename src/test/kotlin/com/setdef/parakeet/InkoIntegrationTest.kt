@@ -97,6 +97,30 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertCompiles()
     }
 
+    /** Extracts the text between `<selection>` markers in [path]'s [text], with the real compiler checking the result. */
+    private fun extractAndCompile(path: String, text: String) {
+        val start = text.indexOf("<selection>")
+        val end = text.indexOf("</selection>") - "<selection>".length
+        val clean = text.replace("<selection>", "").replace("</selection>", "")
+        open(path, clean)
+        val plan = InkoExtractMethod.plan(clean, com.intellij.openapi.util.TextRange(start, end)).getOrThrow()
+        assertTrue("Placeholder types won't compile: ${plan.method}", plan.placeholders.isEmpty())
+        InkoExtractMethod.apply(project, myFixture.editor, plan)
+        assertCompiles()
+    }
+
+    fun testExtractedMethodsStillCompile() {
+        extractAndCompile("src/app/area.inko", "fn pub area(width: Int, height: Int) -> Int {\n  <selection>let w = width * 2\n  w * height</selection>\n}\n")
+        extractAndCompile(
+            "src/app/counter.inko",
+            "type pub Counter {\n  let mut @count: Int\n\n  fn pub mut bump(by: Int) {\n    <selection>@count = @count + by\n    @count = @count * 2</selection>\n  }\n}\n",
+        )
+        extractAndCompile(
+            "src/app/totals.inko",
+            "fn pub total(items: Array[Int]) -> Int {\n  let mut sum: Int = 0\n  <selection>sum = sum + items.size\n  sum = sum * 2</selection>\n  items.size + sum\n}\n",
+        )
+    }
+
     fun testQuickFixesUseTheCompilersDiagnostics() {
         open("src/app/util.inko", "import std.stdio (Stdout, Stderr)\n\nfn pub helper {\n  Stdout.new\n}\n")
         myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Remove unused import 'Stderr'" })

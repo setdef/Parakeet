@@ -146,6 +146,18 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals("the symbol 'nope' is undefined", result.diagnostics.values.single().single().message)
     }
 
+    // inko writes `\u{1}` for the control character in this message, which isn't JSON; the other error still shows.
+    fun testAnInvalidEscapeDoesNotHideOtherErrors() {
+        putTempDirInProjectContent()
+        myFixture.addFileToProject("src/app/escape.inko", "fn pub a -> String {\n  '\\\u0001'\n}\n")
+        myFixture.addFileToProject("src/app/broken.inko", "fn pub b -> Int {\n  (\n}\n")
+        FileDocumentManager.getInstance().saveAllDocuments()
+        val root = Path.of(myFixture.tempDirPath)
+        val result = InkoProjectCheck.getInstance(project).check(root)!!
+        assertEquals(setOf(root.resolve("src/app/escape.inko"), root.resolve("src/app/broken.inko")), result.diagnostics.keys)
+        assertEquals("the escape sequence '\\\u0001' is invalid", result.diagnostics.getValue(root.resolve("src/app/escape.inko")).single().message)
+    }
+
     fun testMovedDeclarationsStillCompile() {
         putTempDirInProjectContent()
         myFixture.addFileToProject("src/app/util.inko", "import std.stdio (Stdout)\n\nlet pub LIMIT = 10\n\ntype pub Helper {\n  let @count: Int\n}\n\nimpl Helper {\n  fn pub show {\n    Stdout.new.print(LIMIT.to_string)\n  }\n}\n\nfn pub make -> Helper {\n  Helper(count: LIMIT)\n}\n")

@@ -26,7 +26,7 @@ dependencies {
         bundledModule("intellij.platform.smRunner")
         testFramework(TestFrameworkType.Platform)
         // Grazie provides the spell-checking inspection in 2026.x.
-        testBundledPlugins("com.intellij.modules.ultimate", "tanvd.grazi")
+        testBundledPlugins("com.intellij.modules.ultimate", "tanvd.grazi", "org.intellij.plugins.markdown")
         testBundledModules("intellij.spellchecker")
     }
 }

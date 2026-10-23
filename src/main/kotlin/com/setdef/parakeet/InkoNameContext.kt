@@ -37,7 +37,7 @@ sealed class InkoNameContext {
 
     companion object {
         // Keywords that, right before a lowercase name, mean the name is being defined (`fn pub static new`, `let mut x`).
-        private val DEFINING_KEYWORDS = arrayOf("fn", "let", "mut", "as", "pub", "async", "static", "move", "extern", "inline")
+        private val DEFINING_KEYWORDS = arrayOf("fn", "let", "mut", "as", "pub", "async", "static", "move", "extern", "inline", "noinline")
 
         fun of(name: InkoName, imports: InkoImports): InkoNameContext {
             val text = name.text

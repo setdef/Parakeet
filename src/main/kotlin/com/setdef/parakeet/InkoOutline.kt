@@ -109,8 +109,10 @@ class InkoOutline private constructor(val roots: List<Node>) {
                         i = if (name == null) i + 1 else open(Node(Kind.IMPL, "impl $header", name.start, token.start), i + 1)
                     }
                     token.text == "fn" -> {
+                        // The lexer gives a method's name as a name even when it's a keyword (`fn pub mut next`),
+                        // so the keywords before it are its modifiers.
                         var j = i + 1
-                        while (j < tokens.size && tokens[j].type == InkoTokens.KEYWORD && tokens[j].text in MODIFIERS) j++
+                        while (j < tokens.size && tokens[j].type == InkoTokens.KEYWORD) j++
                         val first = tokens.getOrNull(j)
                         // A name, or an operator method like `==`; `fn (` is a closure.
                         val nameTokens = when (first?.type) {

@@ -162,6 +162,15 @@ constructors (31 std files define enums).
 
 ### 1.4 Keyword-named methods and keyword names after `.` don't exist for Parakeet (High)
 
+**Status: confirmed and fixed in <commit:1.4>.** `InkoKeywordNamesTest`
+failed before the fix (all 7 tests), and
+`InkoIntegrationTest.testImplementMethodsSeesKeywordNamedMethods` showed the
+real `inko doc` index offering `next` again. The lexer now gives a keyword
+as a name where Inko's parser takes one: a method's name (after the
+modifiers `define_method` allows, in order), a name after `.`, and a named
+argument's label. The outline then finds these methods, including
+`fn pub copy` and `fn pub noinline foo`.
+
 **What Parakeet assumes.**
 
 - Every keyword is a `KEYWORD` token, wherever it appears
@@ -625,7 +634,7 @@ up `\u{…}` escapes.
   a binding (`P/InkoLocals.kt:124-128`), because only the name after the dot
   is excluded.
 - **`noinline` and keyword method names** (see 1.4), and **`type ref`**
-  (see 1.7).
+  (see 1.7). *Status: the first half was fixed with 1.4, in <commit:1.4>.*
 - **Field signatures from `inko doc` include `mut`.** The format is
   `let pub mut @x: T` (`compiler/src/docs.rs:626`). `InkoCalls.parameters`
   strips `let ` and `pub ` but not `mut ` (`P/InkoParameterInfo.kt:49`). So

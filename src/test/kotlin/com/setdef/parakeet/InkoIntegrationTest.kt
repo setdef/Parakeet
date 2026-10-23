@@ -228,6 +228,16 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertCompiles()
     }
 
+    // AUDIT.md finding 1.4: a method named after a keyword is a method, so Implement Methods doesn't offer it again.
+    fun testImplementMethodsSeesKeywordNamedMethods() {
+        val text = "import std.iter (Iter)\n\ntype Countdown {\n  let mut @n: Int\n}\n\nimpl Iter[Int] for Countdown {\n  fn pub mut next -> Option[Int] {\n    if @n == 0 { return Option.None }\n    @n -= 1\n    Option.Some(@n)\n  }\n}\n\nfn pub first -> Int {\n  Countdown(n: 3).next.or(0)\n}\n"
+        open("src/app/countdown.inko", text)
+        val impl = InkoTraitImpl.at(myFixture.file, text.indexOf("@n -= 1"))!!
+        assertEquals("Iter", impl.trait.name)
+        assertEmpty(impl.missing(required = true).map { it.name })
+        assertCompiles()
+    }
+
     fun testInlinedMethodsStillCompile() {
         putTempDirInProjectContent()
         myFixture.addFileToProject(

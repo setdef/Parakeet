@@ -67,15 +67,28 @@ class InkoLexer : LexerBase() {
 
     private val interpolations = ArrayDeque<Interpolation>()
 
+    /** The last token that wasn't whitespace or a comment. */
+    private var previous: IElementType? = null
+
+    /**
+     * Where a method header is (ast/src/parser.rs, `define_method` and friends):
+     * `fn [pub] [inline|noinline] [async [mut]|move|static|mut|extern] NAME`.
+     * 0 outside one; 1 after `fn`; 2 after `pub`; 3 after `inline`; 4 after
+     * `async`; 5 when only the name can follow.
+     */
+    private var fnStage = 0
+
     override fun start(buffer: CharSequence, startOffset: Int, endOffset: Int, initialState: Int) {
         this.buffer = buffer
         this.end = endOffset
         this.tokenEnd = startOffset
         interpolations.clear()
+        previous = null
+        fnStage = 0
         advance()
     }
 
-    override fun getState(): Int = interpolations.size
+    override fun getState(): Int = interpolations.size * 8 + fnStage
     override fun getTokenType(): IElementType? = tokenType
     override fun getTokenStart(): Int = tokenStart
     override fun getTokenEnd(): Int = tokenEnd
@@ -90,6 +103,7 @@ class InkoLexer : LexerBase() {
         }
         var i = tokenStart
         val c = buffer[i]
+        var nextFnStage = 0
         tokenType = when {
             c.isWhitespace() -> {
                 while (i < end && buffer[i].isWhitespace()) i++
@@ -133,10 +147,20 @@ class InkoLexer : LexerBase() {
             isNameStart(c) -> {
                 i = skipName(i)
                 val text = buffer.subSequence(tokenStart, i).toString()
+                val modifier = methodModifier(text)
+                // Inko's parser takes any keyword as a name in these places (ast/src/parser.rs): a method's name
+                // (`method_name`), a name after `.` (`call_with_receiver`), and a named argument's label.
+                val isName = fnStage > 0 || previous == InkoTokens.DOT ||
+                    ((previous == InkoTokens.LPAREN || previous == InkoTokens.COMMA) && labels(i))
                 when {
-                    text in InkoTokens.KEYWORDS -> InkoTokens.KEYWORD
+                    modifier != null -> InkoTokens.KEYWORD.also { nextFnStage = modifier }
+                    isName && text in InkoTokens.KEYWORDS -> InkoTokens.IDENTIFIER
+                    text in InkoTokens.KEYWORDS -> InkoTokens.KEYWORD.also { if (text == "fn") nextFnStage = 1 }
                     c.isUpperCase() -> InkoTokens.CONSTANT
                     else -> InkoTokens.IDENTIFIER
+                }.also {
+                    // A setter's name ends in `=` (`fn value=`), which Inko's `method_name` appends.
+                    if (fnStage > 0 && modifier == null && i < end && buffer[i] == '=' && (i + 1 >= end || buffer[i + 1] != '=' && buffer[i + 1] != '>')) i++
                 }
             }
             else -> {
@@ -155,37 +179,39 @@ class InkoLexer : LexerBase() {
             }
         }
         tokenEnd = i
+        if (tokenType != InkoTokens.WHITE_SPACE && tokenType != InkoTokens.COMMENT) {
+            previous = tokenType
+            fnStage = nextFnStage
+        }
+    }
+
+    /** The stage after [word] if it's a method modifier allowed at the current [fnStage], else null. */
+    private fun methodModifier(word: String): Int? = when {
+        fnStage == 0 || fnStage == 5 -> null
+        fnStage == 1 && word == "pub" -> 2
+        fnStage <= 2 && (word == "inline" || word == "noinline") -> 3
+        fnStage <= 3 && word == "async" -> 4
+        fnStage <= 3 && word in setOf("move", "static", "mut", "extern") -> 5
+        fnStage == 4 && word == "mut" -> 5
+        else -> null
+    }
+
+    /** Whether a `:` that isn't `:=` follows [from] (after spaces): what makes a word a named argument's label. */
+    private fun labels(from: Int): Boolean {
+        var i = from
+        while (i < end && (buffer[i] == ' ' || buffer[i] == '\t')) i++
+        return i < end && buffer[i] == ':' && (i + 1 >= end || buffer[i + 1] != '=' && buffer[i + 1] != ':')
     }
 
     private fun isNameStart(c: Char) = c == '_' || c.isLetter()
 
     // Names may contain `$` (for C functions like `readdir$INODE64`) and end in a single `?` (e.g. `empty?`), as
-    // long as it's not `?=` or `??`. A method's name may end in `=` (a setter, `fn value=`), which is only taken
-    // as part of the name right after `fn`, so `a=1` is still `a`, `=`, `1`.
+    // long as it's not `?=` or `??`.
     private fun skipName(from: Int): Int {
         var i = from
         while (i < end && (buffer[i] == '_' || buffer[i] == '$' || buffer[i].isLetterOrDigit())) i++
-        if (i < end && buffer[i] == '?' && (i + 1 >= end || buffer[i + 1] != '=' && buffer[i + 1] != '?')) {
-            i++
-        } else if (i < end && buffer[i] == '=' && (i + 1 >= end || buffer[i + 1] != '=') && followsFn(from)) {
-            i++
-        }
+        if (i < end && buffer[i] == '?' && (i + 1 >= end || buffer[i + 1] != '=' && buffer[i + 1] != '?')) i++
         return i
-    }
-
-    /** Whether the name at [start] comes right after `fn` (and any modifiers, like `fn pub mut`). */
-    private fun followsFn(start: Int): Boolean {
-        var i = start
-        while (true) {
-            while (i > 0 && buffer[i - 1].isWhitespace()) i--
-            val wordEnd = i
-            while (i > 0 && (buffer[i - 1].isLetter() || buffer[i - 1] == '_')) i--
-            when (buffer.subSequence(i, wordEnd).toString()) {
-                "fn" -> return true
-                "pub", "mut", "move", "static", "inline", "noinline", "async" -> continue
-                else -> return false
-            }
-        }
     }
 
     /**

@@ -91,9 +91,11 @@ private class InkoOutlineElement(private val file: InkoFile, private val node: I
 class InkoBreadcrumbsProvider : BreadcrumbsProvider {
     override fun getLanguages(): Array<Language> = arrayOf(InkoLanguage)
 
+    // The declaration [element] names: an InkoName, or an operator method's first token (`==`).
     private fun nodeFor(element: PsiElement): InkoOutline.Node? {
         val file = element.containingFile ?: return null
-        return file.inkoOutline.all.firstOrNull { it.nameOffset == element.textOffset && element is InkoName }
+        if (element is PsiFile) return null
+        return file.inkoOutline.all.firstOrNull { it.nameOffset == element.textRange.startOffset && file.nameElementOf(it) == element }
     }
 
     override fun acceptElement(element: PsiElement): Boolean = nodeFor(element) != null
@@ -109,6 +111,7 @@ class InkoBreadcrumbsProvider : BreadcrumbsProvider {
         val enclosing = file.inkoOutline.enclosing(element.textOffset)
         val own = nodeFor(element)
         val parent = if (own != null) enclosing.getOrNull(enclosing.indexOf(own) - 1) else enclosing.lastOrNull()
-        return parent?.let(file::nameElementOf) ?: file
+        // Never the element itself, which would send the breadcrumbs walking up forever.
+        return parent?.let(file::nameElementOf)?.takeIf { it != element } ?: file
     }
 }

@@ -48,4 +48,10 @@ class InkoStructureTest : InkoTestCase() {
         myFixture.configureByText("main.inko", text.replace("<caret>", "").replace("''", "'<caret>'"))
         assertEquals(listOf("impl ToString for Helper", "to_string"), myFixture.breadcrumbsAtCaret.map { it.text })
     }
+
+    // Regression: an operator method's name isn't an InkoName, and its crumb was its own parent, looping forever.
+    fun testBreadcrumbsInOperatorMethods() {
+        myFixture.configureByText("main.inko", "type Set {\n  fn ==(other: ref Set) -> Bool {\n    <caret>true\n  }\n}\n")
+        assertEquals(listOf("Set", "=="), myFixture.breadcrumbsAtCaret.map { it.text })
+    }
 }

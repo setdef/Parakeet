@@ -57,46 +57,23 @@ object InkoIntroduceParameter {
         tokens.firstOrNull { it.isKeyword("self") }?.let { return fail("The expression uses `self`, which callers don't have.") }
         tokens.firstOrNull { it.type == InkoTokens.FIELD }?.let { return fail("The expression uses `${it.text}`, which callers can't see.") }
 
-        val module = Inko.pathOf(file.virtualFile)?.let(Inko::moduleName)
-        val imports = InkoImports.parse(text)
-        val needed = mutableListOf<Pair<String, String>>()
-        val private = mutableSetOf<String>()
         val names = PsiTreeUtil.findChildrenOfType(file, InkoName::class.java).filter { expression.contains(it.textRange) }
+        val imports = InkoImports.parse(text)
         for (name in names) {
-            val context = InkoNameContext.of(name, imports)
-            if (context is InkoNameContext.Local) return fail("The expression uses `${name.text}`, a variable callers don't have.")
+            if (InkoNameContext.of(name, imports) is InkoNameContext.Local) return fail("The expression uses `${name.text}`, a variable callers don't have.")
             if (name.previousToken().isToken(InkoTokens.DOT)) continue
-            val resolved = InkoResolver.resolveDefinitions(name)
-            val definitions = resolved.map { it.first }
-            if (definitions.any { it.kind == Kind.INSTANCE_METHOD || it.kind == Kind.STATIC_METHOD }) {
+            if (InkoResolver.resolveDefinitions(name).any { it.first.kind == Kind.INSTANCE_METHOD || it.first.kind == Kind.STATIC_METHOD }) {
                 return fail("The expression calls `${name.text}` on `self`, which callers don't have.")
             }
-            // What callers need imported: an imported name the same way, or one defined in this module.
-            imports.symbol(name.text)?.let { (from, original) -> needed += from to original; continue }
-            val definition = definitions.firstOrNull { it.kind in setOf(Kind.TYPE, Kind.TRAIT, Kind.CONSTANT, Kind.MODULE_METHOD) } ?: continue
-            if (module != null && definition.module == module) {
-                needed += module to name.text
-                val site = resolved.first { it.first == definition }.second
-                if (!isPublic(site)) private += name.text
-            }
         }
+        val (needed, private) = InkoPortableNames.of(file, names)
 
         val occurrences = InkoIntroduceVariable.occurrences(stream, expression).ifEmpty { listOf(expression) }
         val taken = signature.parameters.map { it.name }.toSet() +
             InkoLocals.declarations(text).filter { node.range.contains(it.offset) }.map { it.name }
         val suggested = InkoIntroduceVariable.suggestName(stream, expression)
         val name = if (suggested !in taken) suggested else generateSequence(2) { it + 1 }.map { "$suggested$it" }.first { it !in taken }
-        return Result.success(Plan(method, expression, occurrences, name, inferType(tokens), needed.distinct(), private))
-    }
-
-    /** Whether the declaration named at [site] is `pub` (`let pub X`, `fn pub x`, `type pub X`). */
-    private fun isPublic(site: PsiElement): Boolean {
-        var token = site.previousToken()
-        while (token.isToken(InkoTokens.KEYWORD)) {
-            if (token!!.text == "pub") return true
-            token = token.previousToken()
-        }
-        return false
+        return Result.success(Plan(method, expression, occurrences, name, inferType(tokens), needed, private))
     }
 
     /** A type for an expression when it's obvious: a literal, or `Type(…)`/`Type.new(…)`. */
@@ -146,6 +123,43 @@ object InkoIntroduceParameter {
             imports = plan.imports,
             privateImports = plan.privateNames,
         )
+    }
+}
+
+/**
+ * What code moving out of its module needs: for [names] (as written in
+ * [file]), the (module, name) pairs to import where the code goes, and which
+ * of those are private to [file]'s module (so other modules can't import them).
+ * Names imported into [file] are imported the same way; names defined in its
+ * module are imported from it; anything else (locals, the prelude) needs nothing.
+ */
+object InkoPortableNames {
+    fun of(file: PsiFile, names: List<InkoName>): Pair<List<Pair<String, String>>, Set<String>> {
+        val module = Inko.pathOf(file.virtualFile)?.let(Inko::moduleName)
+        val imports = InkoImports.parse(file.text)
+        val needed = mutableListOf<Pair<String, String>>()
+        val private = mutableSetOf<String>()
+        for (name in names) {
+            if (name.previousToken().isToken(InkoTokens.DOT)) continue
+            if (InkoNameContext.of(name, imports) is InkoNameContext.Local) continue
+            imports.symbol(name.text)?.let { (from, original) -> needed += from to original; continue }
+            val resolved = InkoResolver.resolveDefinitions(name)
+            val (definition, site) = resolved.firstOrNull { it.first.kind in setOf(Kind.TYPE, Kind.TRAIT, Kind.CONSTANT, Kind.MODULE_METHOD) } ?: continue
+            if (module == null || definition.module != module) continue
+            needed += module to name.text
+            if (!isPublic(site)) private += name.text
+        }
+        return needed.distinct() to private
+    }
+
+    /** Whether the declaration named at [site] is `pub` (`let pub X`, `fn pub x`, `type pub X`). */
+    private fun isPublic(site: PsiElement): Boolean {
+        var token = site.previousToken()
+        while (token.isToken(InkoTokens.KEYWORD)) {
+            if (token!!.text == "pub") return true
+            token = token.previousToken()
+        }
+        return false
     }
 }
 

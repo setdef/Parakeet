@@ -125,6 +125,7 @@
         <additionalLibraryRootsProvider implementation="com.setdef.parakeet.InkoLibraryRootsProvider"/>
         <lang.importOptimizer language="Inko" implementationClass="com.setdef.parakeet.InkoImportOptimizer"/>
         <inlineActionHandler implementation="com.setdef.parakeet.InkoInlineVariableHandler"/>
+        <inlineActionHandler implementation="com.setdef.parakeet.InkoInlineMethodHandler"/>
         <typeHierarchyProvider language="Inko" implementationClass="com.setdef.parakeet.InkoTypeHierarchyProvider"/>
         <moveFileHandler implementation="com.setdef.parakeet.InkoMoveFileHandler"/>
         <statementUpDownMover implementation="com.setdef.parakeet.InkoStatementMover"/>

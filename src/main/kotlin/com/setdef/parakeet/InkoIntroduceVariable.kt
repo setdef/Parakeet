@@ -103,7 +103,7 @@ object InkoIntroduceVariable {
     }
 
     /** Where the chain containing [index] starts: back over `.member` steps to the first receiver. */
-    private fun chainStart(stream: InkoTokenStream, index: Int): Int {
+    fun chainStart(stream: InkoTokenStream, index: Int): Int {
         var start = index
         while (start >= 2 && stream.tokens[start - 1].type == InkoTokens.DOT) {
             var receiver = start - 2

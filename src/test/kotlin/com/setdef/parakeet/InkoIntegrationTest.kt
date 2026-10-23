@@ -121,6 +121,22 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         )
     }
 
+    fun testInlinedMethodsStillCompile() {
+        putTempDirInProjectContent()
+        myFixture.addFileToProject(
+            "src/app/util.inko",
+            "let pub SCALE = 3\n\nfn pub double(value: Int) -> Int {\n  value * 2\n}\n\nfn pub area(width: Int, height: Int) -> Int {\n  let w = width * SCALE\n  w * height\n}\n\nfn pub repeat(value: Int) -> Int {\n  value + value\n}\n",
+        )
+        myFixture.addFileToProject(
+            "src/main.inko",
+            "import app.util (area, double, repeat)\n\nfn run -> Int {\n  let w = 10\n  let a = area(w, 2)\n  let r = repeat(w + 1)\n  double(w + 1) * 3 + a + r\n}\n",
+        )
+        for (name in listOf("area", "double", "repeat")) {
+            InkoInlineMethodProcessor(project, declaration("src/app/util.inko", name), null, keepMethod = false).run()
+        }
+        assertCompiles()
+    }
+
     fun testQuickFixesUseTheCompilersDiagnostics() {
         open("src/app/util.inko", "import std.stdio (Stdout, Stderr)\n\nfn pub helper {\n  Stdout.new\n}\n")
         myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Remove unused import 'Stderr'" })

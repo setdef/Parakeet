@@ -23,7 +23,8 @@
         directory, or chosen per project in <i>Settings | Languages &amp; Frameworks | Inko</i>.</p>
         <p>Uses the TextMate grammar and language configuration from
         <a href="https://github.com/inko-lang/vscode">inko-lang/vscode</a> (MPL-2.0).
-        This plugin is not affiliated with or endorsed by the Inko project.</p>
+        This plugin is not affiliated with or endorsed by the Inko project; please report problems
+        <a href="https://github.com/setdef/Parakeet/issues">to Parakeet</a>, not to Inko.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
@@ -78,6 +79,7 @@
                                               providerId="parakeet.inko.parameters" bundle="messages.ParakeetBundle"
                                               nameKey="inlay.parameters.name" descriptionKey="inlay.parameters.description"/>
         <highlightUsagesHandlerFactory implementation="com.setdef.parakeet.InkoHighlightUsagesHandlerFactory"/>
+        <errorHandler implementation="com.setdef.parakeet.InkoErrorReportSubmitter"/>
         <codeInsight.lineMarkerProvider language="Inko" implementationClass="com.setdef.parakeet.InkoTraitLineMarkerProvider"/>
         <runLineMarkerContributor language="Inko" implementationClass="com.setdef.parakeet.InkoRunLineMarkerContributor"/>
 

@@ -13,6 +13,7 @@
 - Parameter info (⌘P / Ctrl+P) in calls: the callee's parameters with the current argument highlighted, for functions, methods (listing each candidate when the type isn't known), enum constructors, and `Type(…)` (its fields).
 - Parameter-name hints before positional arguments (`greet(name: 'Alice')`), only when it's certain what's called; toggle them in Settings | Editor | Inlay Hints.
 - Highlighting the occurrences of the name at the caret that mean the same thing (and ⌘⇧F7 / Ctrl+Shift+F7): a local in its own scope, a field in its type, and other names by what they resolve to, with declarations marked as writes.
+- Reporting errors: the IDE's error dialog can open a GitHub issue in your browser, prefilled with the error and your versions, for you to review and submit.
 - Local variables and parameters (including closure parameters and `case` bindings): Go to Declaration and completion, scoped by blocks.
 - Method calls on a local with a written or obvious type (`x: Foo`, `let x = Foo.new`, `Foo(…)`), or on `self`, now complete and navigate to that type's methods and fields, instead of every type's.
 - A banner when `inko.pkg` requires a newer Inko (`require inko X`) than the project uses, offering to switch to an installed ivm version that's new enough, or to install one.

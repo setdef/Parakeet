@@ -1,6 +1,7 @@
 package com.setdef.parakeet
 
 import com.intellij.ide.actions.QualifiedNameProvider
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
@@ -41,6 +42,8 @@ object InkoQualifiedNames {
 
     // Files outside a project's src/ and test/ (the standard library, dependencies) are named by the index.
     private fun libraryModule(file: PsiFile, path: Path): String? {
+        // Finding project roots needs the IDE's file index, which isn't usable while indexing.
+        if (DumbService.isDumb(file.project)) return null
         val index = InkoDocIndex.getInstance(file.project)
         return InkoProjectRoots.find(file.project).firstNotNullOfOrNull { index.symbols(it)?.moduleOf(path) }
     }

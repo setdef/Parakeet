@@ -61,6 +61,18 @@ class InkoQualifiedNamesTest : InkoTestCase(onDisk = true) {
         PsiTestUtil.addContentRoot(module, myFixture.tempDirFixture.getFile("")!!)
         useFakeInko(FakeInkoDoc.cli { listOf(FakeInkoDoc.module("std.string", std, types = listOf(FakeInkoDoc.type("String", 1)))) })
         val file = myFixture.psiManager.findFile(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(std)!!)!!
+        // Adding the content root (and the libraries the index finds) starts indexing; Copy Reference waits it out.
+        com.intellij.testFramework.IndexingTestUtil.waitUntilIndexesAreReady(project)
         assertEquals("std.string.String", InkoQualifiedNames.of(file.findElementAt(file.text.indexOf("String"))!!.parent))
+    }
+
+    // Copy Reference works while indexing, when the file index (for project roots) isn't usable.
+    fun testStandardLibraryFilesWhileIndexingGetNoReferenceRatherThanAnError() {
+        val std = java.nio.file.Files.createDirectories(java.nio.file.Path.of(myFixture.tempDirPath, "std")).resolve("string.inko")
+        java.nio.file.Files.writeString(std, "type pub String {}\n")
+        val file = myFixture.psiManager.findFile(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(std)!!)!!
+        com.intellij.testFramework.DumbModeTestUtils.runInDumbModeSynchronously(project) {
+            assertNull(InkoQualifiedNames.of(file.findElementAt(file.text.indexOf("String"))!!.parent))
+        }
     }
 }

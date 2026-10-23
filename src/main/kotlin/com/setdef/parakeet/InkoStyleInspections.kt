@@ -148,6 +148,8 @@ class InkoRedundantNamedArgumentInspection : InkoStyleInspection() {
             if (calleeToken.type != InkoTokens.IDENTIFIER || calleeToken.end != token.start || tokens.getOrNull(open - 2)?.isKeyword("fn") == true) return@forEachIndexed
             val close = stream.match(open).takeIf { it > 0 } ?: return@forEachIndexed
             val arguments = arguments(stream, open, close)
+            // Resolving the callee is the costly part, so only for calls with a `name: name` argument.
+            if (arguments.none { isRedundant(tokens, it) }) return@forEachIndexed
             val callee = PsiTreeUtil.getParentOfType(file.findElementAt(calleeToken.start), InkoName::class.java, false) ?: return@forEachIndexed
             if (callee is InkoDeclaration) return@forEachIndexed
             val parameters = InkoResolver.resolveDefinitions(callee).map { it.first }
@@ -158,10 +160,9 @@ class InkoRedundantNamedArgumentInspection : InkoStyleInspection() {
             for ((index, argument) in arguments.withIndex()) {
                 // Positional arguments can't follow named ones, so only a leading run can drop their names.
                 if (arguments.take(index).any { isNamed(tokens, it) }) break
-                if (argument.size != 3 || !tokens[argument[1]].isOperator(":")) continue
+                if (!isRedundant(tokens, argument)) continue
                 val label = tokens[argument[0]]
                 val value = tokens[argument[2]]
-                if (label.type != InkoTokens.IDENTIFIER || value.type != InkoTokens.IDENTIFIER || label.text != value.text) continue
                 // Dropping the name only keeps the meaning when the argument is already in that parameter's position.
                 if (parameters.getOrNull(index) != label.text) continue
                 report(TextRange(label.start, value.end), "Redundant argument name '${label.text}:'", InkoRemoveTextFix("Remove redundant argument name", throughEnd = false))
@@ -194,6 +195,12 @@ class InkoRedundantNamedArgumentInspection : InkoStyleInspection() {
         if (current.isNotEmpty()) result += current
         return result
     }
+
+    // `name: name`: a name, `:`, and the same name.
+    private fun isRedundant(tokens: List<InkoToken>, argument: List<Int>): Boolean =
+        argument.size == 3 && tokens[argument[1]].isOperator(":") &&
+            tokens[argument[0]].type == InkoTokens.IDENTIFIER && tokens[argument[2]].type == InkoTokens.IDENTIFIER &&
+            tokens[argument[0]].text == tokens[argument[2]].text
 
     private fun isNamed(tokens: List<InkoToken>, argument: List<Int>): Boolean =
         argument.size >= 2 && tokens[argument[0]].type == InkoTokens.IDENTIFIER && tokens[argument[1]].isOperator(":")

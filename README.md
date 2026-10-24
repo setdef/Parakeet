@@ -166,8 +166,16 @@ compiler, so it always agrees with your installed Inko version.
   Cuttlebone answers questions about unchanged text from the check it kept,
   in under a millisecond after a file's first check, which costs a whole
   check (about 50 ms for a small project, more on a busy machine). A
-  question whose wait is cancelled (the caret moved) isn't cancelled itself:
-  that would discard the checks Cuttlebone kept.
+  question whose wait is cancelled because the caret moved isn't cancelled
+  itself: that would discard the checks Cuttlebone kept, and its answer is
+  kept for next time. An edit cancels (`$/cancelRequest`) every question
+  about the text before it, since Cuttlebone (from its seventh milestone)
+  would otherwise answer each one for that text, at a check each, for nobody:
+  except what's still waiting for its answer, a search or completion (whose
+  items are filtered as you type on). Usage highlighting, which runs each
+  time the caret moves, so on every keystroke, asks once the text has been
+  still for as long as highlighting waits after an edit (IntelliJ's
+  autoreparse delay, 0.3 s by default).
   In code being edited, Cuttlebone answers from a copy
   with the broken lines blank, or else from the last version that type
   checked ("stale", shown only where nothing changes code; see

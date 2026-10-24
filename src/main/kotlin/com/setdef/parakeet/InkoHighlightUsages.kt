@@ -27,11 +27,15 @@ class InkoHighlightUsagesHandler(editor: Editor, file: PsiFile, private val name
 
     override fun computeUsages(targets: List<InkoName>) {
         val queries = CuttleboneQueries.getInstance(name.project)
+        // This runs each time the caret moves, so as each key is typed, for the name being typed: it asks once the
+        // text is still. Until then there's nothing to show for this text.
+        if (!queries.awaitStill(myFile.viewProvider.document ?: return)) return
         val answer = queries.documentHighlights(myFile, name.textRange.startOffset)
         // Then the caret's name, so that what's invoked on it from the EDT resolves it without waiting. After the
         // highlights, which don't wait for it: until a check can be kept (files written in the last two seconds
-        // aren't), each question is a check of its own.
-        queries.prefetchDefinition(myFile, name.textRange.startOffset)
+        // aren't), each question is a check of its own. Not where Cuttlebone can't check the code: the
+        // definition at the same place has no answer either.
+        if (answer?.editing != true) queries.prefetchDefinition(myFile, name.textRange.startOffset)
         answer ?: return
         if (!answer.editing) {
             // Cuttlebone's Write (bindings and assignments) and Text (declarations) are writes; the rest are reads.

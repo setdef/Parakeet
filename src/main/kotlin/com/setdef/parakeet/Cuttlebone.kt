@@ -88,9 +88,9 @@ import java.util.concurrent.TimeUnit
 /**
  * Cuttlebone, a language server for Inko (an executable the user installs),
  * answers with the compiler's own types and definitions. Parakeet runs one per
- * project through IntelliJ's LSP API, which owns the process, document sync
- * and cancellation. Parakeet requires it: its features ask it questions
- * ([CuttleboneQueries]), and those that need its answers are unavailable
+ * project through IntelliJ's LSP API, which owns the process and document
+ * sync. Parakeet requires it: its features ask it questions, and cancel those
+ * an edit leaves nobody to see ([CuttleboneQueries]); those that need its answers are unavailable
  * without it. Only where it can't check the code being edited do some fall
  * back to Parakeet's own reading of the code ([CuttleboneQueries.Answer.editing]).
  */

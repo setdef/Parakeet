@@ -219,6 +219,51 @@ class CuttleboneClientTest : CuttleboneTestCase() {
         assertEquals(1, received(definition).size)
     }
 
+    private fun edit() {
+        com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) { myFixture.editor.document.insertString(myFixture.editor.document.text.indexOf("1\n"), "4") }
+        com.intellij.psi.PsiDocumentManager.getInstance(project).commitAllDocuments()
+    }
+
+    private fun cancelled() = received("\$/cancelRequest").map { it.getAsJsonObject("params").get("id") }
+
+    // Since milestone 7, Cuttlebone answers every request for the text it was asked about, even after an edit,
+    // at a check each: a request about text that has changed since is one nobody will see, so it's cancelled,
+    // the one Cuttlebone is checking as well as those queued behind it.
+    fun testAnEditCancelsTheRequestsAboutTheTextBefore() {
+        useFake(answered().copy(hang = true))
+        open("src/main.inko", text)
+        runningServer()
+        waitFor("didOpen") { received("textDocument/didOpen").isNotEmpty() }
+        assertNull("no answer yet", query(budgetMs = 0))
+        assertNull("no answer yet", query(marker = "x =", budgetMs = 0))
+        waitFor("the requests") { received(definition).size == 2 }
+        edit()
+        // Well within IntelliJ's own 30 s request timeout, which also cancels.
+        waitFor("the requests to be cancelled", timeoutSeconds = 5) { cancelled().size == 2 }
+        assertEquals(received(definition).map { it.get("id") }.toSet(), cancelled().toSet())
+    }
+
+    // A search (Find Usages, Rename) waits for its answer outside highlighting, and shows what it finds: an edit
+    // meanwhile doesn't take its answer away.
+    fun testAnEditLeavesTheRequestsASearchIsWaitingFor() {
+        useFake(answered().copy(delayMs = 1500))
+        open("src/main.inko", text)
+        runningServer()
+        waitFor("didOpen") { received("textDocument/didOpen").isNotEmpty() }
+        val file = myFixture.file
+        val offset = text.indexOf("to_string")
+        val search = com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread<CuttleboneQueries.Answer<*>?> {
+            com.intellij.openapi.application.ReadAction.compute<CuttleboneQueries.Answer<*>?, Throwable> {
+                CuttleboneQueries.getInstance(project).definition(file, offset, CuttleboneQueries.SEARCH_BUDGET_MS)
+            }
+        }
+        waitFor("the request") { received(definition).size == 1 }
+        edit()
+        waitFor("the search's answer") { search.isDone }
+        assertNotNull(search.get()?.value)
+        assertEquals(emptyList<Any>(), received("\$/cancelRequest"))
+    }
+
     fun testHighlightingDoesntWaitForWhatOnlyTheEditorsActionsShow() {
         val hover = "textDocument/hover"
         useFake(answered().copy(delayMs = 500, answers = answered().answers + answerAt(text, "to_string", hover, mapOf("contents" to "Int"))))

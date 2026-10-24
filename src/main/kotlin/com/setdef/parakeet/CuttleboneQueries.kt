@@ -65,7 +65,7 @@ import java.util.concurrent.atomic.AtomicLong
  * already cached. Nothing waits on the EDT or in a write action either.
  */
 @Service(Service.Level.PROJECT)
-class CuttleboneQueries(private val project: Project) {
+class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Disposable {
     /**
      * Cuttlebone's answer: `fresh` (perhaps [repaired]), or [stale] where the feature asked for it may be;
      * [value] may still be null (nothing there).
@@ -86,6 +86,75 @@ class CuttleboneQueries(private val project: Project) {
 
     private val cache = ConcurrentHashMap<Key, Pending>()
     private val cachedAt = AtomicLong(-1)
+
+    /**
+     * How many times the text of the project's Inko documents has changed. Since milestone 7, Cuttlebone answers
+     * each request for the text it was asked about, even after an edit, at a check each: so a request sent
+     * before an edit, that nothing is waiting for, is cancelled ([cancelOutdated]).
+     */
+    private val edits = AtomicLong()
+
+    /** When the last of [edits] was made ([System.nanoTime]). */
+    @Volatile private var editedAt = 0L
+
+    /** The requests sent and not yet answered: the cache may have let go of them (any PSI change clears it). */
+    private val unanswered: MutableSet<Pending> = ConcurrentHashMap.newKeySet()
+
+    init {
+        com.intellij.openapi.editor.EditorFactory.getInstance().eventMulticaster.addDocumentListener(object : com.intellij.openapi.editor.event.DocumentListener {
+            override fun documentChanged(event: com.intellij.openapi.editor.event.DocumentEvent) {
+                val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
+                if (file.extension != Inko.EXTENSION || project.isDisposed) return
+                if (!com.intellij.openapi.roots.ProjectFileIndex.getInstance(project).isInContent(file)) return
+                editedAt = System.nanoTime()
+                edits.incrementAndGet()
+                cancelOutdated()
+            }
+        }, this)
+    }
+
+    override fun dispose() {}
+
+    /**
+     * Waits until the project's Inko text has gone the daemon's reparse delay without an edit, as IntelliJ's
+     * highlighting does before it starts: true once it has, false if [document] changed meanwhile, so that what
+     * waited has nothing to show for the text it was given. For what runs on every keystroke (usage highlighting
+     * runs each time the caret moves): in code being typed, each question about new text costs Cuttlebone a
+     * check, up to three where it doesn't parse, about a name that's only half typed. Doesn't wait where nothing
+     * may wait (the EDT, a write action): an action invoked there asks at once.
+     */
+    fun awaitStill(document: Document): Boolean {
+        val application = ApplicationManager.getApplication()
+        if (application.isDispatchThread || application.isWriteAccessAllowed) return true
+        val stamp = document.modificationStamp
+        val still = TimeUnit.MILLISECONDS.toNanos(com.intellij.codeInsight.daemon.DaemonCodeAnalyzerSettings.getInstance().autoReparseDelay.toLong())
+        while (true) {
+            ProgressManager.checkCanceled()
+            if (document.modificationStamp != stamp) return false
+            val left = editedAt + still - System.nanoTime()
+            if (left <= 0) return true
+            Thread.sleep(minOf(TimeUnit.NANOSECONDS.toMillis(left) + 1, POLL_MS))
+        }
+    }
+
+    /**
+     * Cancels ($/cancelRequest) every request about text that has changed since, unless something is still
+     * waiting for its answer: a search, completion (whose items are filtered as the person types on), or an
+     * action. What waits in highlighting or a read action stops waiting when the text changes, and cancels its
+     * request then ([await]). Answers already in are kept for as long as the cache is.
+     */
+    private fun cancelOutdated() {
+        for (pending in unanswered) if (pending.waiters.get() == 0) cancelIfOutdated(pending)
+    }
+
+    /**
+     * Cancels [pending] if its text has changed, the one Cuttlebone is checking included: that kills Cuttlebone's
+     * worker, and the checks it kept, so the next check starts from nothing (about 40 ms more for std's json.inko),
+     * which the typing replay measured costing about what finishing the outdated checks would.
+     */
+    private fun cancelIfOutdated(pending: Pending) {
+        if (pending.outdated(edits.get())) pending.cancel()
+    }
 
     /** How many requests were sent, for tests. */
     val sent = AtomicLong()
@@ -260,15 +329,16 @@ class CuttleboneQueries(private val project: Project) {
         val stamp = PsiModificationTracker.getInstance(project).modificationCount
         if (cachedAt.getAndSet(stamp) != stamp) cache.clear()
         val key = Key(System.identityHashCode(server), method, identifier.uri, offset)
-        cache[key]?.let { if (!it.answer.isCancelled) return it }
-        val pending = Pending(CompletableFuture(), EmptyProgressIndicator())
-        cache.putIfAbsent(key, pending)?.let { return it }
+        cache[key]?.let { if (!it.answer.isCancelled && !it.indicator.isCanceled) return it }
+        val pending = Pending(CompletableFuture(), EmptyProgressIndicator(), edits.get())
+        cache.putIfAbsent(key, pending)?.let { if (!it.indicator.isCanceled) return it else cache[key] = pending }
         val request = sent.incrementAndGet()
+        unanswered += pending
         val trace = trace
         trace?.sent(request, method, document)
         // IntelliJ's sendRequestSync turns a cancelled progress indicator into $/cancelRequest, so each
         // request waits on a pooled thread under an indicator of its own: cancelling what waits for it doesn't
-        // cancel the request (see await).
+        // cancel the request (see await), and an edit does (cancelOutdated).
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 var status: CompletableFuture<CuttleboneStatus?>? = null
@@ -281,11 +351,13 @@ class CuttleboneQueries(private val project: Project) {
                         }
                     }
                 }, pending.indicator)
+                unanswered -= pending
                 // Every answer is kept, whatever its status: query decides which it may use.
                 val answer = Answer(convert(result), status?.let { runCatching { it.get(1, TimeUnit.SECONDS) }.getOrNull() })
                 trace?.answered(request, answer.status)
                 pending.answer.complete(answer)
             } catch (e: Throwable) {
+                unanswered -= pending
                 trace?.failed(request, e)
                 cache.remove(key, pending)
                 pending.answer.completeExceptionally(e)
@@ -295,14 +367,23 @@ class CuttleboneQueries(private val project: Project) {
         return pending
     }
 
-    /** A request: its answer, and the indicator it's sent under. */
-    class Pending(val answer: CompletableFuture<Answer<*>?>, val indicator: ProgressIndicator)
+    /** A request: its answer, the indicator it's sent under, and how many [edits] there had been when it was sent. */
+    class Pending(val answer: CompletableFuture<Answer<*>?>, val indicator: ProgressIndicator, private val edits: Long = 0) {
+        /** How many are waiting for the answer right now ([await]). */
+        val waiters = java.util.concurrent.atomic.AtomicInteger()
+
+        fun outdated(edits: Long): Boolean = edits != this.edits && !answer.isDone
+
+        /** IntelliJ's sendRequestSync turns the cancelled indicator into $/cancelRequest. */
+        fun cancel() = indicator.cancel()
+    }
 
     private fun await(pending: Pending, budgetMs: Long, wait: Boolean): Answer<*>? {
         val future = pending.answer
         if (future.isDone) return runCatching { future.getNow(null) }.getOrNull()
         if (!wait || budgetMs <= 0) return null
         val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(budgetMs)
+        pending.waiters.incrementAndGet()
         try {
             while (true) {
                 ProgressManager.checkCanceled()
@@ -317,11 +398,12 @@ class CuttleboneQueries(private val project: Project) {
                     return null
                 }
             }
-        } catch (e: ProcessCanceledException) {
-            // IntelliJ cancelled whatever was waiting (the caret moved, say). The request isn't cancelled: that
-            // would kill Cuttlebone's worker and every check it kept, so the next question would pay a whole
-            // check again. Its answer is kept for next time; an edit to the document cancels it on the server.
-            throw e
+        } finally {
+            // IntelliJ cancelled whatever was waiting, or its budget ran out. If the caret moved, the request isn't
+            // cancelled: that would kill Cuttlebone's worker and every check it kept, so the next question would
+            // pay a whole check again, and its answer is kept for next time. If the text changed (an edit cancels
+            // highlighting), nobody will see the answer, so it's cancelled, unless something else still waits for it.
+            if (pending.waiters.decrementAndGet() == 0) cancelIfOutdated(pending)
         }
     }
 

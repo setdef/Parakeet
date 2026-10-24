@@ -236,7 +236,8 @@ class InkoCompilerReferences(private val project: Project) {
 
 /** Find Usages for Inko declarations: the one search that counts code Cuttlebone can't check, as possible usages. */
 class InkoFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
-    override fun canFindUsages(element: PsiElement): Boolean = element is InkoDeclaration && !element.isLocal
+    // Without Cuttlebone, none: IntelliJ asks this before InkoFindUsagesProvider.canFindUsagesFor.
+    override fun canFindUsages(element: PsiElement): Boolean = element is InkoDeclaration && !element.isLocal && Cuttlebone.canSearch(element)
 
     override fun createFindUsagesHandler(element: PsiElement, forHighlightUsages: Boolean): FindUsagesHandler =
         object : FindUsagesHandler(element) {

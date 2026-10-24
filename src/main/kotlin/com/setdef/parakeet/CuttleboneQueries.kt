@@ -255,7 +255,8 @@ class CuttleboneQueries(private val project: Project) {
         cache.putIfAbsent(key, pending)?.let { return it }
         sent.incrementAndGet()
         // IntelliJ's sendRequestSync turns a cancelled progress indicator into $/cancelRequest, so each
-        // request waits on a pooled thread under an indicator of its own, cancelled with the request.
+        // request waits on a pooled thread under an indicator of its own: cancelling what waits for it doesn't
+        // cancel the request (see await).
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 var status: CompletableFuture<CuttleboneStatus?>? = null

@@ -462,6 +462,7 @@ Audits and session reports, oldest first:
 - [Connecting to Cuttlebone](docs/history/SESSION-cuttlebone-integration.md)
 - [Who owns each LSP feature](docs/history/SESSION-lsp-ownership.md)
 - [Stale and repaired answers](docs/history/SESSION-stale-and-repaired.md)
+- [Requiring Cuttlebone](docs/history/SESSION-require-cuttlebone.md)
 
 ## Icon
 

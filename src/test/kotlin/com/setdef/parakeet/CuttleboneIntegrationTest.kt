@@ -57,7 +57,10 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     private fun open(text: String = main) {
         myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/main.inko", text).virtualFile)
         PlatformTestUtil.waitWithEventsDispatching({ "Cuttlebone didn't start: ${CuttleboneService.getInstance(project).status?.message}" }, {
-            CuttleboneService.getInstance(project).server() != null && CuttleboneService.getInstance(project).editorsSynced()
+            // IntelliJ has sent the editor's text (didOpen): its own features (Go to Type Declaration) need that.
+            val server = CuttleboneService.getInstance(project).server()
+            server != null && CuttleboneService.getInstance(project).sentVersions[server.getDocumentIdentifier(myFixture.file.virtualFile).uri] ==
+                server.getDocumentVersion(myFixture.editor.document)
         }, 60)
     }
 

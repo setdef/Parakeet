@@ -127,8 +127,8 @@ class CuttleboneQueries(private val project: Project) {
         if (!virtualFile.isInLocalFileSystem || virtualFile.extension != Inko.EXTENSION) return null
         val service = CuttleboneService.getInstance(project)
         val server = service.server() ?: return null
-        if (!isSynced(virtualFile)) return null
         val document = FileDocumentManager.getInstance().getDocument(virtualFile) ?: return null
+        if (!service.isSynced(server, virtualFile, document)) return null
         if (offset < 0 || offset > document.textLength) return null
         val identifier = server.getDocumentIdentifier(virtualFile)
         val position = position(document, offset)
@@ -200,15 +200,6 @@ class CuttleboneQueries(private val project: Project) {
             throw e
         }
     }
-
-    /**
-     * Whether the server has this file's current text: IntelliJ syncs the files
-     * open in editors (once it has had time to send `didOpen`), and Cuttlebone
-     * reads saved files from disk.
-     */
-    private fun isSynced(file: VirtualFile): Boolean =
-        (FileEditorManager.getInstance(project).isFileOpen(file) && CuttleboneService.getInstance(project).editorsSynced()) ||
-            !FileDocumentManager.getInstance().isFileModified(file)
 
     /** Where [location] points, as Parakeet's own element: the declaration's name, or a module's file. */
     fun target(location: Location): PsiElement? {

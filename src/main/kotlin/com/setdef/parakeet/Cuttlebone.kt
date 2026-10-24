@@ -4,9 +4,11 @@ import com.google.gson.JsonObject
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.configurations.PathEnvironmentVariableUtil
 import com.intellij.execution.process.CapturingProcessHandler
+import com.intellij.execution.process.OSProcessHandler
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.lsp.api.Lsp4jClient
@@ -70,10 +72,13 @@ import com.intellij.platform.lsp.api.customization.LspTypeHierarchyDisabled
 import com.intellij.platform.lsp.api.customization.LspWorkspaceSymbolCustomizer
 import com.intellij.platform.lsp.api.customization.LspWorkspaceSymbolDisabled
 import com.intellij.util.concurrency.AppExecutorUtil
+import com.intellij.util.io.BaseDataReader
+import com.intellij.util.io.BaseOutputReader
 import org.eclipse.lsp4j.ClientCapabilities
 import org.eclipse.lsp4j.GeneralClientCapabilities
 import org.eclipse.lsp4j.InitializeResult
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification
+import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
@@ -156,6 +161,23 @@ class CuttleboneDescriptor(project: Project) : ProjectWideLspServerDescriptor(pr
     override fun createCommandLine(): GeneralCommandLine {
         val executable = Cuttlebone.executable(project) ?: throw com.intellij.execution.ExecutionException("cuttlebone wasn't found")
         return GeneralCommandLine(executable.toString()).withCharset(Charsets.UTF_8)
+    }
+
+    // IntelliJ's own process handler, with what it writes to the server read on the way.
+    override fun startServerProcess(): OSProcessHandler {
+        val sent = CuttleboneService.getInstance(project).sentVersions
+        sent.clear()
+        return object : OSProcessHandler(createCommandLine()) {
+            private val input by lazy { CuttleboneInputTap(super.getProcessInput(), sent) }
+
+            override fun getProcessInput(): OutputStream = input
+
+            // As IntelliJ's default: the server's output isn't lines, and it's quiet between answers.
+            override fun readerOptions(): BaseOutputReader.Options = object : BaseOutputReader.Options() {
+                override fun policy(): BaseDataReader.SleepingPolicy = forMostlySilentProcess().policy()
+                override fun splitToLines(): Boolean = false
+            }
+        }
     }
 
     override fun createInitializationOptions(): Any = JsonObject().apply {
@@ -251,6 +273,66 @@ abstract class CuttleboneCustomization261 : CuttleboneCustomization() {
     override val onTypeFormattingCustomizer: LspOnTypeFormattingCustomizer get() = LspOnTypeFormattingDisabled
 }
 
+/**
+ * The server's stdin, as IntelliJ writes it: passes every byte on, and records
+ * each document's version as `didOpen` and `didChange` carry it (and forgets
+ * it at `didClose`), once its message has been written.
+ */
+class CuttleboneInputTap(private val delegate: OutputStream, private val sent: MutableMap<String, Int>) : OutputStream() {
+    private val buffer = java.io.ByteArrayOutputStream()
+
+    override fun write(b: Int) = write(byteArrayOf(b.toByte()), 0, 1)
+
+    @Synchronized
+    override fun write(b: ByteArray, off: Int, len: Int) {
+        delegate.write(b, off, len)
+        buffer.write(b, off, len)
+        while (true) {
+            val bytes = buffer.toByteArray()
+            val headerEnd = indexOf(bytes, HEADER_END)
+            if (headerEnd < 0) return
+            val header = String(bytes, 0, headerEnd, Charsets.US_ASCII)
+            val length = CONTENT_LENGTH.find(header)?.groupValues?.get(1)?.toIntOrNull() ?: return reset(bytes, headerEnd + HEADER_END.size)
+            val bodyStart = headerEnd + HEADER_END.size
+            if (bytes.size < bodyStart + length) return
+            record(String(bytes, bodyStart, length, Charsets.UTF_8))
+            reset(bytes, bodyStart + length)
+        }
+    }
+
+    override fun flush() = delegate.flush()
+
+    override fun close() = delegate.close()
+
+    private fun reset(bytes: ByteArray, from: Int) {
+        buffer.reset()
+        buffer.write(bytes, from, bytes.size - from)
+    }
+
+    private fun record(body: String) {
+        // Only document sync matters; parsing anything else (or anything malformed) is skipped.
+        val method = METHOD.find(body.take(200))?.groupValues?.get(1) ?: return
+        if (method != "textDocument/didOpen" && method != "textDocument/didChange" && method != "textDocument/didClose") return
+        val document = runCatching { com.google.gson.JsonParser.parseString(body).asJsonObject.getAsJsonObject("params").getAsJsonObject("textDocument") }.getOrNull() ?: return
+        val uri = document.get("uri")?.asString ?: return
+        if (method == "textDocument/didClose") sent.remove(uri) else document.get("version")?.asInt?.let { sent[uri] = it }
+    }
+
+    private companion object {
+        val HEADER_END = "\r\n\r\n".toByteArray(Charsets.US_ASCII)
+        val CONTENT_LENGTH = Regex("""(?i)Content-Length:\s*(\d+)""")
+        val METHOD = Regex(""""method"\s*:\s*"([^"]+)"""")
+
+        fun indexOf(bytes: ByteArray, part: ByteArray): Int {
+            outer@ for (i in 0..bytes.size - part.size) {
+                for (j in part.indices) if (bytes[i + j] != part[j]) continue@outer
+                return i
+            }
+            return -1
+        }
+    }
+}
+
 /** A `cuttlebone/status` notification: whether the response that follows it is a fresh answer, and if not, why. */
 data class CuttleboneStatus(val method: String, val uri: String, val status: String, val reason: String?, val elapsedMs: Double?) {
     val fresh: Boolean get() = status == "fresh"
@@ -283,16 +365,19 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
     /** Latest `cuttlebone/status` per (method, URI), taken by the response that follows it. */
     val statuses = ConcurrentHashMap<Pair<String, String>, CuttleboneStatus>()
 
-    /** When the running server initialized (System.nanoTime), or 0. */
-    @Volatile private var initializedAt = 0L
+    /** The document version IntelliJ last sent the running server, per URI ([CuttleboneInputTap]). */
+    val sentVersions = ConcurrentHashMap<String, Int>()
 
     /**
-     * Whether IntelliJ has sent the server the text of the files open in editors.
-     * It does so right after `initialize`, and then as files open, but reports
-     * that only through internal API, so this allows it [SYNC_GRACE_MS].
+     * Whether the running server has [file]'s current text. IntelliJ reports
+     * `didOpen` only through internal API, so Parakeet reads what it writes to
+     * the server: a document it sent is synced once the version it sent is the
+     * document's current one, and a file it never sent is read from disk.
      */
-    fun editorsSynced(): Boolean =
-        initializedAt != 0L && System.nanoTime() - initializedAt > TimeUnit.MILLISECONDS.toNanos(SYNC_GRACE_MS)
+    fun isSynced(server: LspServer, file: VirtualFile, document: com.intellij.openapi.editor.Document): Boolean {
+        val sent = sentVersions[server.getDocumentIdentifier(file).uri]
+        return if (sent != null) sent == server.getDocumentVersion(document) else !FileDocumentManager.getInstance().isFileModified(file)
+    }
 
     @Volatile var status: Cuttlebone.Status? = null
         private set
@@ -347,12 +432,11 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         everInitialized = false
         restarts = 0
         statuses.clear()
-        initializedAt = 0
+        sentVersions.clear()
         if (!project.isDefault) LspServerManager.getInstance(project).stopServers(CuttleboneSupportProvider::class.java)
     }
 
     fun initialized(result: InitializeResult) {
-        initializedAt = System.nanoTime()
         everInitialized = true
         restarts = 0
         val info = result.serverInfo
@@ -360,7 +444,7 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
     }
 
     fun stopped(normally: Boolean) {
-        initializedAt = 0
+        sentVersions.clear()
         if (normally) return
         statuses.clear()
         // A server that never initialized refused the session (or couldn't start): retrying won't help.
@@ -399,7 +483,6 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         private val LOG = logger<CuttleboneService>()
         const val MAX_RESTARTS = 5
         const val BACKOFF_MS = 1000L
-        const val SYNC_GRACE_MS = 1000L
 
         fun getInstance(project: Project): CuttleboneService = project.service()
     }

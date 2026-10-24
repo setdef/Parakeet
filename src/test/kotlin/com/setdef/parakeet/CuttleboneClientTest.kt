@@ -47,8 +47,8 @@ class CuttleboneClientTest : CuttleboneTestCase() {
         // the server might only have the file on disk, so no question is asked.
         com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) { myFixture.editor.document.insertString(0, "\n") }
         com.intellij.psi.PsiDocumentManager.getInstance(project).commitAllDocuments()
-        if (!CuttleboneService.getInstance(project).editorsSynced()) assertNull(query(marker = "x ="))
-        waitFor("the editors' text to be synced") { CuttleboneService.getInstance(project).editorsSynced() }
+        if (!synced()) assertNull(query(marker = "x ="))
+        waitFor("the editor's text to be synced") { synced() }
         com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) { myFixture.editor.document.deleteString(0, 1) }
         com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) {
             myFixture.editor.document.replaceString(text.indexOf("1\n"), text.indexOf("1\n") + 1, "42")
@@ -58,6 +58,23 @@ class CuttleboneClientTest : CuttleboneTestCase() {
         val methods = messages().mapNotNull { it.get("method")?.asString }
         assertTrue(methods.toString(), methods.indexOf("textDocument/didOpen") in 0 until methods.indexOf(definition))
         assertTrue(methods.toString(), methods.lastIndexOf("textDocument/didChange") in 0 until methods.indexOf(definition))
+    }
+
+    fun testAnEditedFileIsAskedAboutAsSoonAsItsTextIsSent() {
+        useFake(answered())
+        open("src/main.inko", text)
+        // Edited before the server starts, so only didOpen can give the server this text.
+        com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) {
+            myFixture.editor.document.replaceString(text.indexOf("1\n"), text.indexOf("1\n") + 1, "2")
+        }
+        com.intellij.psi.PsiDocumentManager.getInstance(project).commitAllDocuments()
+        runningServer(waitForOpen = false)
+        waitFor("didOpen") { received("textDocument/didOpen").isNotEmpty() }
+        val sent = received("textDocument/didOpen").single().getAsJsonObject("params").getAsJsonObject("textDocument").get("text").asString
+        assertEquals(text.replace("1\n", "2\n"), sent)
+        assertNotNull("asked as soon as didOpen was sent, with no grace period", inBackground {
+            CuttleboneQueries.getInstance(project).definition(myFixture.file, text.indexOf("to_string"), 2000)
+        })
     }
 
     fun testAnswersAreFreshLocationsAndCached() {

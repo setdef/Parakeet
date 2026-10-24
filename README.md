@@ -1,5 +1,7 @@
 # Parakeet for Inko
 
+[![Certified Shovelware](https://justin.searls.co/img/shovelware.svg)](https://justin.searls.co/shovelware/)
+
 Parakeet is unofficial, community-made support for the
 [Inko](https://inko-lang.org) programming language in JetBrains IDEs. It's
 tested in IntelliJ IDEA, and should work in the others (RubyMine, WebStorm,
@@ -477,6 +479,7 @@ Audits and session reports, oldest first:
 - [Stale and repaired answers](docs/history/SESSION-stale-and-repaired.md)
 - [Requiring Cuttlebone](docs/history/SESSION-require-cuttlebone.md)
 - [Replaying typing against Cuttlebone](docs/history/SESSION-typing-replay.md)
+- [Declaration errors, and 0.12](docs/history/SESSION-declaration-errors-and-0.12.md)
 
 ## Icon
 

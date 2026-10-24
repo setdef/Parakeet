@@ -98,13 +98,14 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
      * definition is, [hover] what type is at a place, and [editing] where it can't check the code (it's being
      * edited). Every other question is answered: nothing there, or with [otherwiseEditing], can't check it.
      * `references` lists a declaration and every use resolving to it, as one check of the whole project does,
-     * so it has no answer while any of the code can't be checked.
+     * so it has no answer while any of the code can't be checked, except for the declarations in [answersReferences].
      */
     inner class Compiler {
         private val definitions = mutableListOf<Pair<At, At>>()
         private val hovers = mutableListOf<Triple<At, String, Int>>()
         private val editing = mutableListOf<At>()
         private var otherwiseEditing = false
+        private val answeredReferences = mutableListOf<At>()
 
         fun resolves(use: At, declaration: At) = apply { definitions += use to declaration }
 
@@ -116,6 +117,12 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
         fun otherwiseEditing() = apply { otherwiseEditing = true }
         fun hover(at: At, type: String, length: Int = at.marker.length - at.shift) = apply { hovers += Triple(at, type, length) }
         fun editing(at: At) = apply { editing += at }
+
+        /**
+         * [declaration]'s references are given even while some code can't be checked: since milestone 8, Cuttlebone
+         * gives them when no unit it can't answer in mentions the name.
+         */
+        fun answersReferences(declaration: At) = apply { answeredReferences += declaration }
 
         private fun matches(at: At, file: com.intellij.openapi.vfs.VirtualFile, offset: Int) = file.path.endsWith("/${at.path}") && at.offset == offset
 
@@ -132,7 +139,9 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
                     listOf(org.eclipse.lsp4j.Location(target.url, range(declaration, declaration.marker.length - declaration.shift)))
                 }
                 "textDocument/references" -> {
-                    if (editing.isNotEmpty() || otherwiseEditing) return@stubCuttlebone CuttleboneQueries.Answer<Any>(null, status("unavailable", "declarationErrors"))
+                    val answered = answeredReferences.any { matches(it, file, offset) } ||
+                        definitions.any { matches(it.first, file, offset) && answeredReferences.any { at -> at.path == it.second.path && at.offset == it.second.offset } }
+                    if ((editing.isNotEmpty() || otherwiseEditing) && !answered) return@stubCuttlebone CuttleboneQueries.Answer<Any>(null, status("unavailable", "declarationErrors"))
                     val declaration = definitions.firstOrNull { matches(it.first, file, offset) }?.second
                         ?: definitions.map { it.second }.firstOrNull { matches(it, file, offset) }
                     declaration?.let { target ->

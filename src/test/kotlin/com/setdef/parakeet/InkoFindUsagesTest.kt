@@ -157,6 +157,16 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
         assertEquals(mapOf("main.inko:6" to null, "main.inko:7" to InkoUsageTypeProvider.POSSIBLE), types)
     }
 
+    // Since milestone 8, references answer for one declaration (`helper`, which no code Cuttlebone can't check
+    // names) while another's (`value`'s) have none: having had the first doesn't make `x.value` certain.
+    fun testReferencesForOneDeclarationDontMakeAnothersUsagesCertain() {
+        compiler().editing(inMain("value\n  total")).answersReferences(inUtil("helper ->")).install()
+        assertEquals(listOf("main.inko:1", "main.inko:5"), usagesOf(declaration("src/app/util.inko", "helper ->")))
+        val usages = myFixture.findUsages(declaration("src/app/util.inko", "value ->"))
+        val types = usages.associate { it.describe() to InkoUsageTypeProvider().getUsageType(it.element!!) }
+        assertEquals(mapOf("main.inko:6" to null, "main.inko:7" to InkoUsageTypeProvider.POSSIBLE), types)
+    }
+
     fun testRenameALocalInPlace() {
         open("src/main.inko")
         myFixture.editor.caretModel.moveToOffset(myFixture.file.text.indexOf("total ="))

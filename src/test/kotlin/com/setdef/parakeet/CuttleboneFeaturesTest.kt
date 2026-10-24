@@ -241,7 +241,7 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
     }
 
     fun testWithoutReferencesEachOccurrenceIsResolved() {
-        // An error anywhere in the project stops the whole project's type check, but not this file's.
+        // Code that a declaration's error may affect mentions `size` somewhere in the project, but not in this file.
         start(referencesOfSize("size(scale", status = "unavailable").copy(reason = "declarationErrors"), definitionOfSize())
         assertEquals(listOf(main.indexOf("size(2.0)")), usagesOfSize("size(scale"))
         assertEquals(1, received("textDocument/definition").size)

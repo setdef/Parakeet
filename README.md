@@ -195,8 +195,9 @@ compiler, so it always agrees with your installed Inko version.
   dependency), a use of it in the project is found first, by resolving
   candidates a file at a time. A trait's method counts the calls to the
   methods implementing it, since the compiler gives each its own id, and
-  renaming any of them renames them all. Where references have no answer (an
-  error anywhere in the project stops its type check), each candidate is
+  renaming any of them renames them all. Where references have no answer (a
+  file in the project doesn't parse or imports a module that doesn't exist,
+  or code a declaration's error may affect mentions the name), each candidate is
   resolved through `textDocument/definition` instead, a file's requests sent
   together. Only there, in code Cuttlebone can't check, does Find Usages show
   what Parakeet's own reading finds, as possible usages; Rename leaves those
@@ -385,8 +386,11 @@ each answer's status:
 | Completion | not used: choosing an item inserts it (Cuttlebone never sends one) | as no answer: Parakeet's reading |
 
 Where Cuttlebone has no answer in code being edited (the method being edited
-after the edit, or a project opened with an error in a declaration), the
-features in the table above read the code themselves. A Cuttlebone before
+after the edit; a file importing a module that doesn't exist, before any good
+check; and, since its eighth milestone, only the method or item with a
+declaration's error and those naming what it's in), the features in the
+table above read the code themselves. Elsewhere in a project with a
+declaration error, Cuttlebone's answers are fresh. A Cuttlebone before
 milestone 5 never sends either kind, and has no answer in such code.
 
 ## Development

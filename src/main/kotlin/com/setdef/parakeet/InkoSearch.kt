@@ -29,10 +29,11 @@ import java.util.concurrent.atomic.AtomicLong
  * Which names a search finds (Find Usages, Rename, Safe Delete, Change Signature, Move, Call Hierarchy,
  * usage counts): the word index finds the candidates, as for any language, and each is a use of the target
  * by the compiler's answers. Cuttlebone's `textDocument/references` lists every use in the project from one
- * check of all of it ([InkoCompilerReferences]). Where it has no answer (an error anywhere in the project
- * stops type checking, or the file is outside a project's `src/` and `test/`), each candidate is resolved
- * through `textDocument/definition` instead, a file's requests sent together. Only Find Usages, which changes
- * nothing, then counts Parakeet's own reading of code Cuttlebone can't check, as possible usages.
+ * check of all of it ([InkoCompilerReferences]). Where it has no answer (a file in the project doesn't parse,
+ * code a declaration's error may affect mentions the name, or the file is outside a project's `src/` and
+ * `test/`), each candidate is resolved through `textDocument/definition` instead, a file's requests sent
+ * together. Only Find Usages, which changes nothing, then counts Parakeet's own reading of code Cuttlebone
+ * can't check, as possible usages.
  */
 object InkoSearch {
     /** What Find Usages is searching for now: for these, code being edited counts by Parakeet's own reading. */
@@ -130,8 +131,6 @@ class InkoCompilerReferences(private val project: Project) {
 
     private val cache = ConcurrentHashMap<Pair<PsiElement, Path>, Optional<Uses>>()
     private val cachedAt = AtomicLong(-1)
-    /** The projects a search had the references of, by the PSI modification count then. */
-    private val answered = ConcurrentHashMap<Path, Long>()
 
     /** For measuring: resolve each candidate through `textDocument/definition`, as when references have no answer. */
     @Volatile
@@ -146,17 +145,19 @@ class InkoCompilerReferences(private val project: Project) {
         val stamp = PsiModificationTracker.getInstance(project).modificationCount
         if (cachedAt.getAndSet(stamp) != stamp) cache.clear()
         val uses = cache.computeIfAbsent(target to root) { Optional.ofNullable(compute(target, root)) }.orElse(null) ?: return null
-        answered[root] = stamp
         return name.textRange.startOffset in uses.offsets[name.containingFile.virtualFile.path].orEmpty()
     }
 
     /**
-     * Whether a search had the references of [name]'s project, with the code as it is: then every use it found
-     * there is by the compiler's ids, and the whole project type checks.
+     * Whether a search found [name] in the references of its target, with the code as it is: by the compiler's
+     * ids. Since milestone 8, references are given for each name apart (none while code Cuttlebone can't check
+     * mentions it), so another search's references say nothing about [name].
      */
     fun covers(name: InkoName): Boolean {
-        val path = checkedPath(name) ?: return false
-        return answered[Inko.projectRoot(path)] == PsiModificationTracker.getInstance(project).modificationCount
+        if (checkedPath(name) == null) return false
+        if (cachedAt.get() != PsiModificationTracker.getInstance(project).modificationCount) return false
+        val path = name.containingFile.virtualFile.path
+        return cache.values.any { uses -> uses.orElse(null)?.offsets?.get(path)?.contains(name.textRange.startOffset) == true }
     }
 
     private fun checkedPath(name: InkoName): Path? {

@@ -157,6 +157,9 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         // Since milestone 5, Cuttlebone answers a file that doesn't parse from a repaired copy (the broken line blank).
         val text = main + twiceAndUses + "\nfn broken( {\n"
         open(text)
+        val answer = inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }!!
+        assertTrue(answer.repaired)
+        assertNull("a repaired answer is fresh, so not marked", inBackground { InkoParameterHints.tooltip(myFixture.file) })
         assertEquals(
             listOf(index to "index", default to "default", text.indexOf("2.0") to "scale", text.indexOf("21") to "value"),
             inBackground { InkoParameterHints.inFile(myFixture.file) },
@@ -193,6 +196,7 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         myFixture.editor.caretModel.moveToOffset(offset)
         val answer = inBackground { CuttleboneQueries.getInstance(project).completion(myFixture.file, offset) }
         assertEquals(listOf("size" to "fn pub size(scale: Float) -> Int"), answer!!.value!!.map { it.label to it.detail })
+        assertTrue(answer.repaired)
         myFixture.completeBasic()
         assertEquals(listOf("size"), myFixture.lookupElementStrings)
     }
@@ -207,6 +211,51 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertNull(inBackground { CuttleboneQueries.getInstance(project).completion(myFixture.file, offset) })
         myFixture.completeBasic()
         assertTrue(myFixture.lookupElementStrings.toString(), myFixture.lookupElementStrings!!.contains("size"))
+    }
+
+    /**
+     * Opens [main], has Cuttlebone check it (its last good check), then adds an import of a module that
+     * doesn't exist: no copy of that type checks, so the answers that hold come from the last good check.
+     */
+    private fun openThenBreakTheImports(): String {
+        open()
+        assertFalse(inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }!!.stale)
+        val document = myFixture.editor.document
+        com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) {
+            document.insertString(main.indexOf("\n") + 1, "import app.nope\n")
+        }
+        com.intellij.psi.PsiDocumentManager.getInstance(project).commitAllDocuments()
+        PlatformTestUtil.waitWithEventsDispatching("the edit to be sent", {
+            val server = CuttleboneService.getInstance(project).server()
+            server != null && CuttleboneService.getInstance(project).isSynced(server, myFixture.file.virtualFile, document)
+        }, 30)
+        return document.text
+    }
+
+    fun testAfterAnEditNoCheckCanAnswerHintsAreStaleAndMarked() {
+        val text = openThenBreakTheImports()
+        val answer = inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }
+        assertTrue("from the last good check: ${answer?.status}", answer!!.stale)
+        // Mapped to where their text is now, a line further down.
+        assertEquals(listOf(text.indexOf("x = make") + 1 to ": B", text.indexOf("y = [") + 1 to ": Array[Int]"), inBackground { InkoParameterHints.types(myFixture.file) })
+        assertEquals(CuttleboneQueries.OUTDATED, inBackground { InkoParameterHints.tooltip(myFixture.file) })
+    }
+
+    fun testAfterAnEditNoCheckCanAnswerResolveDoesntUseAStaleDefinition() {
+        val text = openThenBreakTheImports()
+        // Cuttlebone has a stale definition here, but Rename and the refactorings resolve with it.
+        assertNull(inBackground { CuttleboneQueries.getInstance(project).definition(myFixture.file, text.indexOf("size(2.0)")) })
+        assertEquals(listOf("util.inko:2:size", "util.inko:8:size"), targets(text, "size(2.0)").sorted())
+    }
+
+    fun testAfterAnEditNoCheckCanAnswerDocumentationMarksTheTypeOutdated() {
+        val text = openThenBreakTheImports()
+        val name = nameAt(text, "get(0)")
+        val html = inBackground {
+            val target = (name.reference as InkoReference).multiResolve(false).first().element!!
+            (InkoDocumentationTargetProvider().documentationTarget(target, name.firstChild) as InkoDocumentationTarget).html()
+        }
+        assertTrue(html, html.contains("<code>Result[Int, OutOfBounds]</code> (${CuttleboneQueries.OUTDATED})"))
     }
 
     fun testDocumentationShowsTheTypeOfThisUse() {

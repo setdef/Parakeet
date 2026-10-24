@@ -38,7 +38,8 @@ object FakeCuttlebone {
         val statusNotifications: Boolean = true,
     )
 
-    data class Answer(val method: String, val line: Int, val character: Int, val result: Any?, val status: String = "fresh", val reason: String? = null)
+    /** [repaired] is sent only when set: builds before milestone 5 never send it. */
+    data class Answer(val method: String, val line: Int, val character: Int, val result: Any?, val status: String = "fresh", val reason: String? = null, val repaired: Boolean? = null)
 
     private val gson: Gson = GsonBuilder().serializeNulls().create()
 
@@ -121,7 +122,7 @@ object FakeCuttlebone {
                     "status" to (found?.status ?: "unavailable"),
                     "reason" to (found?.reason ?: if (found == null) "noHir" else null)?.let { mapOf("code" to it, "message" to it) },
                     "elapsedMs" to 1.0,
-                )))
+                ) + listOfNotNull(found?.repaired?.let { "repaired" to it })))
             })
         }
         write(output, JsonObject().apply { add("id", id); add("result", gson.toJsonTree(found?.result)) })

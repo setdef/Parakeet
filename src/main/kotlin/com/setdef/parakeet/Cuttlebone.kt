@@ -337,9 +337,15 @@ class CuttleboneInputTap(private val delegate: OutputStream, private val sent: M
     }
 }
 
-/** A `cuttlebone/status` notification: whether the response that follows it is a fresh answer, and if not, why. */
-data class CuttleboneStatus(val method: String, val uri: String, val status: String, val reason: String?, val elapsedMs: Double?) {
+/**
+ * A `cuttlebone/status` notification: whether the response that follows it is a fresh answer, and if not, why.
+ * Since milestone 5, a fresh answer may come from a [repaired] copy (the documents with some lines blank,
+ * outside anything the answer depends on), and an answer may be [stale]: from the last version of the
+ * documents that type checked, mapped to where its text is now. Builds before that never send either.
+ */
+data class CuttleboneStatus(val method: String, val uri: String, val status: String, val reason: String?, val elapsedMs: Double?, val repaired: Boolean = false) {
     val fresh: Boolean get() = status == "fresh"
+    val stale: Boolean get() = status == "stale"
 }
 
 /**
@@ -356,7 +362,9 @@ class CuttleboneClient(handler: LspServerNotificationsHandler, private val statu
         // `reason` is absent, or null, for a fresh answer.
         val reason = params.get("reason")?.takeIf { it.isJsonObject }?.asJsonObject?.get("code")?.takeIf { it.isJsonPrimitive }?.asString
         val elapsed = params.get("elapsedMs")?.takeIf { it.isJsonPrimitive }?.asDouble
-        statuses[method to uri] = CuttleboneStatus(method, uri, status, reason, elapsed)
+        // Absent before milestone 5, and only ever true on a fresh answer.
+        val repaired = params.get("repaired")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean == true
+        statuses[method to uri] = CuttleboneStatus(method, uri, status, reason, elapsed, repaired)
     }
 }
 

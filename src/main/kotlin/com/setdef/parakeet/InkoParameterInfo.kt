@@ -83,14 +83,18 @@ object InkoCalls {
  * Parameter info (⌘P / Ctrl+P) inside a call's parentheses: Cuttlebone's
  * signature of the method the call resolves to, with the receiver's type
  * arguments filled in, else the `inko doc` definitions it may call. Each item
- * is a [SignatureInformation] or an [InkoDefinition].
+ * is a [CompiledSignature] or an [InkoDefinition].
  */
+/** Cuttlebone's signature for a call, and whether it's from the last version that type checked ([stale]). */
+data class CompiledSignature(val signature: SignatureInformation, val stale: Boolean)
+
 class InkoParameterInfoHandler : ParameterInfoHandler<InkoName, Any> {
     override fun findElementForParameterInfo(context: CreateParameterInfoContext): InkoName? {
         val call = InkoCalls.at(context.file, context.offset) ?: return null
-        val compiled = CuttleboneQueries.getInstance(context.project).signatureHelp(context.file, context.offset)?.value
+        val answer = CuttleboneQueries.getInstance(context.project).signatureHelp(context.file, context.offset)
+        val compiled = answer?.value
         compiled?.signatures?.getOrNull(compiled.activeSignature ?: 0)?.let { signature ->
-            context.itemsToShow = arrayOf(signature)
+            context.itemsToShow = arrayOf(CompiledSignature(signature, answer.stale))
             return call.callee
         }
         val candidates = InkoResolver.resolveDefinitions(call.callee).map { it.first }
@@ -111,7 +115,7 @@ class InkoParameterInfoHandler : ParameterInfoHandler<InkoName, Any> {
 
     override fun updateParameterInfo(element: InkoName, context: UpdateParameterInfoContext) {
         // Cuttlebone's knows named arguments (`times: 1` is `times`'s, in any order); else commas are counted.
-        val compiled = if (context.objectsToView.orEmpty().any { it is SignatureInformation }) {
+        val compiled = if (context.objectsToView.orEmpty().any { it is CompiledSignature }) {
             CuttleboneQueries.getInstance(element.project).signatureHelp(context.file, context.offset)?.value
         } else null
         val active = compiled?.let { help -> help.signatures?.getOrNull(help.activeSignature ?: 0)?.activeParameter ?: help.activeParameter }
@@ -119,12 +123,15 @@ class InkoParameterInfoHandler : ParameterInfoHandler<InkoName, Any> {
     }
 
     override fun updateUI(item: Any, context: ParameterInfoUIContext) {
-        if (item is SignatureInformation) {
-            val range = item.parameters?.getOrNull(context.currentParameterIndex)?.label?.let { label ->
+        if (item is CompiledSignature) {
+            val signature = item.signature
+            val range = signature.parameters?.getOrNull(context.currentParameterIndex)?.label?.let { label ->
                 if (label.isRight) label.right.first to label.right.second
-                else item.label.indexOf(label.left).takeIf { it >= 0 }?.let { it to it + label.left.length }
+                else signature.label.indexOf(label.left).takeIf { it >= 0 }?.let { it to it + label.left.length }
             } ?: (-1 to -1)
-            context.setupUIComponentPresentation(item.label, range.first, range.second, false, false, false, context.defaultParameterColor)
+            // A stale signature is from the last version that type checked: shown, marked.
+            val text = if (item.stale) "${signature.label}  (${CuttleboneQueries.OUTDATED})" else signature.label
+            context.setupUIComponentPresentation(text, range.first, range.second, false, false, false, context.defaultParameterColor)
             return
         }
         val definition = item as InkoDefinition

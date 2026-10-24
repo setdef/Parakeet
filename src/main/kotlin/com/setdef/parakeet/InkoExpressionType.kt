@@ -26,7 +26,8 @@ class InkoExpressionTypeProvider : ExpressionTypeProvider<PsiElement>() {
      * The compiler's type for exactly this expression, from Cuttlebone's hover.
      * Hover gives the innermost expression at a position, so it's asked at the
      * expression's start and at its last token's, and only an answer whose range
-     * is this expression's counts.
+     * is this expression's counts. A stale type (from the last version that type
+     * checked) is shown, marked possibly outdated: Expression Type writes nothing.
      */
     private fun compiledType(expression: InkoExpression): String? {
         val file = expression.containingFile as? InkoFile ?: return null
@@ -39,7 +40,10 @@ class InkoExpressionTypeProvider : ExpressionTypeProvider<PsiElement>() {
             val hovered = hover.range ?: continue
             val start = CuttleboneQueries.offset(document, hovered.start)
             val end = CuttleboneQueries.offset(document, hovered.end)
-            if (start == range.startOffset && end == range.endOffset) return InkoHover.type(hover)
+            if (start == range.startOffset && end == range.endOffset) {
+                val answer = queries.hover(file, offset) ?: continue
+                return InkoHover.type(hover)?.let { if (answer.stale) "$it (${CuttleboneQueries.OUTDATED})" else it }
+            }
         }
         return null
     }

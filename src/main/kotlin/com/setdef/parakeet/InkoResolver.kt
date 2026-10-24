@@ -168,7 +168,7 @@ class InkoResolver private constructor(
         /**
          * The definition Cuttlebone's `textDocument/definition` gives for [name], as
          * Parakeet's own definition there, for the names the heuristic guesses at
-         * (members, calls, constants, fields). Null when there's no fresh answer,
+         * (members, calls, constants, fields). Null when there's no fresh answer (a stale one never counts),
          * it's empty, or it points somewhere Parakeet doesn't know a definition.
          */
         private fun compiled(name: InkoName, file: PsiFile, context: InkoNameContext, symbols: InkoSymbols): Pair<InkoDefinition, PsiElement>? {

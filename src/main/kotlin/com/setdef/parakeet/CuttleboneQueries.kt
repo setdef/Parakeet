@@ -51,7 +51,8 @@ import java.util.concurrent.atomic.AtomicLong
  * Asks Cuttlebone, through IntelliJ's connection to it, for what Parakeet would
  * otherwise guess. Every question has a time budget; when it runs out, or there's
  * no server, or Cuttlebone's status isn't `fresh`, the answer is null and callers
- * use their heuristic. Answers are cached until the project's PSI changes, so
+ * use their heuristic. A `stale` answer is returned only to the questions that
+ * take one (`stale = true`): those whose answers are shown and change no code. Answers are cached until the project's PSI changes, so
  * IntelliJ asking again (resolve is called constantly) costs nothing.
  *
  * Highlighting passes never wait: they use answers already cached, so typing never
@@ -59,8 +60,14 @@ import java.util.concurrent.atomic.AtomicLong
  */
 @Service(Service.Level.PROJECT)
 class CuttleboneQueries(private val project: Project) {
-    /** Cuttlebone's answer. Only `fresh` answers are returned; [value] may still be null (nothing there). */
-    data class Answer<T>(val value: T?, val status: CuttleboneStatus?)
+    /**
+     * Cuttlebone's answer: `fresh` (perhaps [repaired]), or [stale] where the feature asked for it may be;
+     * [value] may still be null (nothing there).
+     */
+    data class Answer<T>(val value: T?, val status: CuttleboneStatus?) {
+        val repaired: Boolean get() = status?.repaired == true
+        val stale: Boolean get() = status?.stale == true
+    }
 
     /** One question, to one server process (a restarted one is asked again). */
     private data class Key(val server: Int, val method: String, val uri: String, val offset: Int)
@@ -71,6 +78,10 @@ class CuttleboneQueries(private val project: Project) {
     /** How many requests were sent, for tests. */
     val sent = AtomicLong()
 
+    /**
+     * Fresh answers only: resolve is built on it, and Rename, the refactorings, quick fixes and
+     * imports change code from what resolve says.
+     */
     fun definition(file: PsiFile, offset: Int, budgetMs: Long = RESOLVE_BUDGET_MS): Answer<List<Location>>? =
         query(file, offset, "textDocument/definition", budgetMs, ::locations) { server, document, position ->
             server.textDocumentService.definition(DefinitionParams(document, position))
@@ -81,12 +92,16 @@ class CuttleboneQueries(private val project: Project) {
             server.textDocumentService.typeDefinition(TypeDefinitionParams(document, position))
         }
 
+    /** Shown in documentation and Expression Type, never written into code, so a stale answer counts: callers mark it. */
     fun hover(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<Hover>? =
-        query(file, offset, "textDocument/hover", budgetMs, { it }) { server, document, position ->
+        query(file, offset, "textDocument/hover", budgetMs, { it }, stale = true) { server, document, position ->
             server.textDocumentService.hover(HoverParams(document, position))
         }
 
-    /** Members after `.` at [offset], in the real buffer: Cuttlebone inserts its own placeholder. */
+    /**
+     * Members after `.` at [offset], in the real buffer: Cuttlebone inserts its own placeholder. Fresh
+     * answers only, since choosing one inserts it (Cuttlebone never sends a stale one).
+     */
     fun completion(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<List<CompletionItem>>? =
         query(file, offset, "textDocument/completion", budgetMs, { result -> result?.let { if (it.isLeft) it.left else it.right.items } }) { server, document, position ->
             server.textDocumentService.completion(CompletionParams(document, position))
@@ -95,22 +110,25 @@ class CuttleboneQueries(private val project: Project) {
     /**
      * Every inlay hint in [file] (inferred types, and parameter names at calls), in
      * one request. Unlike other questions, a highlighting pass waits for it, as
-     * the hints pass is one.
+     * the hints pass is one. Hints are only shown, so a stale answer counts: they're marked.
      */
     fun inlayHints(file: PsiFile, budgetMs: Long = HINTS_BUDGET_MS): Answer<List<InlayHint>>? {
         // Cuttlebone before milestone 4 has none.
         if (capabilities()?.inlayHintProvider?.let { it.isRight || it.left == true } != true) return null
         val document = file.originalFile.virtualFile?.let { FileDocumentManager.getInstance().getDocument(it) } ?: return null
         val end = position(document, document.textLength)
-        return query(file, 0, "textDocument/inlayHint", budgetMs, { hints: List<InlayHint>? -> hints }, waitInHighlighting = true) { server, identifier, start ->
+        return query(file, 0, "textDocument/inlayHint", budgetMs, { hints: List<InlayHint>? -> hints }, waitInHighlighting = true, stale = true) { server, identifier, start ->
             server.textDocumentService.inlayHint(InlayHintParams(identifier, Range(start, end)))
         }
     }
 
-    /** The signature of the call whose parentheses contain [offset], and which of its parameters [offset] is in. */
+    /**
+     * The signature of the call whose parentheses contain [offset], and which of its parameters [offset] is in.
+     * Only parameter info shows it, so a stale answer counts: it's marked.
+     */
     fun signatureHelp(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<SignatureHelp>? {
         if (capabilities()?.signatureHelpProvider == null) return null
-        return query(file, offset, "textDocument/signatureHelp", budgetMs, { help: SignatureHelp? -> help }) { server, document, position ->
+        return query(file, offset, "textDocument/signatureHelp", budgetMs, { help: SignatureHelp? -> help }, stale = true) { server, document, position ->
             server.textDocumentService.signatureHelp(SignatureHelpParams(document, position))
         }
     }
@@ -118,10 +136,11 @@ class CuttleboneQueries(private val project: Project) {
     /**
      * The names in [file] that mean what the one at [offset] means, by the compiler's ids. The
      * usage highlighting pass waits for it, cancelled (and the request with it) when the caret moves.
+     * Highlights change nothing, and Cuttlebone gives stale ones only when the list is complete, so they count.
      */
     fun documentHighlights(file: PsiFile, offset: Int, budgetMs: Long = RESOLVE_BUDGET_MS): Answer<List<DocumentHighlight>>? {
         if (capabilities()?.documentHighlightProvider?.let { it.isRight || it.left == true } != true) return null
-        return query(file, offset, "textDocument/documentHighlight", budgetMs, { highlights: List<DocumentHighlight>? -> highlights }, waitInHighlighting = true) { server, document, position ->
+        return query(file, offset, "textDocument/documentHighlight", budgetMs, { highlights: List<DocumentHighlight>? -> highlights }, waitInHighlighting = true, stale = true) { server, document, position ->
             server.textDocumentService.documentHighlight(DocumentHighlightParams(document, position))
         }
     }
@@ -135,11 +154,15 @@ class CuttleboneQueries(private val project: Project) {
         budgetMs: Long,
         convert: (R?) -> T?,
         waitInHighlighting: Boolean = false,
+        stale: Boolean = false,
         send: (LanguageServer, TextDocumentIdentifier, Position) -> CompletableFuture<R>,
     ): Answer<T>? {
         val pending = start(file, offset, method, convert, send) ?: return null
         @Suppress("UNCHECKED_CAST")
-        return await(pending, budgetMs, wait = mayWait(waitInHighlighting)) as Answer<T>?
+        val answer = await(pending, budgetMs, wait = mayWait(waitInHighlighting)) as Answer<T>?
+        // Parakeet opts in to status notifications: without a `fresh` one (or a `stale` one, where it counts), there's
+        // no usable answer. Any other status, including ones added later, is none.
+        return answer?.takeIf { it.status?.fresh == true || (stale && it.status?.stale == true) }
     }
 
     /** Sends [send]'s request. It must return lsp4j's own future, which IntelliJ cancels; [convert] reads the result. */
@@ -183,9 +206,8 @@ class CuttleboneQueries(private val project: Project) {
                         }
                     }
                 }, pending.indicator)
-                val answer = Answer(convert(result), status?.let { runCatching { it.get(1, TimeUnit.SECONDS) }.getOrNull() })
-                // Parakeet opts in to status notifications: without a `fresh` one, there's no usable answer.
-                pending.answer.complete(answer.takeIf { it.status?.fresh == true })
+                // Every answer is kept, whatever its status: query decides which it may use.
+                pending.answer.complete(Answer(convert(result), status?.let { runCatching { it.get(1, TimeUnit.SECONDS) }.getOrNull() }))
             } catch (e: Throwable) {
                 cache.remove(key, pending)
                 pending.answer.completeExceptionally(e)
@@ -260,6 +282,9 @@ class CuttleboneQueries(private val project: Project) {
                 CACHED_ONLY.set(CACHED_ONLY.get() - 1)
             }
         }
+
+        /** How a stale answer is marked where it's shown: it's from the last version of the code that type checked. */
+        const val OUTDATED = "possibly outdated"
 
         /** How long resolve (go to definition, and everything built on references) waits. */
         const val RESOLVE_BUDGET_MS = 400L

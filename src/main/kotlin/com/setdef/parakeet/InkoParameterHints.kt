@@ -24,8 +24,9 @@ class InkoParameterHintsProvider : InlayHintsProvider {
 
     private class Collector : OwnBypassCollector {
         override fun collectHintsForFile(file: PsiFile, sink: InlayTreeSink) {
+            val tooltip = InkoParameterHints.tooltip(file)
             for ((offset, name) in InkoParameterHints.inFile(file)) {
-                sink.addPresentation(InlineInlayPosition(offset, false, 0), null, null, HintFormat.default) { text("$name:", null) }
+                sink.addPresentation(InlineInlayPosition(offset, false, 0), null, tooltip, HintFormat.default) { text("$name:", null) }
             }
         }
     }
@@ -38,8 +39,9 @@ class InkoTypeHintsProvider : InlayHintsProvider {
 
     private class Collector : OwnBypassCollector {
         override fun collectHintsForFile(file: PsiFile, sink: InlayTreeSink) {
+            val tooltip = InkoParameterHints.tooltip(file)
             for ((offset, label) in InkoParameterHints.types(file)) {
-                sink.addPresentation(InlineInlayPosition(offset, true, 0), null, null, HintFormat.default) { text(label, null) }
+                sink.addPresentation(InlineInlayPosition(offset, true, 0), null, tooltip, HintFormat.default) { text(label, null) }
             }
         }
     }
@@ -48,7 +50,7 @@ class InkoTypeHintsProvider : InlayHintsProvider {
 object InkoParameterHints {
     /**
      * [file]'s parameter-name hints, as (offset, name): Cuttlebone's when it has
-     * a fresh answer (one request for the whole file), else the heuristic's.
+     * a fresh or stale answer (one request for the whole file), else the heuristic's.
      */
     fun inFile(file: PsiFile): List<Pair<Int, String>> {
         cuttlebone(file)?.let { hints -> return hints.filter { it.third == InlayHintKind.Parameter }.map { it.first to it.second.removeSuffix(":") } }
@@ -59,7 +61,14 @@ object InkoParameterHints {
     fun types(file: PsiFile): List<Pair<Int, String>> =
         cuttlebone(file).orEmpty().filter { it.third == InlayHintKind.Type }.map { it.first to it.second }
 
-    /** Cuttlebone's hints for [file] as (offset, label, kind), or null without a fresh answer. */
+    /**
+     * The tooltip for [file]'s hints: when Cuttlebone's are stale (from the last version that type checked,
+     * where the code doesn't now), that they're possibly outdated. Else none.
+     */
+    fun tooltip(file: PsiFile): String? =
+        CuttleboneQueries.OUTDATED.takeIf { CuttleboneQueries.getInstance(file.project).inlayHints(file)?.stale == true }
+
+    /** Cuttlebone's hints for [file] as (offset, label, kind), or null without a fresh or stale answer. */
     private fun cuttlebone(file: PsiFile): List<Triple<Int, String, InlayHintKind?>>? {
         val hints = CuttleboneQueries.getInstance(file.project).inlayHints(file)?.value ?: return null
         val document = file.viewProvider.document ?: return null

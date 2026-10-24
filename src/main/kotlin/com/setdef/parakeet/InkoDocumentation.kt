@@ -76,7 +76,7 @@ class InkoDocumentationTarget(
     }
 
     fun html(): String = buildString {
-        append(header(inferredType()))
+        append(header(inferredType(), inferredTypeIsStale()))
         if (definition.documentation.isNotBlank()) {
             append(DocumentationMarkup.CONTENT_START)
             append(DocMarkdownToHtmlConverter.convert(element.project, definition.documentation))
@@ -89,20 +89,24 @@ class InkoDocumentationTarget(
      * hover), e.g. `Result[ref Int, OutOfBounds]` for a call: what this use
      * gives, with type arguments filled in, which the signature can't say.
      */
-    fun inferredType(): String? {
+    fun inferredType(): String? = hover()?.value?.let(InkoHover::type)
+
+    /** Whether [inferredType] is from the last version that type checked, so is shown as possibly outdated. */
+    private fun inferredTypeIsStale(): Boolean = hover()?.stale == true
+
+    private fun hover(): CuttleboneQueries.Answer<org.eclipse.lsp4j.Hover>? {
         val original = original ?: return null
         val file = original.containingFile as? InkoFile ?: return null
-        val hover = CuttleboneQueries.getInstance(file.project).hover(file, original.textRange.startOffset)?.value ?: return null
-        return InkoHover.type(hover)
+        return CuttleboneQueries.getInstance(file.project).hover(file, original.textRange.startOffset)
     }
 
     /** The declaration, with where it's defined: `fn pub value -> Int` in `app.util.Helper`, and [type], this use's type. */
-    private fun header(type: String? = null): String {
+    private fun header(type: String? = null, stale: Boolean = false): String {
         val signature = StringUtil.escapeXmlEntities(definition.signature ?: definition.name)
         val location = StringUtil.escapeXmlEntities(listOfNotNull(definition.module, definition.owner).joinToString("."))
         val typeSection = type?.let {
             DocumentationMarkup.SECTION_HEADER_START + "Type here" + DocumentationMarkup.SECTION_SEPARATOR +
-                "<code>${StringUtil.escapeXmlEntities(it)}</code>" + DocumentationMarkup.SECTION_END
+                "<code>${StringUtil.escapeXmlEntities(it)}</code>" + (if (stale) " (${CuttleboneQueries.OUTDATED})" else "") + DocumentationMarkup.SECTION_END
         }.orEmpty()
         return DocumentationMarkup.DEFINITION_START + "<code>$signature</code>" + DocumentationMarkup.DEFINITION_END +
             DocumentationMarkup.SECTIONS_START + DocumentationMarkup.SECTION_HEADER_START + "Defined in" +

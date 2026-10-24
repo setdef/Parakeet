@@ -35,7 +35,7 @@ class InkoHighlightUsagesHandler(editor: Editor, file: PsiFile, private val name
         }
     }
 
-    /** Cuttlebone's highlights for [name], matched by the compiler's ids, or null without a fresh, non-empty answer. */
+    /** Cuttlebone's highlights for [name], matched by the compiler's ids, or null without a fresh (or stale), non-empty answer. */
     private fun compiled(): List<Pair<TextRange, DocumentHighlightKind?>>? {
         val highlights = CuttleboneQueries.getInstance(name.project).documentHighlights(myFile, name.textRange.startOffset)?.value
         val document = myFile.viewProvider.document ?: return null

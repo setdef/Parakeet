@@ -294,4 +294,131 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         }
         assertEquals("Int", types["x.size(2.0)"])
     }
+
+    // Milestone 5's answer kinds: `fresh` with `"repaired": true` (from the documents with some lines blank)
+    // is a fresh answer; `stale` (from the last version that type checked) is used only by features that show
+    // something and change no code, marked as possibly outdated where there's somewhere to say so.
+
+    fun testARepairedAnswerIsUsedAsAFreshOne() {
+        start(definitionOfSize().copy(repaired = true))
+        assertEquals(listOf("util.inko:8:size"), targets("size(2.0)"))
+        val answer = inBackground { CuttleboneQueries.getInstance(project).definition(myFixture.file, main.indexOf("size(2.0)")) }!!
+        assertTrue(answer.repaired)
+        assertFalse(answer.stale)
+    }
+
+    fun testAFreshAnswerWithoutTheRepairedFieldIsNotRepaired() {
+        // What Cuttlebone before milestone 5 sends.
+        start(definitionOfSize())
+        val answer = inBackground { CuttleboneQueries.getInstance(project).definition(myFixture.file, main.indexOf("size(2.0)")) }!!
+        assertFalse(answer.repaired)
+        assertFalse(answer.stale)
+    }
+
+    fun testAStatusParakeetDoesntKnowIsNoAnswer() {
+        start(definitionOfSize().copy(status = "someday"), inlayHints(status = "someday"))
+        assertEquals(listOf("util.inko:2:size", "util.inko:8:size"), targets("size(2.0)").sorted())
+        assertEquals(emptyList<Any>(), inBackground { InkoParameterHints.types(myFixture.file) })
+    }
+
+    fun testAStaleDefinitionIsNotUsedSinceRenameAndRefactoringsResolveWithIt() {
+        start(definitionOfSize().copy(status = "stale"))
+        assertEquals(listOf("util.inko:2:size", "util.inko:8:size"), targets("size(2.0)").sorted())
+        assertNull(inBackground { CuttleboneQueries.getInstance(project).definition(myFixture.file, main.indexOf("size(2.0)")) })
+    }
+
+    fun testStaleHintsAreShownAndMarkedPossiblyOutdated() {
+        start(inlayHints(status = "stale"))
+        assertEquals(listOf(main.indexOf("2.0") to "scale"), inBackground { InkoParameterHints.inFile(myFixture.file) })
+        assertEquals(listOf(main.indexOf("x = make") + 1 to ": B"), inBackground { InkoParameterHints.types(myFixture.file) })
+        assertEquals(listOf(CuttleboneQueries.OUTDATED, CuttleboneQueries.OUTDATED), inBackground { tooltips() })
+    }
+
+    fun testFreshHintsHaveNoTooltip() {
+        start(inlayHints())
+        assertEquals(listOf<String?>(null, null), inBackground { tooltips() })
+    }
+
+    /** The tooltips of the hints both providers show in main.inko. */
+    private fun tooltips(): List<String?> {
+        val tooltips = mutableListOf<String?>()
+        val sink = java.lang.reflect.Proxy.newProxyInstance(javaClass.classLoader, arrayOf(com.intellij.codeInsight.hints.declarative.InlayTreeSink::class.java)) { _, method, args ->
+            if (method.name == "addPresentation") tooltips += args!![2] as String?
+            null
+        } as com.intellij.codeInsight.hints.declarative.InlayTreeSink
+        for (provider in listOf(InkoParameterHintsProvider(), InkoTypeHintsProvider())) {
+            (provider.createCollector(myFixture.file, myFixture.editor) as com.intellij.codeInsight.hints.declarative.OwnBypassCollector).collectHintsForFile(myFixture.file, sink)
+        }
+        return tooltips
+    }
+
+    fun testStaleParameterInfoIsShownAndMarkedPossiblyOutdated() {
+        start(signatureHelp(status = "stale"))
+        assertEquals(listOf("fn pub size([scale: Float]) -> Int  (${CuttleboneQueries.OUTDATED})"), parameterInfo(main.indexOf("2.0")))
+    }
+
+    fun testStaleUsageHighlightsAreShown() {
+        useFake(FakeCuttlebone.Script(log = "", answers = listOf(highlightsOfTotal(status = "stale"))))
+        open("src/main.inko", reassigned)
+        runningServer()
+        assertEquals("fn pub run {\n  let mut «=total» = 0\n  «=total» = 1\n  «total» + 2\n}\n", highlighted("total + 2"))
+    }
+
+    fun testAStaleTypeInDocumentationIsMarkedPossiblyOutdated() {
+        start(definitionOfSize(), answerAt(main, "size(2.0)", "textDocument/hover", mapOf(
+            "contents" to mapOf("kind" to "markdown", "value" to "```inko\nInt\n```"),
+        ), status = "stale"))
+        val name = nameAt("size(2.0)")
+        val html = inBackground {
+            val target = (name.reference as InkoReference).multiResolve(false).single().element!!
+            (InkoDocumentationTargetProvider().documentationTarget(target, name.firstChild) as InkoDocumentationTarget).html()
+        }
+        assertTrue(html, html.contains("Type here") && html.contains("<code>Int</code> (${CuttleboneQueries.OUTDATED})"))
+    }
+
+    fun testAStaleExpressionTypeIsMarkedPossiblyOutdated() {
+        val call = main.indexOf("x.size(2.0)")
+        start(answerAt(main, "x.size(2.0)", "textDocument/hover", mapOf(
+            "contents" to mapOf("kind" to "markdown", "value" to "```inko\nInt\n```"),
+            "range" to mapOf("start" to mapOf("line" to 8, "character" to 2), "end" to mapOf("line" to 8, "character" to 2 + "x.size(2.0)".length)),
+        ), status = "stale"))
+        val provider = InkoExpressionTypeProvider()
+        val types = inBackground {
+            provider.getExpressionsAt(myFixture.file.findElementAt(call + 2)!!).associate { it.text to provider.getInformationHint(it) }
+        }
+        assertEquals("Int (${CuttleboneQueries.OUTDATED})", types["x.size(2.0)"])
+    }
+
+    fun testStaleCompletionIsNotUsedSinceItInsertsCode() {
+        // Cuttlebone never sends one; if it did, it would be from text that has changed since.
+        val text = main.replace("x.size(2.0)", "x.")
+        myFixture.addFileToProject("src/app/util.inko", util)
+        useFake(FakeCuttlebone.Script(log = "", answers = listOf(answerAt(text, "x.\n", "textDocument/completion", mapOf(
+            "isIncomplete" to false,
+            "items" to listOf(mapOf("label" to "label", "kind" to 5, "detail" to "let pub @label: String")),
+        ), shift = 2, status = "stale"))))
+        open("src/main.inko", text)
+        runningServer()
+        val offset = text.indexOf("x.\n") + 2
+        myFixture.editor.caretModel.moveToOffset(offset)
+        assertNull(inBackground { CuttleboneQueries.getInstance(project).completion(myFixture.file, offset) })
+        myFixture.completeBasic()
+        assertEquals(listOf("size"), myFixture.lookupElementStrings)
+    }
+
+    fun testARepairedCompletionIsUsed() {
+        val text = main.replace("x.size(2.0)", "x.")
+        myFixture.addFileToProject("src/app/util.inko", util)
+        useFake(FakeCuttlebone.Script(log = "", answers = listOf(answerAt(text, "x.\n", "textDocument/completion", mapOf(
+            "isIncomplete" to false,
+            "items" to listOf(mapOf("label" to "label", "kind" to 5, "detail" to "let pub @label: String")),
+        ), shift = 2).copy(repaired = true))))
+        open("src/main.inko", text)
+        runningServer()
+        val offset = text.indexOf("x.\n") + 2
+        myFixture.editor.caretModel.moveToOffset(offset)
+        assertTrue(inBackground { CuttleboneQueries.getInstance(project).completion(myFixture.file, offset) }!!.repaired)
+        myFixture.completeBasic()
+        assertEquals(listOf("label"), myFixture.lookupElementStrings)
+    }
 }

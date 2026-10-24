@@ -102,37 +102,67 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
         }
     }
 
-    fun testTypingAStandardLibraryModule() {
+    /** A copy of the installed standard library as the project: it comes with the toolchain, so this always runs. */
+    private fun std() {
         val std = InkoTestRuns.standardLibrary(InkoCli.getInstance(project))
         assertNotNull("the standard library wasn't found", std)
         copy(std!!, Path.of(myFixture.tempDirPath).resolve("src"))
-        val report = replay("src/std/json.inko", from = "  fn mut object -> Result[Json, Error[E]] {")
-        report.print("std/json.inko")
     }
 
-    fun testTypingAProject() {
-        val dir = env("PARAKEET_REPLAY_PROJECT")?.let(Path::of) ?: return println("Skipped: set PARAKEET_REPLAY_PROJECT to a project's directory to replay typing in it")
+    /** The project PARAKEET_REPLAY_PROJECT names, if it's set, and the method to type in it. */
+    private fun project(): Pair<String, String?>? {
+        val dir = env("PARAKEET_REPLAY_PROJECT")?.let(Path::of) ?: return null
         val root = Path.of(myFixture.tempDirPath)
         for (part in listOf("src", "dep")) if (Files.isDirectory(dir.resolve(part))) copy(dir.resolve(part), root.resolve(part))
         Files.copy(dir.resolve(Inko.MANIFEST), root.resolve(Inko.MANIFEST))
         val file = env("PARAKEET_REPLAY_FILE") ?: "src/idoc/html.inko"
-        val report = replay(file, from = env("PARAKEET_REPLAY_FROM") ?: "fn adjust_headings(".takeIf { env("PARAKEET_REPLAY_FILE") == null })
-        report.print("${dir.fileName}/$file")
+        return file to (env("PARAKEET_REPLAY_FROM") ?: "fn adjust_headings(".takeIf { env("PARAKEET_REPLAY_FILE") == null })
     }
 
+    private val skipped = "Skipped: set PARAKEET_REPLAY_PROJECT to a project's directory to replay typing in it"
+
+    // A new method, typed from its first line: until its last `}`, the file doesn't parse.
+    fun testTypingANewMethodInAStdModule() {
+        std()
+        replay("src/std/json.inko", JSON_OBJECT, Scope.METHOD).print("new method, std/json.inko")
+    }
+
+    // A method's body, typed between its braces (as when the IDE closes the `{` typed before it): the file
+    // parses again as each statement is finished.
+    fun testTypingAMethodBodyInAStdModule() {
+        std()
+        replay("src/std/json.inko", JSON_OBJECT, Scope.BODY).print("method body, std/json.inko")
+    }
+
+    fun testTypingANewMethodInAProject() {
+        val (file, from) = project() ?: return println(skipped)
+        replay(file, from, Scope.METHOD).print("new method, ${Path.of(env("PARAKEET_REPLAY_PROJECT")!!).fileName}/$file")
+    }
+
+    fun testTypingAMethodBodyInAProject() {
+        val (file, from) = project() ?: return println(skipped)
+        replay(file, from, Scope.BODY).print("method body, ${Path.of(env("PARAKEET_REPLAY_PROJECT")!!).fileName}/$file")
+    }
+
+    /** What the replay deletes and types again: a whole method, or only the lines between its braces. */
+    private enum class Scope { METHOD, BODY }
+
     /**
-     * Opens [path], deletes the method that starts at the line [from] (or the file's first method), lets
-     * everything settle, then types the method back as a person would, and waits for the results to settle.
+     * Opens [path], deletes the method that starts at the line [from] (or the file's first method), or its
+     * body, lets everything settle, then types it back as a person would, and waits for the results to settle.
      */
-    private fun replay(path: String, from: String?): Report {
+    private fun replay(path: String, from: String?, scope: Scope): Report {
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(Path.of(myFixture.tempDirPath))!!.refresh(false, true)
         putTempDirInProjectContent()
         val file = myFixture.findFileInTempDir(path) ?: error("no $path")
         myFixture.configureFromExistingVirtualFile(file)
         document = myFixture.editor.document
         val text = document.text
-        val start = if (from != null) text.indexOf(from).also { check(it >= 0) { "no $from in $path" } } else Regex("(?m)^ *fn ").find(text)!!.range.first
-        val code = method(text, start)
+        val method = if (from != null) text.indexOf(from).also { check(it >= 0) { "no $from in $path" } } else Regex("(?m)^ *fn ").find(text)!!.range.first
+        val whole = method(text, method)
+        // The body: after the method's first line, up to its closing one.
+        val start = if (scope == Scope.METHOD) method else text.indexOf('\n', method) + 1
+        val code = if (scope == Scope.METHOD) whole else text.substring(start, method + whole.trimEnd('\n').lastIndexOf('\n') + 1)
         println("REPLAY typing ${code.length} characters of $path:\n$code")
 
         waitFor("Cuttlebone to start", 60) { CuttleboneService.getInstance(project).server() != null }
@@ -445,6 +475,8 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
     }
 
     private companion object {
+        const val JSON_OBJECT = "  fn mut object -> Result[Json, Error[E]] {"
+
         /** The [p]th of [sorted] (0 to 1), by the nearest rank below. */
         fun percentile(sorted: List<Long>, p: Double): Long? = sorted.getOrNull(((sorted.size - 1) * p).toInt())
 

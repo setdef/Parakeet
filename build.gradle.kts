@@ -128,8 +128,11 @@ val typingReplay by intellijPlatformTesting.testIde.registering {
         description = "Replays typing against the real cuttlebone, and fails when typing responsiveness regresses."
         group = "verification"
         testClassesDirs = sourceSets.test.get().output.classesDirs
-        // The test task's: with the platform's test framework, which this task's own lacks.
-        classpath = tasks.test.get().classpath
+        // The test task's, with the platform's test framework, which this task's own lacks: but with Parakeet as
+        // this task builds it, not the test sandbox's copy, which nothing here rebuilds.
+        dependsOn(tasks.prepareTestSandbox)
+        classpath = tasks.test.get().classpath.filter { "/plugins-test/parakeet/lib/parakeet-" !in it.invariantSeparatorsPath } +
+            files(tasks.named("composedJar"))
         // Named rather than found: the scan doesn't see the platform's test case classes on this classpath.
         isScanForTestClasses = false
         include("**/$TYPING_REPLAY.class")

@@ -16,6 +16,9 @@ class InkoReference(element: InkoName) :
     override fun multiResolve(incompleteCode: Boolean): Array<ResolveResult> =
         InkoResolver.resolve(element).map { PsiElementResolveResult(it) }.toTypedArray()
 
+    // Searches ask this of every occurrence of a name: Cuttlebone's cached answers only (CuttleboneQueries.cachedOnly).
+    override fun isReferenceTo(element: PsiElement): Boolean = CuttleboneQueries.cachedOnly { super.isReferenceTo(element) }
+
     override fun getVariants(): Array<Any> = emptyArray()
 
     // A renamed module file (`util.inko`) renames the module in import paths (`util`).

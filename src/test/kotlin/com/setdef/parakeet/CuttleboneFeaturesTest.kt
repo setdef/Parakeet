@@ -197,6 +197,26 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         assertEquals("fn pub run {\n  let mut «=total» = 0\n  «total» = 1\n  «total» + 2\n}\n", highlighted("total + 2"))
     }
 
+    /** Find Usages of the `size` declared at [marker] in util.inko, as offsets in main.inko. */
+    private fun usagesOfSize(marker: String): List<Int> = inBackground {
+        val util = myFixture.findFileInTempDir("src/app/util.inko")!!
+        val file = com.intellij.psi.PsiManager.getInstance(project).findFile(util)!!
+        val declaration = PsiTreeUtil.getParentOfType(file.findElementAt(file.text.indexOf(marker)), InkoName::class.java, false)!!
+        com.intellij.psi.search.searches.ReferencesSearch.search(declaration, com.intellij.psi.search.GlobalSearchScope.projectScope(project)).findAll()
+            .filter { it.element.containingFile.name == "main.inko" }.map { it.element.textRange.startOffset }
+    }
+
+    fun testFindUsagesNeverAsksPerOccurrence() {
+        // A common name has an occurrence on nearly every line; asking about each took minutes.
+        start(definitionOfSize())
+        assertEquals("a possible usage, as without Cuttlebone", listOf(main.indexOf("size(2.0)")), usagesOfSize("size(unit"))
+        assertEquals(0, received("textDocument/definition").size)
+        // An answer Cuttlebone already gave (here, from Go to Declaration) is used.
+        targets("size(2.0)")
+        assertEquals(emptyList<Int>(), usagesOfSize("size(unit"))
+        assertEquals(listOf(main.indexOf("size(2.0)")), usagesOfSize("size(scale"))
+    }
+
     fun testParameterInfoUsesTheResolvedMethod() {
         start(definitionOfSize())
         targets("size(2.0)")

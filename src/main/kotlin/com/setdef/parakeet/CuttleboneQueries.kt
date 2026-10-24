@@ -165,6 +165,7 @@ class CuttleboneQueries(private val project: Project) {
         if (cachedAt.getAndSet(stamp) != stamp) cache.clear()
         val key = Key(System.identityHashCode(server), method, identifier.uri, offset)
         cache[key]?.let { if (!it.answer.isCancelled) return it }
+        if (CACHED_ONLY.get() > 0) return null
         val pending = Pending(CompletableFuture(), EmptyProgressIndicator())
         cache.putIfAbsent(key, pending)?.let { return it }
         sent.incrementAndGet()
@@ -244,6 +245,21 @@ class CuttleboneQueries(private val project: Project) {
 
     companion object {
         private val LOG = logger<CuttleboneQueries>()
+        private val CACHED_ONLY = ThreadLocal.withInitial { 0 }
+
+        /**
+         * Runs [action] using only answers already cached: nothing is asked or waited for. For searches
+         * (Find Usages, Rename, Call Hierarchy, usage counts), which resolve every occurrence of a name:
+         * Cuttlebone answers one position per check, so asking about each took a minute on a common name.
+         */
+        fun <T> cachedOnly(action: () -> T): T {
+            CACHED_ONLY.set(CACHED_ONLY.get() + 1)
+            try {
+                return action()
+            } finally {
+                CACHED_ONLY.set(CACHED_ONLY.get() - 1)
+            }
+        }
 
         /** How long resolve (go to definition, and everything built on references) waits. */
         const val RESOLVE_BUDGET_MS = 400L

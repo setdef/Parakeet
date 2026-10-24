@@ -157,13 +157,17 @@ compiler, so it always agrees with your installed Inko version.
   anything but a local or a module, completion after `.`, parameter info,
   hints, usage highlighting, Expression Type, Find Usages, Rename and the
   refactorings built on it) is unavailable, and Parakeet says so once when the
-  project opens. Each question has a time budget (0.4 s for resolving a name and for
-  usage highlighting, 1.5 s for completion, parameter info, documentation and
-  Expression Type, 2 s for a file's inlay hints, asked in one request), and
-  answers are kept until the code changes. Highlighting only waits for
-  resolving names (inspections and intentions resolve them), the inlay hints
-  and usage highlighting: Cuttlebone answers questions about unchanged text
-  from the check it kept, in under a millisecond after a file's first check.
+  project opens. Each question has a time budget (0.4 s for resolving a name, 1.5 s for
+  completion, parameter info, documentation and Expression Type, 2 s for
+  usage highlighting and for a file's inlay hints, asked in one request, and
+  10 s for a search's references), and answers are kept until the code
+  changes. Highlighting only waits for resolving names (inspections and
+  intentions resolve them), the inlay hints and usage highlighting:
+  Cuttlebone answers questions about unchanged text from the check it kept,
+  in under a millisecond after a file's first check, which costs a whole
+  check (about 50 ms for a small project, more on a busy machine). A
+  question whose wait is cancelled (the caret moved) isn't cancelled itself:
+  that would discard the checks Cuttlebone kept.
   In code being edited, Cuttlebone answers from a copy
   with the broken lines blank, or else from the last version that type
   checked ("stale", shown only where nothing changes code; see

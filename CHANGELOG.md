@@ -19,6 +19,7 @@
 
 ### Fixed
 
+- Usage highlighting waits up to 2 s, as inlay hints do, instead of 0.4 s: a file's first question pays its whole check, which on a busy machine took longer than 0.4 s, so the highlights didn't show (and a test failed now and then). Moving the caret no longer cancels the question it was waiting for, which made Cuttlebone discard every check it had kept.
 - Renaming a field renames it where a constructor sets it by name (`Point(x: 1)`), and Change Signature no longer renames a named argument of a call to another method in the same file.
 - Every LSP feature IntelliJ would run for Cuttlebone, other than Go to Type Declaration, is off, so none appears twice (inlay hints and parameter info did), and Cuttlebone's own diagnostics are turned off, as Parakeet's come from `inko check`.
 

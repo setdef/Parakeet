@@ -26,9 +26,13 @@ class InkoHighlightUsagesHandler(editor: Editor, file: PsiFile, private val name
     override fun selectTargets(targets: List<InkoName>, selectionConsumer: Consumer<in List<InkoName>>) = selectionConsumer.consume(targets)
 
     override fun computeUsages(targets: List<InkoName>) {
-        // The caret's name: what's invoked on it from the EDT resolves it without waiting.
-        CuttleboneQueries.getInstance(name.project).prefetchDefinition(myFile, name.textRange.startOffset)
-        val answer = CuttleboneQueries.getInstance(name.project).documentHighlights(myFile, name.textRange.startOffset) ?: return
+        val queries = CuttleboneQueries.getInstance(name.project)
+        val answer = queries.documentHighlights(myFile, name.textRange.startOffset)
+        // Then the caret's name, so that what's invoked on it from the EDT resolves it without waiting. After the
+        // highlights, which don't wait for it: until a check can be kept (files written in the last two seconds
+        // aren't), each question is a check of its own.
+        queries.prefetchDefinition(myFile, name.textRange.startOffset)
+        answer ?: return
         if (!answer.editing) {
             // Cuttlebone's Write (bindings and assignments) and Text (declarations) are writes; the rest are reads.
             for ((range, kind) in compiled(answer.value.orEmpty())) (if (kind == DocumentHighlightKind.Read) myReadUsages else myWriteUsages) += range

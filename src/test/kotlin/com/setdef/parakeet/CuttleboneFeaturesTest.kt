@@ -166,6 +166,19 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
 
     private val reassigned = "fn pub run {\n  let mut total = 0\n  total = 1\n  total + 2\n}\n"
 
+    // A file's first question pays its whole check, which takes longer the busier the machine is (up to
+    // 260 ms measured beside another test run, from 50 ms idle): the pass waits for it, as for inlay hints.
+    // After that, Cuttlebone answers from the check it kept.
+    fun testUsageHighlightingWaitsForAFilesFirstCheck() {
+        useFake(FakeCuttlebone.Script(log = "", delayMs = 1000, answers = listOf(highlightsOfTotal())))
+        open("src/main.inko", reassigned)
+        runningServer()
+        assertEquals("fn pub run {\n  let mut «=total» = 0\n  «=total» = 1\n  «total» + 2\n}\n", highlighted("total + 2"))
+        // Its own question first: the caret's definition, asked in advance for the EDT, mustn't hold it up.
+        val asked = messages().mapNotNull { it.get("method")?.asString }.filter { it == "textDocument/documentHighlight" || it == "textDocument/definition" }
+        assertEquals(listOf("textDocument/documentHighlight", "textDocument/definition"), asked)
+    }
+
     /** Usage highlighting at [marker] in [reassigned]: «=write» and «read». */
     private fun highlighted(marker: String): String {
         val name = inBackground { PsiTreeUtil.getParentOfType(myFixture.file.findElementAt(reassigned.indexOf(marker)), InkoName::class.java, false)!! }

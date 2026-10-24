@@ -171,10 +171,10 @@ class CuttleboneQueries(private val project: Project) {
 
     /**
      * The names in [file] that mean what the one at [offset] means, by the compiler's ids. The
-     * usage highlighting pass waits for it, cancelled (and the request with it) when the caret moves.
+     * usage highlighting pass waits for it, until the caret moves (the request carries on, for the next pass).
      * Highlights change nothing, and Cuttlebone gives stale ones only when the list is complete, so they count.
      */
-    fun documentHighlights(file: PsiFile, offset: Int, budgetMs: Long = RESOLVE_BUDGET_MS): Answer<List<DocumentHighlight>>? {
+    fun documentHighlights(file: PsiFile, offset: Int, budgetMs: Long = HIGHLIGHT_BUDGET_MS): Answer<List<DocumentHighlight>>? {
         if (capabilities()?.documentHighlightProvider?.let { it.isRight || it.left == true } != true) return null
         return query(file, offset, "textDocument/documentHighlight", budgetMs, { highlights: List<DocumentHighlight>? -> highlights }, waitInHighlighting = true, stale = true) { server, document, position ->
             server.textDocumentService.documentHighlight(DocumentHighlightParams(document, position))
@@ -279,13 +279,8 @@ class CuttleboneQueries(private val project: Project) {
         return pending
     }
 
-    /** A request: its answer, and the indicator that cancels it. */
-    class Pending(val answer: CompletableFuture<Answer<*>?>, val indicator: ProgressIndicator) {
-        fun cancel() {
-            indicator.cancel()
-            answer.cancel(false)
-        }
-    }
+    /** A request: its answer, and the indicator it's sent under. */
+    class Pending(val answer: CompletableFuture<Answer<*>?>, val indicator: ProgressIndicator)
 
     private fun await(pending: Pending, budgetMs: Long, wait: Boolean): Answer<*>? {
         val future = pending.answer
@@ -307,8 +302,9 @@ class CuttleboneQueries(private val project: Project) {
                 }
             }
         } catch (e: ProcessCanceledException) {
-            // IntelliJ cancelled whatever was waiting: cancel the request too ($/cancelRequest).
-            pending.cancel()
+            // IntelliJ cancelled whatever was waiting (the caret moved, say). The request isn't cancelled: that
+            // would kill Cuttlebone's worker and every check it kept, so the next question would pay a whole
+            // check again. Its answer is kept for next time; an edit to the document cancels it on the server.
             throw e
         }
     }
@@ -344,6 +340,11 @@ class CuttleboneQueries(private val project: Project) {
         const val INTERACTIVE_BUDGET_MS = 1500L
         /** How long a search waits for one answer: it runs in the background, and can be cancelled. */
         const val SEARCH_BUDGET_MS = 10_000L
+        /**
+         * How long the usage highlighting pass waits. Usually Cuttlebone answers from a kept check at once, but a
+         * file's first question pays its whole check, which takes longer the busier the machine is.
+         */
+        const val HIGHLIGHT_BUDGET_MS = 2000L
         /** How long the inlay hints pass waits for a file's hints. */
         const val HINTS_BUDGET_MS = 2000L
         private const val POLL_MS = 10L

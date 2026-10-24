@@ -195,8 +195,11 @@ class CuttleboneClientTest : CuttleboneTestCase() {
         assertEquals("the late answer was cached, not asked for again", 1, received(definition).size)
     }
 
-    fun testCancellingTheWaitCancelsTheRequest() {
-        useFake(answered().copy(hang = true))
+    // Cancelling a running query kills Cuttlebone's worker, and every check it kept with it (milestone 6), so
+    // the next question would pay a first check again: moving the caret, which cancels the usage highlighting
+    // pass, would keep the file from ever being checked in time. The request finishes, for the next pass.
+    fun testCancellingTheWaitLeavesTheRequestToFinish() {
+        useFake(answered().copy(delayMs = 800))
         open("src/main.inko", text)
         runningServer()
         val file = myFixture.file
@@ -211,7 +214,9 @@ class CuttleboneClientTest : CuttleboneTestCase() {
             }
         }
         assertTrue(cancelled)
-        waitFor("\$/cancelRequest") { received("\$/cancelRequest").isNotEmpty() }
+        waitFor("the answer, for the next pass") { query(budgetMs = 0)?.value != null }
+        assertEquals(emptyList<Any>(), received("\$/cancelRequest"))
+        assertEquals(1, received(definition).size)
     }
 
     fun testHighlightingDoesntWaitForWhatOnlyTheEditorsActionsShow() {

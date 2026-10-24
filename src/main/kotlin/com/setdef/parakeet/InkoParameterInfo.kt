@@ -97,6 +97,9 @@ class InkoParameterInfoHandler : ParameterInfoHandler<InkoName, Any> {
             context.itemsToShow = arrayOf(CompiledSignature(signature, answer.stale))
             return call.callee
         }
+        // Cuttlebone has no signature for a type's constructor (`Point(x: 1)`), whose fields are shown instead;
+        // otherwise, only in code it can't check does Parakeet's own reading of the call stand in.
+        if (answer == null || (!answer.editing && !isConstructor(call.callee))) return null
         val candidates = InkoResolver.resolveDefinitions(call.callee).map { it.first }
             .filter { it.kind in CALLABLE }
             .distinctBy { it.signature to it.owner }
@@ -148,6 +151,8 @@ class InkoParameterInfoHandler : ParameterInfoHandler<InkoName, Any> {
         val (highlightStart, highlightEnd) = if (current in parameters.indices) start to start + parameters[current].length else -1 to -1
         context.setupUIComponentPresentation(text, highlightStart, highlightEnd, false, false, false, context.defaultParameterColor)
     }
+
+    private fun isConstructor(callee: InkoName): Boolean = callee.tokenType == InkoTokens.CONSTANT && !callee.previousToken().isToken(InkoTokens.DOT)
 
     private companion object {
         val CALLABLE = setOf(Kind.MODULE_METHOD, Kind.STATIC_METHOD, Kind.INSTANCE_METHOD, Kind.CONSTRUCTOR, Kind.TYPE)

@@ -471,6 +471,7 @@ class InkoInlineMethodHandler : InlineActionHandler() {
 
     override fun inlineElement(project: Project, editor: Editor?, element: PsiElement) {
         val method = element as? InkoDeclaration ?: return
+        if (!Cuttlebone.canSearch(method)) return Cuttlebone.showNeeded(project, editor, "Inline Method")
         InkoInlineMethod.unsupported(method.containingFile.text, method.textRange.startOffset)?.let { message ->
             if (editor != null) CommonRefactoringUtil.showErrorHint(project, editor, message, "Inline Method", null)
             else CommonRefactoringUtil.showErrorMessage("Inline Method", message, null, project)

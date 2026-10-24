@@ -172,7 +172,7 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         // Parakeet's hints still name what it can resolve.
         val text = main + twiceAndUses + "\nfn broken -> Missing {\n  1\n}\n"
         open(text)
-        assertNull(inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) })
+        assertTrue("code being edited", inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }!!.editing)
         assertEquals(listOf(default to "default", text.indexOf("21") to "value"), inBackground { InkoParameterHints.inFile(myFixture.file) })
         assertEquals("only Cuttlebone knows types", emptyList<Any>(), inBackground { InkoParameterHints.types(myFixture.file) })
     }
@@ -208,7 +208,7 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         open(text)
         val offset = text.indexOf("x.\n") + 2
         myFixture.editor.caretModel.moveToOffset(offset)
-        assertNull(inBackground { CuttleboneQueries.getInstance(project).completion(myFixture.file, offset) })
+        assertTrue("code being edited", inBackground { CuttleboneQueries.getInstance(project).completion(myFixture.file, offset) }!!.editing)
         myFixture.completeBasic()
         assertTrue(myFixture.lookupElementStrings.toString(), myFixture.lookupElementStrings!!.contains("size"))
     }
@@ -244,7 +244,10 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     fun testAfterAnEditNoCheckCanAnswerResolveDoesntUseAStaleDefinition() {
         val text = openThenBreakTheImports()
         // Cuttlebone has a stale definition here, but Rename and the refactorings resolve with it.
-        assertNull(inBackground { CuttleboneQueries.getInstance(project).definition(myFixture.file, text.indexOf("size(2.0)")) })
+        // Only a stale one: the code can't be checked as it is, so Parakeet reads it.
+        val answer = inBackground { CuttleboneQueries.getInstance(project).definition(myFixture.file, text.indexOf("size(2.0)")) }!!
+        assertNull(answer.value)
+        assertTrue(answer.editing)
         assertEquals(listOf("util.inko:2:size", "util.inko:8:size"), targets(text, "size(2.0)").sorted())
     }
 

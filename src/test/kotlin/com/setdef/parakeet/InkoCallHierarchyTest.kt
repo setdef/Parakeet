@@ -37,6 +37,8 @@ class InkoCallHierarchyTest : InkoTestCase(onDisk = true) {
 
     override fun setUp() {
         super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         putTempDirInProjectContent()
         myFixture.addFileToProject("src/app/util.inko", util)
         myFixture.addFileToProject("src/main.inko", main)

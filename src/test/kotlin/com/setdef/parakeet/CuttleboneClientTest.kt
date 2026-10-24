@@ -101,8 +101,18 @@ class CuttleboneClientTest : CuttleboneTestCase() {
         useFake(answered())
         open("src/main.inko", text)
         runningServer()
-        assertNull("the fake answers anywhere else with status unavailable", query(marker = "x ="))
+        // The fake answers anywhere else with status unavailable, reason noHir: code that doesn't parse.
+        val answer = query(marker = "x =")!!
+        assertNull(answer.value)
+        assertTrue("noHir: the code is being edited", answer.editing)
         assertEquals(1, received(definition).size)
+    }
+
+    fun testUnavailableForAnotherReasonIsNotEditing() {
+        useFake(FakeCuttlebone.Script(log = "", answers = listOf(answerAt(text, "to_string", definition, null, status = "unavailable").copy(reason = "timeout"))))
+        open("src/main.inko", text)
+        runningServer()
+        assertNull("no answer, and nothing to fall back on", query())
     }
 
     fun testWithoutAServerThereIsNoAnswerAndNothingStarts() {
@@ -111,6 +121,22 @@ class CuttleboneClientTest : CuttleboneTestCase() {
         assertTrue(CuttleboneService.getInstance(project).status is Cuttlebone.Status.NotFound)
         assertNull(query())
         assertNull(CuttleboneService.getInstance(project).server())
+    }
+
+    fun testWithoutCuttleboneASetupMessageIsShownOnce() {
+        fun shown() = com.intellij.notification.NotificationsManager.getNotificationsManager()
+            .getNotificationsOfType(com.intellij.notification.Notification::class.java, project).filter { it.title == "Parakeet needs Cuttlebone" }
+        shown().forEach { it.expire() }
+        open("src/main.inko", text)
+        waitFor("the setup message") { shown().isNotEmpty() }
+        open("src/other.inko", text)
+        CuttleboneService.getInstance(project).canStart()
+        com.intellij.testFramework.PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+        val notification = shown().single()
+        assertTrue(notification.content, notification.content.contains("isn't installed") || notification.content.contains("wasn't found"))
+        assertEquals(listOf("How to set up Cuttlebone", "Settings…"), notification.actions.map { it.templateText })
+        assertTrue(CuttleboneService.getInstance(project).unavailable)
+        notification.expire()
     }
 
     fun testAVersionMismatchNeverStartsIt() {

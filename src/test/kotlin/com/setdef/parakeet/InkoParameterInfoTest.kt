@@ -10,6 +10,8 @@ import java.lang.reflect.Proxy
 class InkoParameterInfoTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         val util = "type pub Helper {\n  let pub @count: Int\n  let pub @name: String\n\n  fn pub static new(count: Int, name: String) -> Helper {\n    Helper(count: count, name: name)\n  }\n}\n\nfn pub greet(name: String, times: Array[Int]) {}\n"
         myFixture.addFileToProject("src/app/util.inko", util)
         useFakeInko(FakeInkoDoc.cli { mirror ->

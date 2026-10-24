@@ -83,7 +83,7 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
     fun testOnTheEdtResolveOnlyUsesAnswersAlreadyCached() {
         start(definitionOfSize())
         val reference = nameAt("size(2.0)").reference as InkoReference
-        assertEquals("not asked yet: the heuristic", 2, reference.multiResolve(false).size)
+        assertEquals("not asked yet: nothing, rather than a guess", 0, reference.multiResolve(false).size)
         targets("size(2.0)")
         assertEquals("cached", 1, reference.multiResolve(false).size)
     }
@@ -154,9 +154,14 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         assertEquals(listOf("fn pub size([scale: Float]) -> Int"), parameterInfo(main.indexOf("2.0")))
     }
 
-    fun testWithoutAnAnswerParameterInfoIsParakeets() {
-        start(signatureHelp(status = "unavailable"))
+    fun testInCodeBeingEditedParameterInfoIsParakeets() {
+        start(signatureHelp(status = "unavailable").copy(reason = "noHir"))
         assertEquals("both size methods fit", listOf("[unit: Int]", "[scale: Float]"), parameterInfo(main.indexOf("2.0")).sorted().reversed())
+    }
+
+    fun testWithoutAnAnswerParameterInfoShowsNothing() {
+        start(signatureHelp(status = "unavailable").copy(reason = "timeout"))
+        assertEquals(emptyList<String>(), parameterInfo(main.indexOf("2.0")))
     }
 
     private val reassigned = "fn pub run {\n  let mut total = 0\n  total = 1\n  total + 2\n}\n"
@@ -190,8 +195,8 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         assertEquals("fn pub run {\n  let mut «=total» = 0\n  «=total» = 1\n  «total» + 2\n}\n", highlighted("total + 2"))
     }
 
-    fun testWithoutAnAnswerUsageHighlightingIsParakeets() {
-        useFake(FakeCuttlebone.Script(log = "", answers = listOf(highlightsOfTotal(status = "unavailable"))))
+    fun testInCodeBeingEditedUsageHighlightingIsParakeets() {
+        useFake(FakeCuttlebone.Script(log = "", answers = listOf(highlightsOfTotal(status = "unavailable").copy(reason = "declarationErrors"))))
         open("src/main.inko", reassigned)
         runningServer()
         assertEquals("fn pub run {\n  let mut «=total» = 0\n  «total» = 1\n  «total» + 2\n}\n", highlighted("total + 2"))
@@ -315,25 +320,28 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         assertFalse(answer.stale)
     }
 
-    fun testWithoutStatusNotificationsNoAnswerIsUsed() {
-        // A server that sends no status can't say an answer is fresh.
+    fun testWithoutStatusNotificationsNoAnswerIsUsedAndNothingIsGuessed() {
+        // A server that sends no status can't say an answer is fresh, nor that the code is being edited.
         myFixture.addFileToProject("src/app/util.inko", util)
         useFake(FakeCuttlebone.Script(log = "", answers = listOf(definitionOfSize()), statusNotifications = false))
         open("src/main.inko", main)
         runningServer()
-        assertEquals(listOf("util.inko:2:size", "util.inko:8:size"), targets("size(2.0)").sorted())
+        assertEquals(emptyList<String>(), targets("size(2.0)"))
     }
 
     fun testAStatusParakeetDoesntKnowIsNoAnswer() {
         start(definitionOfSize().copy(status = "someday"), inlayHints(status = "someday"))
-        assertEquals(listOf("util.inko:2:size", "util.inko:8:size"), targets("size(2.0)").sorted())
+        assertEquals(emptyList<String>(), targets("size(2.0)"))
         assertEquals(emptyList<Any>(), inBackground { InkoParameterHints.types(myFixture.file) })
     }
 
     fun testAStaleDefinitionIsNotUsedSinceRenameAndRefactoringsResolveWithIt() {
         start(definitionOfSize().copy(status = "stale"))
+        // Only a stale answer means the code can't be checked as it is: it's being edited, so Parakeet reads it.
         assertEquals(listOf("util.inko:2:size", "util.inko:8:size"), targets("size(2.0)").sorted())
-        assertNull(inBackground { CuttleboneQueries.getInstance(project).definition(myFixture.file, main.indexOf("size(2.0)")) })
+        val answer = inBackground { CuttleboneQueries.getInstance(project).definition(myFixture.file, main.indexOf("size(2.0)")) }!!
+        assertNull(answer.value)
+        assertTrue(answer.editing)
     }
 
     fun testStaleHintsAreShownAndMarkedPossiblyOutdated() {
@@ -410,7 +418,9 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         runningServer()
         val offset = text.indexOf("x.\n") + 2
         myFixture.editor.caretModel.moveToOffset(offset)
-        assertNull(inBackground { CuttleboneQueries.getInstance(project).completion(myFixture.file, offset) })
+        val answer = inBackground { CuttleboneQueries.getInstance(project).completion(myFixture.file, offset) }!!
+        assertNull(answer.value)
+        assertTrue("only a stale answer: the code can't be checked as it is", answer.editing)
         myFixture.completeBasic()
         assertEquals(listOf("size"), myFixture.lookupElementStrings)
     }

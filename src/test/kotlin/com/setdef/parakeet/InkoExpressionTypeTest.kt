@@ -4,6 +4,8 @@ package com.setdef.parakeet
 class InkoExpressionTypeTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         myFixture.addFileToProject("inko.pkg", "")
         myFixture.addFileToProject("src/app/util.inko", "type pub Helper {\n  let @count: Int\n\n  fn pub static new -> Helper {\n    Helper(count: 0)\n  }\n\n  fn pub value -> Int {\n    @count\n  }\n\n  fn pub twin -> Self {\n    self\n  }\n\n  fn pub first[T](items: Array[T]) -> T {\n    items.get(0)\n  }\n}\n\nfn pub helper -> String {\n  'x'\n}\n")
         useFakeInko(FakeInkoDoc.cli { mirror ->

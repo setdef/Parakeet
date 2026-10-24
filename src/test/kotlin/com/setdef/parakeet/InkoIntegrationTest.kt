@@ -69,6 +69,8 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     fun testChangedSignaturesStillCompile() {
+        // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
+        cuttleboneCantCheckTheCode()
         putTempDirInProjectContent()
         myFixture.addFileToProject("src/app/util.inko", "fn pub area(width: Int, height: Int) -> Int {\n  width * height\n}\n\nfn pub square(side: Int) -> Int {\n  area(side, height: side)\n}\n")
         myFixture.addFileToProject("src/main.inko", "import app.util (area)\n\nfn total -> Int {\n  area(2, 3) + area(width: 4, height: area(1, 1))\n}\n")
@@ -82,6 +84,8 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     fun testIntroducedParametersStillCompile() {
+        // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
+        cuttleboneCantCheckTheCode()
         putTempDirInProjectContent()
         val util = "let pub LIMIT = 10\n\nfn pub clamp(value: Int) -> Int {\n  let doubled = LIMIT * 2\n  if value > doubled { LIMIT * 2 } else { value }\n}\n"
         myFixture.addFileToProject("src/app/util.inko", util)
@@ -129,8 +133,10 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     fun testFlippedComparisonStillCompiles() =
         intentionCompiles("fn pub check(a: Int, b: Int) -> Bool {\n  a + 1 <caret>< b and b > 2\n}\n", "Flip '<' to '>'")
 
-    fun testNamedArgumentsStillCompile() =
+    // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
+    fun testNamedArgumentsStillCompile() = cuttleboneCantCheckTheCode().let {
         intentionCompiles("fn pub area(width: Int, height: Int) -> Int {\n  width * height\n}\n\nfn pub twice -> Int {\n  area(<caret>2, 3)\n}\n", "Add argument names")
+    }
 
     fun testSpecifiedTypeStillCompiles() =
         intentionCompiles("fn pub area(width: Int, height: Int) -> Int {\n  let <caret>total = width * height\n  total\n}\n", "Specify type explicitly")
@@ -159,6 +165,8 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     fun testMovedDeclarationsStillCompile() {
+        // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
+        cuttleboneCantCheckTheCode()
         putTempDirInProjectContent()
         myFixture.addFileToProject("src/app/util.inko", "import std.stdio (Stdout)\n\nlet pub LIMIT = 10\n\ntype pub Helper {\n  let @count: Int\n}\n\nimpl Helper {\n  fn pub show {\n    Stdout.new.print(LIMIT.to_string)\n  }\n}\n\nfn pub make -> Helper {\n  Helper(count: LIMIT)\n}\n")
         myFixture.addFileToProject("src/main.inko", "import app.util (Helper, make)\n\ntype async Main {\n  fn async main {\n    let h: Helper = make\n    h.show\n  }\n}\n")
@@ -252,6 +260,8 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
 
     // AUDIT.md finding 1.6: `recv.value = x` calls the setter `value=`, so renaming the setter renames the call.
     fun testRenamedSettersStillCompile() {
+        // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
+        cuttleboneCantCheckTheCode()
         putTempDirInProjectContent()
         myFixture.addFileToProject("src/app/counter.inko", "type pub Counter {\n  let mut @value: Int\n\n  fn pub mut value=(v: Int) {\n    @value = v\n  }\n}\n")
         myFixture.addFileToProject("src/main.inko", "import app.counter (Counter)\n\nfn bump(c: mut Counter) {\n  c.value = 2\n}\n")
@@ -280,6 +290,8 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
 
     // AUDIT.md finding 1.14: inko doc gives a constant's type as `let pub LIMIT: Int`.
     fun testConstantTypesFromInkoDoc() {
+        // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
+        cuttleboneCantCheckTheCode()
         myFixture.addFileToProject("src/app/limits.inko", "let pub LIMIT = 10\n")
         val text = "import app.limits (LIMIT)\n\nfn pub twice -> Int {\n  LIMIT * 2\n}\n"
         open("src/app/twice.inko", text)
@@ -296,6 +308,8 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     fun testInlinedMethodsStillCompile() {
+        // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
+        cuttleboneCantCheckTheCode()
         putTempDirInProjectContent()
         myFixture.addFileToProject(
             "src/app/util.inko",
@@ -347,6 +361,8 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     fun testNavigatesWithInkoDoc() {
+        // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
+        cuttleboneCantCheckTheCode()
         myFixture.addFileToProject("src/app/util.inko", "type pub Helper {}\n")
         val text = "import app.util (Helper)\n\nfn a(h: Helper) -> String {\n  ''\n}\n"
         open("src/main.inko", text)

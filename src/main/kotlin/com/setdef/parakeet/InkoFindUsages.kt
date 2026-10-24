@@ -32,7 +32,7 @@ class InkoFindUsagesProvider : FindUsagesProvider {
     override fun getWordsScanner(): WordsScanner =
         DefaultWordsScanner(InkoLexer(), InkoTokens.NAMES, InkoTokens.COMMENTS, InkoTokens.STRINGS)
 
-    override fun canFindUsagesFor(element: PsiElement): Boolean = element is InkoDeclaration || element is InkoFile
+    override fun canFindUsagesFor(element: PsiElement): Boolean = (element is InkoDeclaration || element is InkoFile) && Cuttlebone.canSearch(element)
 
     override fun getHelpId(element: PsiElement): String? = null
 
@@ -126,10 +126,11 @@ class InkoInstanceMethodRenameProcessor : RenamePsiElementProcessor() {
     override fun forcesShowPreview(): Boolean = true
 }
 
-/** Declarations outside the project (the standard library, dependencies) can't be renamed. */
+/** Declarations outside the project (the standard library, dependencies) can't be renamed, nor, without Cuttlebone, ones its uses need it for. */
 class InkoRenameVeto : Condition<PsiElement> {
     override fun value(element: PsiElement): Boolean {
         if (element !is InkoDeclaration && element !is InkoFile) return false
+        if (!Cuttlebone.canSearch(element)) return true
         val file = element.containingFile?.virtualFile ?: return false
         return !ProjectFileIndex.getInstance(element.project).isInContent(file)
     }
@@ -155,5 +156,6 @@ class InkoRefactoringSupportProvider : RefactoringSupportProvider() {
 
     // Safe Delete (⌘⌫ / Alt+Delete) warns about usages, then deletes the whole declaration. Not parameters:
     // removing one would mean editing every call.
-    override fun isSafeDeleteAvailable(element: PsiElement): Boolean = element is InkoDeclaration && InkoDeclarations.extent(element) != null
+    override fun isSafeDeleteAvailable(element: PsiElement): Boolean =
+        element is InkoDeclaration && InkoDeclarations.extent(element) != null && Cuttlebone.canSearch(element)
 }

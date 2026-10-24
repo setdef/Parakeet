@@ -9,6 +9,8 @@ import com.intellij.openapi.command.WriteCommandAction
 class InkoStyleInspectionsTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         // Inspections only run in project content; on-disk test files aren't in the light project's content root.
         putTempDirInProjectContent()
         myFixture.enableInspections(

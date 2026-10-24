@@ -5,6 +5,8 @@ package com.setdef.parakeet
 class InkoIntentionsTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         // Intentions are only offered in project content; on-disk test files aren't in the light project's content root.
         putTempDirInProjectContent()
         myFixture.addFileToProject("inko.pkg", "")

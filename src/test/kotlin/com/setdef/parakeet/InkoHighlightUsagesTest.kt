@@ -6,6 +6,8 @@ import com.intellij.psi.util.PsiTreeUtil
 class InkoHighlightUsagesTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         myFixture.addFileToProject("src/app/util.inko", "type pub Helper {}\n")
         useFakeInko(FakeInkoDoc.cli { mirror ->
             listOf(FakeInkoDoc.module("app.util", mirror.resolve("src/app/util.inko"), types = listOf(FakeInkoDoc.type("Helper", 1))))

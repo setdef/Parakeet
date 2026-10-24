@@ -116,6 +116,8 @@ class InkoCallHierarchyProvider : HierarchyProvider {
         val file = CommonDataKeys.PSI_FILE.getData(dataContext) as? InkoFile ?: return null
         val name = PsiTreeUtil.getParentOfType(file.findElementAt(editor.caretModel.offset), InkoName::class.java, false)
         // A method's name (declared or called), else the method the caret is in.
+        // Callers are found as Find Usages finds them.
+        if (CuttleboneService.getInstance(file.project).unavailable) return null
         if (name is InkoDeclaration && InkoCallHierarchy.isMethod(name)) return name
         if (name != null) {
             InkoResolver.resolve(name).filterIsInstance<InkoDeclaration>().firstOrNull { InkoCallHierarchy.isMethod(it) }?.let { return it }

@@ -50,10 +50,12 @@ class InkoTypeHintsProvider : InlayHintsProvider {
 object InkoParameterHints {
     /**
      * [file]'s parameter-name hints, as (offset, name): Cuttlebone's when it has
-     * a fresh or stale answer (one request for the whole file), else the heuristic's.
+     * a fresh or stale answer (one request for the whole file), else, in code it
+     * can't check, the heuristic's.
      */
     fun inFile(file: PsiFile): List<Pair<Int, String>> {
         cuttlebone(file)?.let { hints -> return hints.filter { it.third == InlayHintKind.Parameter }.map { it.first to it.second.removeSuffix(":") } }
+        if (CuttleboneQueries.getInstance(file.project).inlayHints(file)?.editing != true) return emptyList()
         return PsiTreeUtil.collectElements(file) { it.isToken(InkoTokens.LPAREN) }.flatMap { at(it, askCuttlebone = false) }
     }
 

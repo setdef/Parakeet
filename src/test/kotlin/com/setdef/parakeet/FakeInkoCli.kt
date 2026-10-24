@@ -42,7 +42,7 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
     override fun setUp() {
         super.setUp()
         if (!realInko) useFakeInko(FakeInkoCli(available = false))
-        // No Cuttlebone unless a test sets one up: every other test checks Parakeet's own behaviour.
+        // No Cuttlebone unless a test sets one up (a fake, or stubCuttlebone), so what needs it is unavailable.
         useCuttlebone(NO_CUTTLEBONE)
     }
 
@@ -60,6 +60,22 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
     protected fun useCuttlebone(executable: String) {
         InkoProjectSettings.getInstance(project).cuttlebone = executable
         CuttleboneService.getInstance(project).reset()
+    }
+
+    /**
+     * Cuttlebone, in-process: each question (method, file, offset) gets [answer]'s answer, as a server's
+     * would arrive with its status. For tests of features that need Cuttlebone, without starting one.
+     */
+    protected fun stubCuttlebone(answer: (method: String, file: com.intellij.openapi.vfs.VirtualFile, offset: Int) -> CuttleboneQueries.Answer<*>?) =
+        CuttleboneQueries.getInstance(project).stub(testRootDisposable, answer)
+
+    /**
+     * Cuttlebone running, but unable to check the code because it's being edited (here, a declaration
+     * has an error). That's the only state in which Parakeet reads the code itself, so the tests of that
+     * reading run in it.
+     */
+    protected fun cuttleboneCantCheckTheCode(reason: String = "declarationErrors") = stubCuttlebone { method, file, _ ->
+        CuttleboneQueries.Answer<Any>(null, CuttleboneStatus(method, file.url, "unavailable", reason, 1.0))
     }
 
     override fun createTempDirTestFixture(): TempDirTestFixture = if (onDisk) TempDirTestFixtureImpl() else super.createTempDirTestFixture()

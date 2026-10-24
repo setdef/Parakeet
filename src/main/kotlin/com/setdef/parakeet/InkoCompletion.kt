@@ -117,8 +117,10 @@ private class InkoCompletions(private val file: PsiFile) {
         is InkoCompletionContext.Bare -> bare()
     }
 
+    /** Cuttlebone's members; Parakeet's own reading of the code only where it can't check the code being edited. */
     private fun member(context: InkoCompletionContext.Member): List<LookupElement> {
-        compiledMembers()?.let { return it }
+        val answer = CuttleboneQueries.getInstance(file.project).completion(file, offset) ?: return emptyList()
+        if (!answer.editing) return compiledMembers(answer.value.orEmpty())
         val symbols = symbols ?: return emptyList()
         if (context.receiverType == InkoTokens.IDENTIFIER) {
             imports.moduleAliasedAs(context.receiver)?.let { module -> return symbols.topLevelIn(module).map(::definition) }
@@ -140,12 +142,10 @@ private class InkoCompletions(private val file: PsiFile) {
     }
 
     /**
-     * The members Cuttlebone lists after the `.` at the caret, when it has a
-     * fresh answer. It's asked about the real buffer (it inserts its own
-     * placeholder), and the list is complete, so it's filtered here by prefix.
+     * The members Cuttlebone lists after the `.` at the caret. It's asked about the real buffer (it inserts
+     * its own placeholder), and the list is complete, so it's filtered here by prefix.
      */
-    private fun compiledMembers(): List<LookupElement>? {
-        val items = CuttleboneQueries.getInstance(file.project).completion(file, offset)?.value ?: return null
+    private fun compiledMembers(items: List<org.eclipse.lsp4j.CompletionItem>): List<LookupElement> {
         return items.map { item ->
             val signature = item.detail
             LookupElementBuilder.create(item.label)

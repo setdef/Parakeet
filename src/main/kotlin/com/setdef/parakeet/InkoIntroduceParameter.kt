@@ -167,6 +167,8 @@ object InkoPortableNames {
 /** Introduce Parameter (⌥⌘P / Ctrl+Alt+P). */
 class InkoIntroduceParameterHandler : RefactoringActionHandler {
     override fun invoke(project: Project, editor: Editor, file: PsiFile, dataContext: DataContext?) {
+        // Every call to the method gets the new argument, so its calls must be found.
+        if (CuttleboneService.getInstance(project).unavailable) return Cuttlebone.showNeeded(project, editor, TITLE)
         val stream = InkoTokenStream(editor.document.immutableCharSequence)
         val selection = editor.selectionModel
         val candidates = if (selection.hasSelection()) {

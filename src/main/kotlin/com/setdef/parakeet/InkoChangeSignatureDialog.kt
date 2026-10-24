@@ -43,6 +43,7 @@ class InkoChangeSignatureHandler : ChangeSignatureHandler {
     }
 
     private fun open(project: Project, method: InkoDeclaration, editor: Editor?) {
+        if (!Cuttlebone.canSearch(method)) return Cuttlebone.showNeeded(project, editor, TITLE)
         InkoChangeSignature.unsupported(method)?.let { message ->
             if (editor != null) CommonRefactoringUtil.showErrorHint(project, editor, message, TITLE, null)
             else CommonRefactoringUtil.showErrorMessage(TITLE, message, null, project)

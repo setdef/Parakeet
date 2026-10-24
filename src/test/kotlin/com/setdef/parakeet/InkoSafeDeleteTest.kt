@@ -5,6 +5,12 @@ import com.intellij.refactoring.BaseRefactoringProcessor
 import com.intellij.refactoring.safeDelete.SafeDeleteHandler
 
 class InkoSafeDeleteTest : InkoTestCase(onDisk = true) {
+    override fun setUp() {
+        super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
+    }
+
     private fun declaration(marker: String): InkoDeclaration =
         PsiTreeUtil.getParentOfType(myFixture.file.findElementAt(myFixture.file.text.indexOf(marker)), InkoDeclaration::class.java, false)!!
 

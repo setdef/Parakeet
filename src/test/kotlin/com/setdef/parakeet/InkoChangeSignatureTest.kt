@@ -70,6 +70,8 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
 
     override fun setUp() {
         super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         putTempDirInProjectContent()
         useFakeInko(FakeInkoDoc.cli { mirror ->
             val utilFile = mirror.resolve("src/app/util.inko")

@@ -46,12 +46,17 @@ class InkoMoveDeclarationHandler : MoveHandlerDelegate() {
 
     override fun tryToMove(element: PsiElement, project: Project, dataContext: DataContext?, reference: PsiReference?, editor: Editor?): Boolean {
         val declaration = InkoMoveDeclaration.movable(element) ?: return false
+        if (!Cuttlebone.canSearch(declaration)) {
+            Cuttlebone.showNeeded(project, editor, "Move")
+            return true
+        }
         InkoMoveDeclarationDialog(project, declaration).show()
         return true
     }
 
     override fun doMove(project: Project, elements: Array<out PsiElement>, targetContainer: PsiElement?, callback: MoveCallback?) {
         val declaration = elements.singleOrNull()?.let(InkoMoveDeclaration::movable) ?: return
+        if (!Cuttlebone.canSearch(declaration)) return Cuttlebone.showNeeded(project, null, "Move")
         InkoMoveDeclarationDialog(project, declaration).show()
     }
 

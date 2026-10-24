@@ -36,6 +36,7 @@ import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.Range
 import org.eclipse.lsp4j.SignatureHelp
 import org.eclipse.lsp4j.SignatureHelpParams
+import org.eclipse.lsp4j.ServerCapabilities
 import org.eclipse.lsp4j.TextDocumentIdentifier
 import org.eclipse.lsp4j.TypeDefinitionParams
 import org.eclipse.lsp4j.jsonrpc.messages.Either
@@ -48,23 +49,32 @@ import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Asks Cuttlebone, through IntelliJ's connection to it, for what Parakeet would
- * otherwise guess. Every question has a time budget; when it runs out, or there's
- * no server, or Cuttlebone's status isn't `fresh`, the answer is null and callers
- * use their heuristic. A `stale` answer is returned only to the questions that
- * take one (`stale = true`): those whose answers are shown and change no code. Answers are cached until the project's PSI changes, so
+ * Asks Cuttlebone, through IntelliJ's connection to it, for the compiler's
+ * answers. Every question has a time budget; when it runs out, or there's no
+ * server, there's no answer (null), and the feature has nothing to show: no
+ * guess stands in for Cuttlebone. The one exception is code Cuttlebone can't
+ * check because it's being edited ([Answer.editing]), where some features fall
+ * back to Parakeet's own reading of the code. A `stale` answer is returned only
+ * to the questions that take one (`stale = true`): those whose answers are shown
+ * and change no code. Answers are cached until the project's PSI changes, so
  * IntelliJ asking again (resolve is called constantly) costs nothing.
  *
- * Highlighting passes never wait: they use answers already cached, so typing never
- * waits on the server. Nothing waits on the EDT or in a write action either.
+ * Highlighting passes never wait, unless the question says so: they use answers
+ * already cached. Nothing waits on the EDT or in a write action either.
  */
 @Service(Service.Level.PROJECT)
 class CuttleboneQueries(private val project: Project) {
     /**
      * Cuttlebone's answer: `fresh` (perhaps [repaired]), or [stale] where the feature asked for it may be;
      * [value] may still be null (nothing there).
+     *
+     * Or, when [editing], no answer because the code as it is can't be type checked there: it doesn't parse,
+     * a declaration has an error, or the expression has one (`noHir`, `declarationErrors`, `untyped`), or only
+     * a stale answer exists where the question doesn't take one. Such an answer has no [value]. It's the only
+     * state in which a feature may use Parakeet's own reading of the code instead: mid-edit, where the user
+     * would otherwise lose something they need.
      */
-    data class Answer<T>(val value: T?, val status: CuttleboneStatus?) {
+    data class Answer<T>(val value: T?, val status: CuttleboneStatus?, val editing: Boolean = false) {
         val repaired: Boolean get() = status?.repaired == true
         val stale: Boolean get() = status?.stale == true
     }
@@ -145,7 +155,27 @@ class CuttleboneQueries(private val project: Project) {
         }
     }
 
-    private fun capabilities() = CuttleboneService.getInstance(project).server()?.initializeResult?.capabilities
+    private fun capabilities() =
+        if (stub != null) ServerCapabilities().apply {
+            inlayHintProvider = Either.forLeft(true)
+            signatureHelpProvider = org.eclipse.lsp4j.SignatureHelpOptions()
+            documentHighlightProvider = Either.forLeft(true)
+        } else CuttleboneService.getInstance(project).server()?.initializeResult?.capabilities
+
+    /**
+     * For tests: answers each question (method, file, offset) in place of a server, as Cuttlebone's answer
+     * and its status would arrive. A null answer is a question the server never answered.
+     */
+    @Volatile private var stub: ((String, VirtualFile, Int) -> Answer<*>?)? = null
+
+    val stubbed: Boolean get() = stub != null
+
+    @org.jetbrains.annotations.TestOnly
+    fun stub(disposable: com.intellij.openapi.Disposable, answer: (method: String, file: VirtualFile, offset: Int) -> Answer<*>?) {
+        stub = answer
+        cache.clear()
+        com.intellij.openapi.util.Disposer.register(disposable) { stub = null; cache.clear() }
+    }
 
     private fun <R, T> query(
         file: PsiFile,
@@ -162,7 +192,10 @@ class CuttleboneQueries(private val project: Project) {
         val answer = await(pending, budgetMs, wait = mayWait(waitInHighlighting)) as Answer<T>?
         // Parakeet opts in to status notifications: without a `fresh` one (or a `stale` one, where it counts), there's
         // no usable answer. Any other status, including ones added later, is none.
-        return answer?.takeIf { it.status?.fresh == true || (stale && it.status?.stale == true) }
+        if (answer?.editing == true) return answer
+        val status = answer?.status ?: return null
+        if (status.fresh || (stale && status.stale)) return answer
+        return if (status.stale || (status.status == "unavailable" && status.reason in EDITING)) Answer(null, status, editing = true) else null
     }
 
     /** Sends [send]'s request. It must return lsp4j's own future, which IntelliJ cancels; [convert] reads the result. */
@@ -175,6 +208,10 @@ class CuttleboneQueries(private val project: Project) {
     ): Pending? {
         val virtualFile = file.originalFile.virtualFile ?: return null
         if (!virtualFile.isInLocalFileSystem || virtualFile.extension != Inko.EXTENSION) return null
+        stub?.let { answer ->
+            sent.incrementAndGet()
+            return Pending(CompletableFuture.completedFuture(answer(method, virtualFile, offset)), EmptyProgressIndicator())
+        }
         val service = CuttleboneService.getInstance(project)
         val server = service.server() ?: return null
         val document = FileDocumentManager.getInstance().getDocument(virtualFile) ?: return null
@@ -188,7 +225,8 @@ class CuttleboneQueries(private val project: Project) {
         if (cachedAt.getAndSet(stamp) != stamp) cache.clear()
         val key = Key(System.identityHashCode(server), method, identifier.uri, offset)
         cache[key]?.let { if (!it.answer.isCancelled) return it }
-        if (CACHED_ONLY.get() > 0) return null
+        // Not asked: a search decides from Parakeet's reading of the code, as in code being edited.
+        if (CACHED_ONLY.get() > 0) return Pending(CompletableFuture.completedFuture(Answer<Any>(null, null, editing = true)), EmptyProgressIndicator())
         val pending = Pending(CompletableFuture(), EmptyProgressIndicator())
         cache.putIfAbsent(key, pending)?.let { return it }
         sent.incrementAndGet()
@@ -282,6 +320,9 @@ class CuttleboneQueries(private val project: Project) {
                 CACHED_ONLY.set(CACHED_ONLY.get() - 1)
             }
         }
+
+        /** The reasons Cuttlebone gives for no answer in code being edited ([Answer.editing]). */
+        val EDITING = setOf("noHir", "declarationErrors", "untyped")
 
         /** How a stale answer is marked where it's shown: it's from the last version of the code that type checked. */
         const val OUTDATED = "possibly outdated"

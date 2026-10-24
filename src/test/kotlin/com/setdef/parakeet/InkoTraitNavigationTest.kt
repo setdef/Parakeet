@@ -30,6 +30,8 @@ class InkoTraitNavigationTest : InkoTestCase(onDisk = true) {
 
     override fun setUp() {
         super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         myFixture.addFileToProject("src/app/util.inko", util)
         useFakeInko(FakeInkoDoc.cli { mirror ->
             val file = mirror.resolve("src/app/util.inko")

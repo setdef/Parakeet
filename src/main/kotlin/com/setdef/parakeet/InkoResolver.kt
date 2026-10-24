@@ -9,6 +9,7 @@ import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiPolyVariantReferenceBase
 import com.intellij.psi.ResolveResult
 import com.intellij.psi.util.PsiTreeUtil
+import org.eclipse.lsp4j.Location
 import com.setdef.parakeet.InkoDefinitionKind as Kind
 
 class InkoReference(element: InkoName) :
@@ -149,8 +150,11 @@ class InkoResolver private constructor(
         }
 
         /**
-         * What [name] refers to: each definition, with the element where its name
-         * is written. Cuttlebone's answer when it has a fresh one (and [askCuttlebone]), else the heuristic.
+         * What [name] refers to: each definition, with the element where its name is written. Names whose
+         * targets depend on types (members, calls, constants, fields) need Cuttlebone's answer: without one
+         * they resolve to nothing, except in code being edited ([CuttleboneQueries.Answer.editing]), where
+         * Parakeet's own reading of the code stands in. Imports, module paths and locals follow from the
+         * code alone.
          */
         fun resolveDefinitions(name: InkoName, askCuttlebone: Boolean = true): List<Pair<InkoDefinition, PsiElement>> {
             val file = name.containingFile ?: return emptyList()
@@ -158,7 +162,14 @@ class InkoResolver private constructor(
             val symbols = InkoDocIndex.getInstance(name.project).symbols(Inko.projectRoot(path)) ?: return emptyList()
             val imports = InkoImports.parse(file.text)
             val context = InkoNameContext.of(name, imports)
-            if (askCuttlebone) compiled(name, file, context, symbols)?.let { return listOf(it) }
+            if (isGuessed(context) && askCuttlebone) {
+                val answer = CuttleboneQueries.getInstance(name.project).definition(file, name.textRange.startOffset) ?: return emptyList()
+                if (!answer.editing) return compiled(name, answer, symbols)?.let(::listOf).orEmpty()
+            }
+            return heuristic(name, file, path, symbols, imports, context)
+        }
+
+        private fun heuristic(name: InkoName, file: PsiFile, path: java.nio.file.Path, symbols: InkoSymbols, imports: InkoImports, context: InkoNameContext): List<Pair<InkoDefinition, PsiElement>> {
             val resolver = InkoResolver(symbols, symbols.moduleOf(path) ?: Inko.moduleName(path), imports, file, name.textRange.startOffset)
             return resolver.definitions(context).distinct().mapNotNull { definition ->
                 toPsi(file, definition)?.let { definition to it }
@@ -166,16 +177,12 @@ class InkoResolver private constructor(
         }
 
         /**
-         * The definition Cuttlebone's `textDocument/definition` gives for [name], as
-         * Parakeet's own definition there, for the names the heuristic guesses at
-         * (members, calls, constants, fields). Null when there's no fresh answer (a stale one never counts),
-         * it's empty, or it points somewhere Parakeet doesn't know a definition.
+         * The definition Cuttlebone's `textDocument/definition` [answer] gives, as Parakeet's own definition
+         * there. Null when it's empty, or points somewhere Parakeet doesn't know a definition.
          */
-        private fun compiled(name: InkoName, file: PsiFile, context: InkoNameContext, symbols: InkoSymbols): Pair<InkoDefinition, PsiElement>? {
-            if (!isGuessed(context)) return null
-            val queries = CuttleboneQueries.getInstance(name.project)
-            val location = queries.definition(file, name.textRange.startOffset)?.value?.firstOrNull() ?: return null
-            val target = queries.target(location) ?: return null
+        private fun compiled(name: InkoName, answer: CuttleboneQueries.Answer<List<Location>>, symbols: InkoSymbols): Pair<InkoDefinition, PsiElement>? {
+            val location = answer.value?.firstOrNull() ?: return null
+            val target = CuttleboneQueries.getInstance(name.project).target(location) ?: return null
             return definitionAt(target, symbols)?.let { it to target }
         }
 

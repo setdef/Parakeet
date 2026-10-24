@@ -77,8 +77,8 @@ class InkoConfigurable(private val project: Project) : BoundConfigurable("Inko")
                         .bindText({ cuttlebone }, { cuttlebone = it })
                         .align(AlignX.FILL)
                         .comment(
-                            "Cuttlebone, a language server for Inko, gives the compiler's own types and definitions. " +
-                                "Leave empty to use <code>cuttlebone</code> on PATH. Without it, Parakeet guesses.",
+                            "Cuttlebone, a language server for Inko, gives the compiler's own types and definitions, which Parakeet needs. " +
+                                "Leave empty to use <code>cuttlebone</code> on PATH. <a href=\"${Cuttlebone.SETUP_DOCS}\">How to set it up</a>",
                         )
                 }
                 row { comment(CuttleboneService.getInstance(project).status?.message ?: "Cuttlebone starts when an Inko file opens.") }

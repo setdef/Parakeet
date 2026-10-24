@@ -10,6 +10,8 @@ import java.nio.file.Path
 class InkoMoveDeclarationTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         putTempDirInProjectContent()
         myFixture.addFileToProject("inko.pkg", "")
         // An `inko doc` that documents nothing: the index falls back to the project's own sources, as when it doesn't compile.

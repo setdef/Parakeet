@@ -18,8 +18,10 @@ import com.setdef.parakeet.InkoDefinitionKind as Kind
 class InkoExpressionTypeProvider : ExpressionTypeProvider<PsiElement>() {
     override fun getInformationHint(element: PsiElement): String {
         val expression = element as? InkoExpression ?: return UNKNOWN
-        val type = compiledType(expression) ?: InkoExpressionTypes.of(expression.containingFile, expression.textRange)
-        return type?.let(StringUtil::escapeXmlEntities) ?: UNKNOWN
+        val file = expression.containingFile
+        val type = compiledType(expression)
+            ?: InkoExpressionTypes.of(file, expression.textRange).takeIf { editing(expression) }
+        return type?.let(StringUtil::escapeXmlEntities) ?: if (CuttleboneService.getInstance(file.project).unavailable) NO_CUTTLEBONE else UNKNOWN
     }
 
     /**
@@ -48,6 +50,12 @@ class InkoExpressionTypeProvider : ExpressionTypeProvider<PsiElement>() {
         return null
     }
 
+    /** Whether Cuttlebone can't check the code at [expression] because it's being edited. */
+    private fun editing(expression: InkoExpression): Boolean {
+        val file = expression.containingFile as? InkoFile ?: return false
+        return CuttleboneQueries.getInstance(file.project).hover(file, expression.textRange.startOffset)?.editing == true
+    }
+
     override fun getErrorHint(): String = "No Inko expression at the caret"
 
     override fun getExpressionsAt(elementAt: PsiElement): List<PsiElement> {
@@ -57,7 +65,8 @@ class InkoExpressionTypeProvider : ExpressionTypeProvider<PsiElement>() {
     }
 
     private companion object {
-        const val UNKNOWN = "Unknown: Parakeet can only tell types written in the code, not ones the compiler infers"
+        const val UNKNOWN = "Unknown: the compiler has no type for this expression"
+        const val NO_CUTTLEBONE = "Unknown: Expression Type needs Cuttlebone, which isn't running"
     }
 }
 

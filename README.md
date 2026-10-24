@@ -49,10 +49,9 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   turn on *Settings → Tools → Actions on Save → Reformat code*.
 - **Go to definition** (⌘-click / Ctrl-click, ⌘B / Ctrl+B) for types, traits,
   constants, functions, methods, fields, modules, and local variables and
-  parameters, including the standard library and dependencies. With
-  [Cuttlebone](#cuttlebone-optional), a method call goes to the method the
-  compiler calls.
-- **Go to Type Declaration** (⇧⌘B / Ctrl+Shift+B), with Cuttlebone
+  parameters, including the standard library and dependencies. A method call
+  goes to the method the compiler calls, from [Cuttlebone](#cuttlebone).
+- **Go to Type Declaration** (⇧⌘B / Ctrl+Shift+B)
 - **Find Usages** (⌥F7 / Alt+F7) and **Rename** (⇧F6 / Shift+F6) across the
   project, including renaming a module's file; calls on values of unknown type
   are shown as possible usages
@@ -61,7 +60,7 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Parameter info** (⌘P / Ctrl+P) in calls, and parameter-name hints before
   positional arguments
 - **Type hints** for `let` bindings and closure arguments that don't write a
-  type, with Cuttlebone. Types and parameter names each have a switch in
+  type. Types and parameter names each have a switch in
   *Settings → Editor → Inlay Hints*
 - **Trait gutter icons** linking traits, their implementations, and the
   methods that implement them, with **Go to Implementation** (⌥⌘B /
@@ -71,14 +70,11 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Generate** (⌘N / Alt+Insert) in a type: a **Constructor** (`fn static new`
   from every field) and **Implement Trait** (an `impl` for a chosen trait, with
   its required methods stubbed and the trait imported)
-- **Expression Type** (⌃⇧P / Ctrl+Shift+P): the compiler's type with
-  Cuttlebone, and otherwise types the code states; others are shown as
-  unknown rather than guessed
+- **Expression Type** (⌃⇧P / Ctrl+Shift+P): the compiler's type
 - **Go to Test** (⌘⇧T / Ctrl+Shift+T) between `src/app/util.inko` and
   `test/app/test_util.inko`, and Create Test
 - **Quick documentation** (F1, or hover): a definition's signature, where
-  it's defined, and its doc comment, and with Cuttlebone the type at the
-  caret ("Type here"); ⇧F1 opens standard library definitions on
+  it's defined, and its doc comment, and the type at the caret ("Type here"); ⇧F1 opens standard library definitions on
   docs.inko-lang.org
 - **Go to Class / Go to Symbol** (⌘O / ⌥⌘O) and Search Everywhere for Inko
   types, traits, methods, and constants
@@ -112,9 +108,7 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   sync, update, add, and remove dependencies, and a Sync button when
   `inko.pkg` changes
 - **Completion** for keywords, local variables, names in scope, imports,
-  members after `.` (the compiler's list with Cuttlebone, else narrowed to
-  the receiver's type when it's known), and
-  fields after `@`, plus names from modules that aren't imported yet, adding
+  members after `.` (the compiler's list), and fields after `@`, plus names from modules that aren't imported yet, adding
   the import when you choose one
 - **Imports on paste**: pasting Inko code into another module adds the imports
   it needs (*Settings → Editor → General → Auto Import → Insert imports on
@@ -157,30 +151,29 @@ compiler, so it always agrees with your installed Inko version.
   so files you've edited since (saved or not) are read from source, and when
   the project doesn't compile, the standard library and dependencies are still
   documented while your own files are read from source.
-- **Cuttlebone**, when it's installed, answers with the compiler's own types
-  and definitions; see [Cuttlebone](#cuttlebone-optional) for which features
-  ask it. Each question has a time budget (0.4 s for resolving a name and for
+- **Cuttlebone** answers with the compiler's own types and definitions; see
+  [Cuttlebone](#cuttlebone) for which features ask it. Parakeet requires
+  it: without it, what needs the compiler's types (go to definition of
+  anything but a local or a module, completion after `.`, parameter info,
+  hints, usage highlighting, Expression Type, Find Usages, Rename and the
+  refactorings built on it) is unavailable, and Parakeet says so once when the
+  project opens. Each question has a time budget (0.4 s for resolving a name and for
   usage highlighting, 1.5 s for completion, parameter info, documentation and
   Expression Type, 2 s for a file's inlay hints, asked in one request), and
   answers are kept until the code changes. Highlighting never waits for it,
   except the inlay hints and usage highlighting passes, which only show
-  Cuttlebone's answers. Searches (Find Usages, Rename, Call Hierarchy, usage
-  counts) never ask it: they use answers already given, since asking about
-  every occurrence of a common name took a minute on a project the size of
-  std. In code being edited, Cuttlebone answers from a copy with the broken
-  lines blank, or else from the last version that type checked ("stale",
-  shown only where nothing changes code; see
-  [Answers in code being edited](#answers-in-code-being-edited)). Without an
-  answer it may use (no Cuttlebone, a timeout, or code it can't answer for,
-  like the method being edited after the edit), Parakeet falls back to its
-  own reading of the code, below.
-- **Without Cuttlebone, types aren't inferred.** A method call like
-  `x.to_string` narrows to `x`'s type when it's written or obvious (`x: Foo`,
-  `let x = Foo.new`, `self`), and otherwise offers every `to_string` it can't
-  rule out, preferring types mentioned in the file. Parameter-name hints only
-  appear when exactly one parameter list fits. Local variables and parameters
-  are found from the file's own tokens. The same happens with Cuttlebone
-  whenever it has no answer Parakeet may use.
+  Cuttlebone's answers. In code being edited, Cuttlebone answers from a copy
+  with the broken lines blank, or else from the last version that type
+  checked ("stale", shown only where nothing changes code; see
+  [Answers in code being edited](#answers-in-code-being-edited)).
+- **In code Cuttlebone can't check** (it doesn't parse there, or a
+  declaration has an error), some features read the code themselves instead,
+  so they don't go dark mid-edit; see
+  [Answers in code being edited](#answers-in-code-being-edited) for which.
+  That reading doesn't infer types: a method call like `x.to_string` narrows
+  to `x`'s type when it's written or obvious (`x: Foo`, `let x = Foo.new`,
+  `self`), and otherwise offers every `to_string` it can't rule out. It's
+  never used where Cuttlebone has answered, or isn't running.
 - **Find Usages and Rename** search the IDE's word index for each name, then
   keep the occurrences that resolve to the declaration. A method call whose
   receiver type isn't known resolves to every candidate, so it's listed as a
@@ -239,8 +232,9 @@ compiler, so it always agrees with your installed Inko version.
   names are only removed when each named argument is in its parameter's
   position, since Inko accepts named arguments in any order.
 - **Expression Type** uses Cuttlebone's type when hover's range is exactly
-  the chosen expression. Otherwise, it and **"Specify type explicitly"** (which
-  writes the type into the code, so never uses Cuttlebone's) only use types
+  the chosen expression. In code Cuttlebone can't check, it, and
+  **"Specify type explicitly"** (which writes the type into the code, so never
+  uses Cuttlebone's) everywhere, only use types
   the code states: literals, annotations, constructors, `self`, fields, comparisons,
   casts, and signatures' return types. A method's type is only trusted when its
   receiver's type is known, and return types using type parameters aren't
@@ -251,8 +245,8 @@ compiler, so it always agrees with your installed Inko version.
   pasting adds the ones the target module lacks.
 - **Completing unimported names** only offers `pub` definitions, since Inko
   can't import private ones, and ranks them below names already in scope.
-- **The Structure view, breadcrumbs, folding, indentation, usage
-  highlighting, Extend Selection, Unwrap, and postfix completion** come from
+- **The Structure view, breadcrumbs, folding, indentation, Extend
+  Selection, Unwrap, and postfix completion** come from
   the file's own tokens, so they follow unsaved edits and work without `inko`.
 
 ## Requirements
@@ -264,8 +258,7 @@ compiler, so it always agrees with your installed Inko version.
   ivm-installed version or another executable for a project, use
   *Settings → Languages & Frameworks → Inko*.
 
-- Optionally, [Cuttlebone](#cuttlebone-optional), for the compiler's types
-  and definitions
+- [Cuttlebone](#cuttlebone), for the compiler's types and definitions
 
 ## Installing
 
@@ -287,11 +280,11 @@ Plugins → ⚙️ → Install Plugin from Disk…* (without automatic updates).
 local build, run `./gradlew buildPlugin` and install
 `build/distributions/parakeet-<version>.zip` the same way.
 
-## Cuttlebone (optional)
+## Cuttlebone
 
 Cuttlebone is a language server for Inko that type checks with Inko's own
-compiler. Parakeet works without it, guessing types from the code; with it,
-Parakeet asks it first.
+compiler. Parakeet requires it for everything that needs the compiler's
+types; without it, those features are unavailable rather than guessed.
 
 ### Setting it up
 
@@ -314,24 +307,31 @@ bar can restart it by hand.
 
 ### What asks Cuttlebone
 
-| Feature | With a fresh answer | Without one |
+Without Cuttlebone, every feature below is unavailable. With it:
+
+| Feature | Cuttlebone's answer | Where Cuttlebone can't check the code being edited |
 |---|---|---|
-| Go to definition, and what's built on resolving a name (quick documentation, inspections, refactorings, …) | `textDocument/definition`: the declaration the compiler resolves | Parakeet's guess |
-| Find Usages, Rename, Call Hierarchy, usage counts | definitions already asked for (above), never asked per occurrence | Parakeet's guess, with possible usages |
-| Completion after `.` | `textDocument/completion` on the real buffer | Parakeet's guess |
-| Parameter info | `textDocument/signatureHelp`: the resolved method's signature, with the receiver's type arguments, and the argument's parameter (named ones too) | Parakeet's guess |
-| Parameter-name and type hints | `textDocument/inlayHint`, once for the whole file | parameter names: Parakeet's guess; types: none |
-| Highlight usages | `textDocument/documentHighlight`: the same symbol by the compiler's ids, with assignments as writes | Parakeet's guess |
-| Quick documentation | the resolved definition, plus hover's type at the caret | the definition Parakeet resolves |
+| Go to definition, and what's built on resolving a name (quick documentation, inspections, refactorings, …) | `textDocument/definition`: the declaration the compiler resolves | Parakeet's reading of the code |
+| Find Usages, Rename, Call Hierarchy, usage counts | definitions already asked for (above), never asked per occurrence | Parakeet's reading, with possible usages |
+| Completion after `.` | `textDocument/completion` on the real buffer | Parakeet's reading |
+| Parameter info | `textDocument/signatureHelp`: the resolved method's signature, with the receiver's type arguments, and the argument's parameter (named ones too). For a type's constructor (`Point(x: 1)`), which it has none for, the type's fields | Parakeet's reading |
+| Parameter-name and type hints | `textDocument/inlayHint`, once for the whole file | parameter names: Parakeet's reading; types: none |
+| Highlight usages | `textDocument/documentHighlight`: the same symbol by the compiler's ids, with assignments as writes | Parakeet's reading |
+| Quick documentation | the resolved definition, plus hover's type at the caret | the definition Parakeet's reading resolves |
 | Expression Type | hover's type, when its range is the expression | the types the code states |
-| Go to Type Declaration | `textDocument/typeDefinition`, through IntelliJ's LSP support | not available |
+| Go to Type Declaration | `textDocument/typeDefinition`, through IntelliJ's LSP support | nothing |
+
+Where Cuttlebone answers that there's nothing there (a name that doesn't
+resolve, say), or has no answer for another reason (it's starting, or a
+question ran out of time), nothing is shown: Parakeet's reading stands in
+only for code being edited.
 
 Errors and warnings come from `inko check`, with or without Cuttlebone, and
 Parakeet turns off Cuttlebone's own diagnostics: IntelliJ's display of them
 would have no quick fixes, wouldn't be in Inspect Code, and wouldn't mark
 files that aren't open. Hints, parameter info and usage highlighting need
 a Cuttlebone that answers them (since its fourth milestone); with an
-older one, Parakeet uses its own. Every other LSP feature IntelliJ offers is
+older one, they're unavailable. Every other LSP feature IntelliJ offers is
 turned off, so nothing shows twice. Cuttlebone answers from each open file's unsaved text,
 and from saved text for the rest.
 
@@ -355,13 +355,13 @@ each answer's status:
 | Expression Type | used | "(possibly outdated)" after the type |
 | Highlight usages | used | as a fresh answer: there's nowhere to mark it |
 | Go to Type Declaration | used (IntelliJ's own) | as a fresh answer |
-| Go to definition, and everything built on resolving a name | not used: Rename, the refactorings, quick fixes and imports change code from it | Parakeet's guess |
-| Completion | not used: choosing an item inserts it (Cuttlebone never sends one) | Parakeet's guess |
+| Go to definition, and everything built on resolving a name | not used: Rename, the refactorings, quick fixes and imports change code from it | as no answer: Parakeet's reading |
+| Completion | not used: choosing an item inserts it (Cuttlebone never sends one) | as no answer: Parakeet's reading |
 
-Where Cuttlebone still has no answer (the method being edited after the
-edit, or a project opened with an error in a declaration), Parakeet guesses.
-A Cuttlebone before milestone 5 never sends either kind, and has no answer
-in such code.
+Where Cuttlebone has no answer in code being edited (the method being edited
+after the edit, or a project opened with an error in a declaration), the
+features in the table above read the code themselves. A Cuttlebone before
+milestone 5 never sends either kind, and has no answer in such code.
 
 ## Development
 

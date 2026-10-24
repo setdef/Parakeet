@@ -44,6 +44,8 @@ class InkoResolverTest : InkoTestCase(onDisk = true) {
 
     override fun setUp() {
         super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         val root = Path.of(myFixture.tempDirPath)
         myFixture.addFileToProject("src/app/util.inko", util)
         // Like the real std: a doc comment first, and a location (1:1) that isn't where the name is.

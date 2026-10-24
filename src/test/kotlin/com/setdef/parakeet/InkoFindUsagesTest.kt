@@ -50,6 +50,8 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
 
     override fun setUp() {
         super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         // Like a real project: the files are in the project's content, so project-wide searches see them.
         putTempDirInProjectContent()
         myFixture.addFileToProject("src/app/util.inko", util)

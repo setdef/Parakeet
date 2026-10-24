@@ -34,6 +34,8 @@ class InkoBareCallsTest : InkoTestCase(onDisk = true) {
 
     override fun setUp() {
         super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         // The fake first: opening the file indexes the project.
         useFakeInko(FakeInkoDoc.cli { mirror ->
             val path = mirror.resolve("src/app/counter.inko")

@@ -15,6 +15,8 @@ class InkoSetterTest : InkoTestCase(onDisk = true) {
 
     override fun setUp() {
         super.setUp()
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         putTempDirInProjectContent()
         myFixture.addFileToProject("inko.pkg", "")
         // An `inko doc` that documents nothing: definitions come from the files' own source.

@@ -11,6 +11,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.psi.PsiElement
 import com.intellij.platform.lsp.api.Lsp4jClient
 import com.intellij.platform.lsp.api.LspServer
 import com.intellij.platform.lsp.api.LspServerListener
@@ -88,8 +89,10 @@ import java.util.concurrent.TimeUnit
  * Cuttlebone, a language server for Inko (an executable the user installs),
  * answers with the compiler's own types and definitions. Parakeet runs one per
  * project through IntelliJ's LSP API, which owns the process, document sync
- * and cancellation. Parakeet's own features ask it questions
- * ([CuttleboneQueries]) and fall back to their heuristics when it has no answer.
+ * and cancellation. Parakeet requires it: its features ask it questions
+ * ([CuttleboneQueries]), and those that need its answers are unavailable
+ * without it. Only where it can't check the code being edited do some fall
+ * back to Parakeet's own reading of the code ([CuttleboneQueries.Answer.editing]).
  */
 object Cuttlebone {
     private val LOG = logger<Cuttlebone>()
@@ -105,16 +108,43 @@ object Cuttlebone {
             ?: System.getProperty("user.home")?.let { Path.of(it, ".cargo", "bin", "cuttlebone") }?.takeIf(Files::isExecutable)
     }
 
+    /**
+     * Whether a feature that finds a declaration's uses (Find Usages, Rename, Safe Delete, Change Signature, …)
+     * can serve [element]: always for locals and modules, whose uses follow from the code alone, and for
+     * anything else only while Cuttlebone can answer. Without it they're unavailable, not half done.
+     */
+    fun canSearch(element: PsiElement): Boolean =
+        element is InkoFile || (element is InkoDeclaration && element.isLocal) || !CuttleboneService.getInstance(element.project).unavailable
+
+    /** Says [action] needs Cuttlebone, in the editor if there is one. */
+    fun showNeeded(project: Project, editor: com.intellij.openapi.editor.Editor?, action: String) {
+        val message = "$action needs Cuttlebone, which isn't running (see Settings | Languages & Frameworks | Inko)."
+        if (editor != null) com.intellij.refactoring.util.CommonRefactoringUtil.showErrorHint(project, editor, message, action, null)
+        else com.intellij.refactoring.util.CommonRefactoringUtil.showErrorMessage(action, message, null, project)
+    }
+
     /** `cuttlebone 0.1.0 (Inko 0.21.1)` → `0.21.1`. */
     fun linkedInko(versionOutput: String): String? = Regex("""\(Inko ([^)\s]+)\)""").find(versionOutput)?.groupValues?.get(1)
 
-    /** Why Cuttlebone isn't answering, or that it is: shown in the settings, never as a popup. */
-    sealed class Status(val message: String) {
-        class NotFound(setting: String) :
-            Status(if (setting.isEmpty()) "Cuttlebone isn't installed (no cuttlebone on PATH), so types are guessed." else "Cuttlebone wasn't found at $setting, so types are guessed.")
+    /** Where README.md says how to set Cuttlebone up. */
+    const val SETUP_DOCS = "https://github.com/setdef/Parakeet#cuttlebone"
+
+    /** What needs Cuttlebone, for messages saying it's missing. */
+    const val NEEDED_FOR = "go to definition, completion after a dot, parameter info, hints, Find Usages, Rename and the other refactorings"
+
+    /**
+     * Why Cuttlebone isn't answering, or that it is: shown in the settings. A [setup] problem is also
+     * shown once as a notification ([CuttleboneService]), since Parakeet needs Cuttlebone.
+     */
+    sealed class Status(val message: String, val setup: Boolean = false) {
+        class NotFound(setting: String) : Status(
+            (if (setting.isEmpty()) "Cuttlebone isn't installed (no cuttlebone on PATH)" else "Cuttlebone wasn't found at $setting") +
+                ", so $NEEDED_FOR are unavailable.",
+            setup = true,
+        )
         data object NoInko : Status("Cuttlebone needs the inko executable, which isn't set up.")
-        class Refused(reason: String) : Status("Cuttlebone refused this project: $reason Types are guessed.")
-        class Stopped(reason: String) : Status("Cuttlebone stopped: $reason Types are guessed until it restarts.")
+        class Refused(reason: String) : Status("Cuttlebone refused this project: $reason Until it runs, $NEEDED_FOR are unavailable.", setup = true)
+        class Stopped(reason: String) : Status("Cuttlebone stopped: $reason Until it runs, $NEEDED_FOR are unavailable.")
         data object Starting : Status("Cuttlebone is starting.")
         class Running(version: String) : Status("Using $version for types and definitions.")
     }
@@ -441,6 +471,8 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         }
         checked = null
         status = null
+        // New settings: if Cuttlebone still can't run, say so again.
+        notified = false
         everInitialized = false
         restarts = 0
         statuses.clear()
@@ -479,10 +511,46 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         }, delay, TimeUnit.MILLISECONDS)
     }
 
-    // Said once, in idea.log and the settings page (InkoConfigurable), never as a popup.
+    /**
+     * Whether Cuttlebone can't answer at all: it isn't installed, refused the project, or stopped for good.
+     * Features that need it are then unavailable. While it starts or restarts it counts as available:
+     * its questions just have no answer yet.
+     */
+    val unavailable: Boolean
+        get() {
+            if (project.isDefault) return true
+            if (CuttleboneQueries.getInstance(project).stubbed) return false
+            return when (val status = status) {
+                null -> Cuttlebone.executable(project) == null
+                is Cuttlebone.Status.NotFound, is Cuttlebone.Status.Refused, Cuttlebone.Status.NoInko -> true
+                // Stopped for good, rather than restarting.
+                is Cuttlebone.Status.Stopped -> checked?.getOrNull() != null
+                else -> false
+            }
+        }
+
+    @Volatile private var notified = false
+
+    // In idea.log and the settings page (InkoConfigurable); a setup problem also once as a notification.
     private fun report(status: Cuttlebone.Status) {
         if (status.message != this.status?.message) LOG.info(status.message)
         this.status = status
+        if (status.setup && !notified && !project.isDisposed) {
+            notified = true
+            notifySetup(status)
+        }
+    }
+
+    private fun notifySetup(status: Cuttlebone.Status) {
+        val notification = com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup("Parakeet for Inko")
+            .createNotification("Parakeet needs Cuttlebone", status.message, com.intellij.notification.NotificationType.WARNING)
+        notification.addAction(com.intellij.notification.NotificationAction.createSimple("How to set up Cuttlebone") {
+            com.intellij.ide.BrowserUtil.browse(Cuttlebone.SETUP_DOCS)
+        })
+        notification.addAction(com.intellij.notification.NotificationAction.createSimple("Settings…") {
+            com.intellij.openapi.options.ShowSettingsUtil.getInstance().showSettingsDialog(project, InkoConfigurable::class.java)
+        })
+        notification.notify(project)
     }
 
     /** The running server, if any (started lazily, when an Inko file opens). */

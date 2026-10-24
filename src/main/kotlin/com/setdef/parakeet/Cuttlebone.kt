@@ -136,7 +136,12 @@ object Cuttlebone {
     }
 }
 
-/** Starts Cuttlebone when an Inko file opens, once [CuttleboneService] has checked it can run. */
+/**
+ * Starts Cuttlebone when an Inko file opens, once [CuttleboneService] has checked it can run.
+ * Without compatibility stubs: Kotlin would otherwise add overrides of 2026.1's new
+ * default methods that call methods 2025.3 doesn't have.
+ */
+@JvmDefaultWithoutCompatibility
 class CuttleboneSupportProvider : LspServerSupportProvider {
     override fun fileOpened(project: Project, file: VirtualFile, serverStarter: LspServerSupportProvider.LspServerStarter) {
         if (file.extension != Inko.EXTENSION || !file.isInLocalFileSystem) return
@@ -185,7 +190,7 @@ class CuttleboneDescriptor(project: Project) : ProjectWideLspServerDescriptor(pr
  * when Cuttlebone has no answer (and asks Cuttlebone itself), and IntelliJ
  * gets the ones where it can't make things worse.
  */
-open class CuttleboneCustomization : LspCustomization() {
+abstract class CuttleboneCustomization : LspCustomization() {
     // Parakeet's references resolve through Cuttlebone's definition (InkoResolver).
     override val goToDefinitionCustomizer: LspGoToDefinitionCustomizer get() = LspGoToDefinitionDisabled
     // Parakeet has no Go to Type Declaration of its own.
@@ -224,7 +229,8 @@ open class CuttleboneCustomization : LspCustomization() {
         fun create(): CuttleboneCustomization {
             val loader = LspCustomization::class.java.classLoader
             val newer = runCatching { Class.forName("com.intellij.platform.lsp.api.customization.LspRenameCustomizer", false, loader) }.isSuccess
-            return if (newer) CuttleboneCustomization261() else CuttleboneCustomization()
+            // Anonymous, as LspCustomization is override-only: the Plugin Verifier rejects constructing a named subclass.
+            return if (newer) object : CuttleboneCustomization261() {} else object : CuttleboneCustomization() {}
         }
     }
 }
@@ -233,7 +239,7 @@ open class CuttleboneCustomization : LspCustomization() {
  * The features IntelliJ 2026.1 added. Only loaded there and later ([CuttleboneCustomization.create]):
  * in 2025.3 these classes don't exist, and neither do the features.
  */
-class CuttleboneCustomization261 : CuttleboneCustomization() {
+abstract class CuttleboneCustomization261 : CuttleboneCustomization() {
     // Parakeet's Rename, Call and Type Hierarchy, Extend Selection and Optimize Imports.
     override val renameCustomizer: LspRenameCustomizer get() = LspRenameDisabled
     override val callHierarchyCustomizer: LspCallHierarchyCustomizer get() = LspCallHierarchyDisabled

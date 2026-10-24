@@ -30,7 +30,7 @@ class InkoErrorReportSubmitter : ErrorReportSubmitter() {
         consumer: Consumer<in SubmittedReportInfo>,
     ): Boolean {
         val environment = InkoIssueReport.Environment(
-            plugin = pluginDescriptor?.version ?: "unknown",
+            plugin = version ?: "unknown",
             ide = ApplicationInfo.getInstance().let { "${it.fullApplicationName} (${it.build.asString()})" },
             os = "${SystemInfo.OS_NAME} ${SystemInfo.OS_VERSION} (${SystemInfo.OS_ARCH})",
             java = "${SystemInfo.JAVA_RUNTIME_VERSION} (${SystemInfo.JAVA_VENDOR})",
@@ -39,6 +39,15 @@ class InkoErrorReportSubmitter : ErrorReportSubmitter() {
         BrowserUtil.browse(url)
         consumer.consume(SubmittedReportInfo(url, "the issue in your browser", SubmittedReportInfo.SubmissionStatus.NEW_ISSUE))
         return true
+    }
+
+    companion object {
+        /** Written by the build (build.gradle.kts), since each supported IDE marks a different way to ask it internal. */
+        internal val version: String? by lazy {
+            InkoErrorReportSubmitter::class.java.getResourceAsStream("/parakeet/build.properties")?.use { stream ->
+                java.util.Properties().apply { load(stream) }.getProperty("version")
+            }
+        }
     }
 }
 

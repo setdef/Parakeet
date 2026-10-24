@@ -58,8 +58,11 @@ intellijPlatform {
         token = providers.environmentVariable("PUBLISH_TOKEN")
     }
     pluginVerification {
+        // Problems in code that never runs on the IDE reporting them, each explained there.
+        ignoredProblemsFile = layout.projectDirectory.file("verification/ignored-problems.txt")
         ides {
-            // The version we build against.
+            // The oldest release sinceBuild (253) admits, and the version we build against.
+            create(IntelliJPlatformType.IntellijIdea, "2025.3")
             create(IntelliJPlatformType.IntellijIdea, "2026.2.3")
         }
     }
@@ -112,6 +115,14 @@ tasks.test {
     if (providers.gradleProperty("noCuttlebone").isPresent) exclude("**/CuttleboneIntegrationTest*")
     // Where check.sh found cuttlebone; the tests otherwise look on PATH.
     providers.environmentVariable("CUTTLEBONE").orNull?.let { environment("CUTTLEBONE", it) }
+}
+
+// The plugin's version, for error reports (InkoErrorReportSubmitter), without IDE API: 2026.2
+// marks every plugin lookup internal, and 2025.3 marks ErrorReportSubmitter.getPluginDescriptor override-only.
+tasks.processResources {
+    val version = project.version.toString()
+    inputs.property("version", version)
+    filesMatching("parakeet/build.properties") { expand("version" to version) }
 }
 
 // TextMate bundles must be plain files on disk, so ship them beside the plugin's jars.

@@ -1,0 +1,9 @@
+// The Plugin Verifier's known exceptions (build.gradle.kts). Keep this to problems in
+// code that never runs on the IDE that reports them, each with why. The format is
+// plugin ID, version (empty for any), and a pattern for the problem's short
+// description, split by colons, so a pattern can't have one.
+//
+// The classes for the LSP features IntelliJ 2026.1 added, which 2025.3 doesn't have.
+// Only CuttleboneCustomization261 names them (CuttleboneOwnershipTest checks), and
+// CuttleboneCustomization.create() only creates it where they exist.
+com.setdef.parakeet::(?i)access to unresolved class com\.intellij\.platform\.lsp\.api\.customization\.Lsp(CallHierarchy|CodeLens|OnTypeFormatting|OptimizeImports|Rename|SelectionRange|TypeHierarchy)(Customizer|Disabled)

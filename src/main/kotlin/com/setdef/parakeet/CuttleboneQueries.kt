@@ -212,9 +212,9 @@ class CuttleboneQueries(private val project: Project) {
 
     /** Where [location] points, as Parakeet's own element: the declaration's name, or a module's file. */
     fun target(location: Location): PsiElement? {
-        val server = CuttleboneService.getInstance(project).server()
-        val file = server?.descriptor?.findFileByUri(location.uri)
-            ?: com.intellij.openapi.vfs.VirtualFileManager.getInstance().findFileByUrl(location.uri) ?: return null
+        // Not the server's descriptor: 2026.1 changed LspServer.getDescriptor's type, so no call to it works in both.
+        val path = runCatching { java.nio.file.Path.of(java.net.URI(location.uri)) }.getOrNull() ?: return null
+        val file = com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByNioFile(path) ?: return null
         val psiFile = PsiManager.getInstance(project).findFile(file) as? InkoFile ?: return null
         val range = location.range
         // A module's location is empty, at the start of its file.

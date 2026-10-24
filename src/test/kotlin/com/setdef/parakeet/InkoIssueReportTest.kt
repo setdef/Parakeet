@@ -26,6 +26,11 @@ class InkoIssueReportTest : TestCase() {
         assertTrue(body, body.contains("```\n$trace\n```"))
     }
 
+    fun testReportsThePluginsVersion() {
+        val version = java.nio.file.Files.readAllLines(java.nio.file.Path.of("gradle.properties")).single { it.startsWith("version") }.substringAfter('=').trim()
+        assertEquals(version, InkoErrorReportSubmitter.version)
+    }
+
     fun testAsksForADescriptionWhenThereIsNone() {
         assertTrue(parameters(InkoIssueReport.url(listOf("boom"), null, environment)).getValue("body").contains("<!-- Describe what you were doing. -->"))
     }

@@ -195,10 +195,11 @@ class CuttleboneDescriptor(project: Project) : ProjectWideLspServerDescriptor(pr
 
     // IntelliJ's own process handler, with what it writes to the server read on the way.
     override fun startServerProcess(): OSProcessHandler {
-        val sent = CuttleboneService.getInstance(project).sentVersions
+        val service = CuttleboneService.getInstance(project)
+        val sent = service.sentVersions
         sent.clear()
         return object : OSProcessHandler(createCommandLine()) {
-            private val input by lazy { CuttleboneInputTap(super.getProcessInput(), sent) }
+            private val input by lazy { CuttleboneInputTap(super.getProcessInput(), sent, service.sentMessages) }
 
             override fun getProcessInput(): OutputStream = input
 
@@ -312,7 +313,12 @@ abstract class CuttleboneCustomization261 : CuttleboneCustomization() {
  * each document's version as `didOpen` and `didChange` carry it (and forgets
  * it at `didClose`), once its message has been written.
  */
-class CuttleboneInputTap(private val delegate: OutputStream, private val sent: MutableMap<String, Int>) : OutputStream() {
+class CuttleboneInputTap(
+    private val delegate: OutputStream,
+    private val sent: MutableMap<String, Int>,
+    /** How many messages of each method were written: requests, notifications and `$/cancelRequest`. */
+    private val counts: MutableMap<String, java.util.concurrent.atomic.AtomicLong>? = null,
+) : OutputStream() {
     private val buffer = java.io.ByteArrayOutputStream()
 
     override fun write(b: Int) = write(byteArrayOf(b.toByte()), 0, 1)
@@ -344,8 +350,9 @@ class CuttleboneInputTap(private val delegate: OutputStream, private val sent: M
     }
 
     private fun record(body: String) {
-        // Only document sync matters; parsing anything else (or anything malformed) is skipped.
+        // Only document sync is parsed; anything else (or anything malformed) is only counted.
         val method = METHOD.find(body.take(200))?.groupValues?.get(1) ?: return
+        counts?.getOrPut(method) { java.util.concurrent.atomic.AtomicLong() }?.incrementAndGet()
         if (method != "textDocument/didOpen" && method != "textDocument/didChange" && method != "textDocument/didClose") return
         val document = runCatching { com.google.gson.JsonParser.parseString(body).asJsonObject.getAsJsonObject("params").getAsJsonObject("textDocument") }.getOrNull() ?: return
         val uri = document.get("uri")?.asString ?: return
@@ -373,7 +380,16 @@ class CuttleboneInputTap(private val delegate: OutputStream, private val sent: M
  * outside anything the answer depends on), and an answer may be [stale]: from the last version of the
  * documents that type checked, mapped to where its text is now. Builds before that never send either.
  */
-data class CuttleboneStatus(val method: String, val uri: String, val status: String, val reason: String?, val elapsedMs: Double?, val repaired: Boolean = false) {
+data class CuttleboneStatus(
+    val method: String,
+    val uri: String,
+    val status: String,
+    val reason: String?,
+    val elapsedMs: Double?,
+    val repaired: Boolean = false,
+    /** From a check Cuttlebone kept from an earlier question about the same text, rather than one run for it (milestone 6). */
+    val cached: Boolean = false,
+) {
     val fresh: Boolean get() = status == "fresh"
     val stale: Boolean get() = status == "stale"
 }
@@ -394,7 +410,9 @@ class CuttleboneClient(handler: LspServerNotificationsHandler, private val statu
         val elapsed = params.get("elapsedMs")?.takeIf { it.isJsonPrimitive }?.asDouble
         // Absent before milestone 5, and only ever true on a fresh answer.
         val repaired = params.get("repaired")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean == true
-        statuses[method to uri] = CuttleboneStatus(method, uri, status, reason, elapsed, repaired)
+        // Absent before milestone 6.
+        val cached = params.get("cached")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean == true
+        statuses[method to uri] = CuttleboneStatus(method, uri, status, reason, elapsed, repaired, cached)
     }
 }
 
@@ -406,6 +424,9 @@ class CuttleboneClient(handler: LspServerNotificationsHandler, private val statu
 class CuttleboneService(private val project: Project) : com.intellij.openapi.Disposable {
     /** Latest `cuttlebone/status` per (method, URI), taken by the response that follows it. */
     val statuses = ConcurrentHashMap<Pair<String, String>, CuttleboneStatus>()
+
+    /** How many messages of each method IntelliJ has written to the servers it started ([CuttleboneInputTap]), for tests. */
+    val sentMessages = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
 
     /** The document version IntelliJ last sent the running server, per URI ([CuttleboneInputTap]). */
     val sentVersions = ConcurrentHashMap<String, Int>()

@@ -90,6 +90,16 @@ class CuttleboneQueries(private val project: Project) {
     /** How many requests were sent, for tests. */
     val sent = AtomicLong()
 
+    /** What happens to each request sent to a server, for tests that measure it (the typing replay). */
+    interface Trace {
+        /** [request] (numbered from 1) was sent about [document] as it is now. */
+        fun sent(request: Long, method: String, document: Document)
+        fun answered(request: Long, status: CuttleboneStatus?)
+        fun failed(request: Long, error: Throwable)
+    }
+
+    @Volatile var trace: Trace? = null
+
     /**
      * Fresh answers only, unless [stale]: resolve is built on it, and Rename, the refactorings, quick fixes
      * and imports change code from what it says, so only navigation and what only shows takes a stale one.
@@ -253,7 +263,9 @@ class CuttleboneQueries(private val project: Project) {
         cache[key]?.let { if (!it.answer.isCancelled) return it }
         val pending = Pending(CompletableFuture(), EmptyProgressIndicator())
         cache.putIfAbsent(key, pending)?.let { return it }
-        sent.incrementAndGet()
+        val request = sent.incrementAndGet()
+        val trace = trace
+        trace?.sent(request, method, document)
         // IntelliJ's sendRequestSync turns a cancelled progress indicator into $/cancelRequest, so each
         // request waits on a pooled thread under an indicator of its own: cancelling what waits for it doesn't
         // cancel the request (see await).
@@ -270,8 +282,11 @@ class CuttleboneQueries(private val project: Project) {
                     }
                 }, pending.indicator)
                 // Every answer is kept, whatever its status: query decides which it may use.
-                pending.answer.complete(Answer(convert(result), status?.let { runCatching { it.get(1, TimeUnit.SECONDS) }.getOrNull() }))
+                val answer = Answer(convert(result), status?.let { runCatching { it.get(1, TimeUnit.SECONDS) }.getOrNull() })
+                trace?.answered(request, answer.status)
+                pending.answer.complete(answer)
             } catch (e: Throwable) {
+                trace?.failed(request, e)
                 cache.remove(key, pending)
                 pending.answer.completeExceptionally(e)
                 if (e !is ProcessCanceledException) LOG.debug("Cuttlebone request failed", e)

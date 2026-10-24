@@ -390,6 +390,7 @@ Tools are managed with [mise](https://mise.jdx.dev) (`mise install`).
 | `./gradlew runIde` | Launch a sandbox IDE with the plugin loaded |
 | `./gradlew test` | Run all headless IDE tests, including integration tests against your installed `inko` and `cuttlebone` (`-PnoCuttlebone` skips the latter) |
 | `./gradlew test -PunitOnly` | Run only the unit tests, which use a fake `inko` and a fake Cuttlebone and need nothing installed |
+| `./gradlew typingReplay` | Type code into a std module at a person's speed against your installed `inko` and `cuttlebone`, and fail if typing responsiveness regresses ([the limits](docs/history/SESSION-typing-replay.md)); `PARAKEET_REPLAY_PROJECT` adds a project of your own |
 | `./gradlew verifyPlugin` | Check compatibility with the oldest and newest supported IDEs |
 | `./gradlew buildPlugin` | Build the installable zip |
 | `scripts/check.sh [--full]` | Every check a commit must pass (`--full` adds the Plugin Verifier); see AGENTS.md. Cuttlebone's integration tests use `$CUTTLEBONE` or `cuttlebone` on PATH, and are skipped (with a message) without one; `--full` requires it |

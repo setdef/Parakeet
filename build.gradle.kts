@@ -2,6 +2,8 @@ import org.jetbrains.changelog.Changelog
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
+val TYPING_REPLAY = "CuttleboneTypingReplayIntegrationTest"
+
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.intellij.platform")
@@ -113,8 +115,26 @@ tasks.register("updatePluginsXml") {
 tasks.test {
     if (providers.gradleProperty("unitOnly").isPresent) exclude("**/*IntegrationTest*")
     if (providers.gradleProperty("noCuttlebone").isPresent) exclude("**/CuttleboneIntegrationTest*")
+    exclude("**/$TYPING_REPLAY*")
     // Where check.sh found cuttlebone; the tests otherwise look on PATH.
     providers.environmentVariable("CUTTLEBONE").orNull?.let { environment("CUTTLEBONE", it) }
+}
+
+// The typing replay types for minutes, against the real `cuttlebone`, with the daemon on its timer and
+// completion popping up as in the IDE. It runs in an IDE of its own: in the tests' IDE, what it left running
+// made a later test's teardown wait forever. scripts/check.sh runs it when there's a cuttlebone.
+val typingReplay by intellijPlatformTesting.testIde.registering {
+    task {
+        description = "Replays typing against the real cuttlebone, and fails when typing responsiveness regresses."
+        group = "verification"
+        testClassesDirs = sourceSets.test.get().output.classesDirs
+        // The test task's: with the platform's test framework, which this task's own lacks.
+        classpath = tasks.test.get().classpath
+        // Named rather than found: the scan doesn't see the platform's test case classes on this classpath.
+        isScanForTestClasses = false
+        include("**/$TYPING_REPLAY.class")
+        providers.environmentVariable("CUTTLEBONE").orNull?.let { environment("CUTTLEBONE", it) }
+    }
 }
 
 // The plugin's version, for error reports (InkoErrorReportSubmitter), without IDE API: 2026.2
@@ -132,9 +152,11 @@ tasks.prepareSandbox {
     }
 }
 
-// Tests load the plugin from the sandbox, so they need the bundles there too.
-tasks.prepareTestSandbox {
-    from(layout.projectDirectory.dir("bundles")) {
-        into(intellijPlatform.projectName.map { "$it/bundles" })
+// Tests load the plugin from the sandbox, so they need the bundles there too (the typing replay's has its own).
+for (sandbox in listOf("prepareTestSandbox", "prepareSandbox_typingReplay")) {
+    tasks.named<org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask>(sandbox) {
+        from(layout.projectDirectory.dir("bundles")) {
+            into(intellijPlatform.projectName.map { "$it/bundles" })
+        }
     }
 }

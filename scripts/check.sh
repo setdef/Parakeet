@@ -69,6 +69,10 @@ fi
 # --rerun: a cached test result can't stand in for this run, since the
 # integration tests depend on the installed `inko` and `cuttlebone`, which Gradle can't see.
 step "tests (unit, integration and guardrails)" run ./gradlew --quiet --console=plain test --rerun $cuttlebone_flag
+# The typing replay, in an IDE of its own (build.gradle.kts): it needs Cuttlebone.
+if [ -z "$cuttlebone_flag" ]; then
+    step "typing replay against Cuttlebone" run ./gradlew --quiet --console=plain typingReplay --rerun
+fi
 step "plugin build" run ./gradlew --quiet --console=plain buildPlugin
 
 if [ "$full" = true ]; then

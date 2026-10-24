@@ -39,6 +39,15 @@ class CuttleboneClientTest : CuttleboneTestCase() {
         }
     }
 
+    fun testTurnsOffCuttlebonesDiagnostics() {
+        // Errors are Parakeet's (`inko check`), so Cuttlebone's full checks would be for nothing.
+        useFake(answered())
+        open("src/main.inko", text)
+        runningServer(waitForOpen = false)
+        val options = received("initialize").single().getAsJsonObject("params").getAsJsonObject("initializationOptions")
+        assertFalse(options.toString(), options.get("diagnostics")?.asBoolean ?: true)
+    }
+
     fun testAnEditReachesTheServerBeforeTheNextQuery() {
         useFake(answered())
         open("src/main.inko", text)

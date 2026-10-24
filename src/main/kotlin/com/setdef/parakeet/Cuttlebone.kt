@@ -183,6 +183,8 @@ class CuttleboneDescriptor(project: Project) : ProjectWideLspServerDescriptor(pr
     override fun createInitializationOptions(): Any = JsonObject().apply {
         InkoCli.getInstance(project).commandLine(emptyList(), null)?.exePath?.let { addProperty("inko", it) }
         addProperty("statusNotifications", true)
+        // Errors and warnings are Parakeet's, from `inko check` (CuttleboneCustomization), so Cuttlebone needn't check for them.
+        addProperty("diagnostics", false)
     }
 
     // UTF-16 positions, which are IntelliJ's offsets.
@@ -223,7 +225,8 @@ abstract class CuttleboneCustomization : LspCustomization() {
     override val completionCustomizer: LspCompletionCustomizer get() = LspCompletionDisabled
     // Find Usages is Parakeet's, on IntelliJ's PSI.
     override val findReferencesCustomizer: LspFindReferencesCustomizer get() = LspFindReferencesDisabled
-    // Errors come from `inko check`.
+    // Errors come from `inko check`: IntelliJ's would have no quick fixes, aren't in Inspect Code, don't
+    // mark files that aren't open, and vanish without Cuttlebone. Cuttlebone's are off (createInitializationOptions).
     override val diagnosticsCustomizer: LspDiagnosticsCustomizer get() = LspDiagnosticsDisabled
     // Parakeet's parameter-name hints.
     override val inlayHintCustomizer: LspInlayHintCustomizer get() = LspInlayHintDisabled

@@ -228,9 +228,10 @@ abstract class CuttleboneCustomization : LspCustomization() {
     // Errors come from `inko check`: IntelliJ's would have no quick fixes, aren't in Inspect Code, don't
     // mark files that aren't open, and vanish without Cuttlebone. Cuttlebone's are off (createInitializationOptions).
     override val diagnosticsCustomizer: LspDiagnosticsCustomizer get() = LspDiagnosticsDisabled
-    // Parakeet's parameter-name hints.
+    // Parakeet's hints ask Cuttlebone for the whole file, and have a switch for types and one for parameter
+    // names (IntelliJ's have one for everything); parameter names fall back to the heuristic in broken code.
     override val inlayHintCustomizer: LspInlayHintCustomizer get() = LspInlayHintDisabled
-    // Parakeet's parameter info.
+    // Parakeet's parameter info shows Cuttlebone's signature, and falls back to `inko doc`'s where it has none.
     override val signatureHelpCustomizer: LspSignatureHelpCustomizer get() = LspSignatureHelpDisabled
     // Parakeet's usage highlighting.
     override val documentHighlightsCustomizer: LspDocumentHighlightsCustomizer get() = LspDocumentHighlightsDisabled

@@ -32,6 +32,8 @@ import org.eclipse.lsp4j.Location
 import org.eclipse.lsp4j.LocationLink
 import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.Range
+import org.eclipse.lsp4j.SignatureHelp
+import org.eclipse.lsp4j.SignatureHelpParams
 import org.eclipse.lsp4j.TextDocumentIdentifier
 import org.eclipse.lsp4j.TypeDefinitionParams
 import org.eclipse.lsp4j.jsonrpc.messages.Either
@@ -95,7 +97,7 @@ class CuttleboneQueries(private val project: Project) {
      */
     fun inlayHints(file: PsiFile, budgetMs: Long = HINTS_BUDGET_MS): Answer<List<InlayHint>>? {
         // Cuttlebone before milestone 4 has none.
-        if (CuttleboneService.getInstance(project).server()?.initializeResult?.capabilities?.inlayHintProvider?.let { it.isRight || it.left == true } != true) return null
+        if (capabilities()?.inlayHintProvider?.let { it.isRight || it.left == true } != true) return null
         val document = file.originalFile.virtualFile?.let { FileDocumentManager.getInstance().getDocument(it) } ?: return null
         val end = position(document, document.textLength)
         val pending = start(file, 0, "textDocument/inlayHint", { hints: List<InlayHint>? -> hints }) { server, identifier, start ->
@@ -105,6 +107,16 @@ class CuttleboneQueries(private val project: Project) {
         @Suppress("UNCHECKED_CAST")
         return await(pending, budgetMs, wait = !application.isDispatchThread && !application.isWriteAccessAllowed) as Answer<List<InlayHint>>?
     }
+
+    /** The signature of the call whose parentheses contain [offset], and which of its parameters [offset] is in. */
+    fun signatureHelp(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<SignatureHelp>? {
+        if (capabilities()?.signatureHelpProvider == null) return null
+        return query(file, offset, "textDocument/signatureHelp", budgetMs, { help: SignatureHelp? -> help }) { server, document, position ->
+            server.textDocumentService.signatureHelp(SignatureHelpParams(document, position))
+        }
+    }
+
+    private fun capabilities() = CuttleboneService.getInstance(project).server()?.initializeResult?.capabilities
 
     private fun <R, T> query(
         file: PsiFile,

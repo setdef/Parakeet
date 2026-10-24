@@ -120,6 +120,21 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf(main.indexOf("x = make") + 1 to ": B", main.indexOf("y = [") + 1 to ": Array[Int]"), types)
     }
 
+    fun testParameterInfoHasTheCompilersSignature() {
+        // Being typed: no `)` yet, which Cuttlebone allows for.
+        val text = main.replace("x.size(2.0)", "x.size(")
+        open(text)
+        val help = inBackground { CuttleboneQueries.getInstance(project).signatureHelp(myFixture.file, text.indexOf("x.size(") + 7) }
+        if (CuttleboneService.getInstance(project).server()?.initializeResult?.capabilities?.signatureHelpProvider == null) {
+            println("This cuttlebone has no signature help, so parameter info is Parakeet's")
+            assertNull(help)
+            return
+        }
+        val signature = help!!.value!!.signatures.single()
+        assertEquals("fn pub size(scale: Float) -> Int", signature.label)
+        assertEquals(0, signature.activeParameter ?: help.value!!.activeParameter)
+    }
+
     fun testWithASyntaxErrorHintsFallBackToParakeet() {
         // Cuttlebone has no answer for a file that doesn't parse; Parakeet's hints still name what it can resolve.
         val text = main + "\nfn twice(value: Int) -> Int {\n  value * 2\n}\n\nfn uses -> Int {\n  twice(21)\n}\n\nfn broken( {\n"

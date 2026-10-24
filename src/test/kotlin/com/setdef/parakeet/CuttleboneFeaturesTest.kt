@@ -116,6 +116,49 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         assertEquals(0, received("textDocument/definition").size)
     }
 
+    /** A stand-in for the IDE's contexts: getters answer from [values], setters record into it. */
+    private inline fun <reified T> context(values: MutableMap<String, Any?>): T =
+        java.lang.reflect.Proxy.newProxyInstance(T::class.java.classLoader, arrayOf(T::class.java)) { _, method, args ->
+            when {
+                method.name == "setupUIComponentPresentation" -> { values["shown"] = Triple(args!![0], args[1], args[2]); args[0] }
+                method.name.startsWith("set") && args?.size == 1 -> { values[method.name.removePrefix("set").replaceFirstChar(Char::lowercase)] = args[0]; null }
+                method.name.startsWith("get") -> values[method.name.removePrefix("get").replaceFirstChar(Char::lowercase)]
+                method.name.startsWith("is") -> values[method.name.removePrefix("is").replaceFirstChar(Char::lowercase)] ?: false
+                else -> values[method.name]
+            }
+        } as T
+
+    /** Parameter info at [offset], as IntelliJ runs it (in the background): each item, with the current parameter in [brackets]. */
+    private fun parameterInfo(offset: Int): List<String> = inBackground {
+        val handler = InkoParameterInfoHandler()
+        val created = mutableMapOf<String, Any?>("file" to myFixture.file, "editor" to myFixture.editor, "offset" to offset, "project" to project)
+        val owner = handler.findElementForParameterInfo(context(created)) ?: return@inBackground emptyList()
+        val updated = mutableMapOf<String, Any?>("file" to myFixture.file, "editor" to myFixture.editor, "offset" to offset, "parameterOwner" to owner, "objectsToView" to created["itemsToShow"])
+        handler.updateParameterInfo(owner, context(updated))
+        (created["itemsToShow"] as Array<*>).map { item ->
+            val ui = mutableMapOf<String, Any?>("parameterOwner" to owner, "currentParameterIndex" to updated["currentParameter"], "defaultParameterColor" to java.awt.Color.WHITE)
+            handler.updateUI(item!!, context(ui))
+            val (shown, start, end) = ui["shown"] as Triple<*, *, *>
+            val text = shown as String
+            if ((start as Int) < 0) text else text.substring(0, start) + "[" + text.substring(start, end as Int) + "]" + text.substring(end)
+        }
+    }
+
+    private fun signatureHelp(status: String = "fresh") = answerAt(main, "2.0", "textDocument/signatureHelp", mapOf(
+        "signatures" to listOf(mapOf("label" to "fn pub size(scale: Float) -> Int", "parameters" to listOf(mapOf("label" to listOf(12, 24))), "activeParameter" to 0)),
+        "activeSignature" to 0, "activeParameter" to 0,
+    ), status = status)
+
+    fun testParameterInfoShowsCuttlebonesSignature() {
+        start(signatureHelp())
+        assertEquals(listOf("fn pub size([scale: Float]) -> Int"), parameterInfo(main.indexOf("2.0")))
+    }
+
+    fun testWithoutAnAnswerParameterInfoIsParakeets() {
+        start(signatureHelp(status = "unavailable"))
+        assertEquals("both size methods fit", listOf("[unit: Int]", "[scale: Float]"), parameterInfo(main.indexOf("2.0")).sorted().reversed())
+    }
+
     fun testParameterInfoUsesTheResolvedMethod() {
         start(definitionOfSize())
         targets("size(2.0)")

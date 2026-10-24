@@ -6,6 +6,7 @@ import com.intellij.lang.parameterInfo.ParameterInfoUIContext
 import com.intellij.lang.parameterInfo.UpdateParameterInfoContext
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.PsiTreeUtil
+import org.eclipse.lsp4j.SignatureInformation
 import com.setdef.parakeet.InkoDefinitionKind as Kind
 
 /** A call around an offset: the callee's name, its `(`, and which argument the offset is in. */
@@ -78,10 +79,20 @@ object InkoCalls {
     }
 }
 
-/** Parameter info (⌘P / Ctrl+P) inside a call's parentheses, from the `inko doc` index. */
-class InkoParameterInfoHandler : ParameterInfoHandler<InkoName, InkoDefinition> {
+/**
+ * Parameter info (⌘P / Ctrl+P) inside a call's parentheses: Cuttlebone's
+ * signature of the method the call resolves to, with the receiver's type
+ * arguments filled in, else the `inko doc` definitions it may call. Each item
+ * is a [SignatureInformation] or an [InkoDefinition].
+ */
+class InkoParameterInfoHandler : ParameterInfoHandler<InkoName, Any> {
     override fun findElementForParameterInfo(context: CreateParameterInfoContext): InkoName? {
         val call = InkoCalls.at(context.file, context.offset) ?: return null
+        val compiled = CuttleboneQueries.getInstance(context.project).signatureHelp(context.file, context.offset)?.value
+        compiled?.signatures?.getOrNull(compiled.activeSignature ?: 0)?.let { signature ->
+            context.itemsToShow = arrayOf(signature)
+            return call.callee
+        }
         val candidates = InkoResolver.resolveDefinitions(call.callee).map { it.first }
             .filter { it.kind in CALLABLE }
             .distinctBy { it.signature to it.owner }
@@ -99,10 +110,24 @@ class InkoParameterInfoHandler : ParameterInfoHandler<InkoName, InkoDefinition> 
         InkoCalls.at(context.file, context.offset)?.callee?.takeIf { it == context.parameterOwner }
 
     override fun updateParameterInfo(element: InkoName, context: UpdateParameterInfoContext) {
-        context.setCurrentParameter(InkoCalls.at(context.file, context.offset)?.argument ?: -1)
+        // Cuttlebone's knows named arguments (`times: 1` is `times`'s, in any order); else commas are counted.
+        val compiled = if (context.objectsToView.orEmpty().any { it is SignatureInformation }) {
+            CuttleboneQueries.getInstance(element.project).signatureHelp(context.file, context.offset)?.value
+        } else null
+        val active = compiled?.let { help -> help.signatures?.getOrNull(help.activeSignature ?: 0)?.activeParameter ?: help.activeParameter }
+        context.setCurrentParameter(active ?: InkoCalls.at(context.file, context.offset)?.argument ?: -1)
     }
 
-    override fun updateUI(definition: InkoDefinition, context: ParameterInfoUIContext) {
+    override fun updateUI(item: Any, context: ParameterInfoUIContext) {
+        if (item is SignatureInformation) {
+            val range = item.parameters?.getOrNull(context.currentParameterIndex)?.label?.let { label ->
+                if (label.isRight) label.right.first to label.right.second
+                else item.label.indexOf(label.left).takeIf { it >= 0 }?.let { it to it + label.left.length }
+            } ?: (-1 to -1)
+            context.setupUIComponentPresentation(item.label, range.first, range.second, false, false, false, context.defaultParameterColor)
+            return
+        }
+        val definition = item as InkoDefinition
         val path = context.parameterOwner?.containingFile?.virtualFile?.let(Inko::pathOf)
         val symbols = path?.let { InkoDocIndex.getInstance(context.parameterOwner.project).symbols(Inko.projectRoot(path)) }
         val parameters = InkoCalls.parameters(definition, symbols)

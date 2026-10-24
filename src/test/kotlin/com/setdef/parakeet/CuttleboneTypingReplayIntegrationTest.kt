@@ -124,24 +124,24 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
     // A new method, typed from its first line: until its last `}`, the file doesn't parse.
     fun testTypingANewMethodInAStdModule() {
         std()
-        replay("src/std/json.inko", JSON_OBJECT, Scope.METHOD).print("new method, std/json.inko")
+        replay("src/std/json.inko", JSON_OBJECT, Scope.METHOD).apply { print("new method, std/json.inko") }.assertWithinLimits()
     }
 
     // A method's body, typed between its braces (as when the IDE closes the `{` typed before it): the file
     // parses again as each statement is finished.
     fun testTypingAMethodBodyInAStdModule() {
         std()
-        replay("src/std/json.inko", JSON_OBJECT, Scope.BODY).print("method body, std/json.inko")
+        replay("src/std/json.inko", JSON_OBJECT, Scope.BODY).apply { print("method body, std/json.inko") }.assertWithinLimits()
     }
 
     fun testTypingANewMethodInAProject() {
         val (file, from) = project() ?: return println(skipped)
-        replay(file, from, Scope.METHOD).print("new method, ${Path.of(env("PARAKEET_REPLAY_PROJECT")!!).fileName}/$file")
+        replay(file, from, Scope.METHOD).apply { print("new method, ${Path.of(env("PARAKEET_REPLAY_PROJECT")!!).fileName}/$file") }.assertWithinLimits()
     }
 
     fun testTypingAMethodBodyInAProject() {
         val (file, from) = project() ?: return println(skipped)
-        replay(file, from, Scope.BODY).print("method body, ${Path.of(env("PARAKEET_REPLAY_PROJECT")!!).fileName}/$file")
+        replay(file, from, Scope.BODY).apply { print("method body, ${Path.of(env("PARAKEET_REPLAY_PROJECT")!!).fileName}/$file") }.assertWithinLimits()
     }
 
     /** What the replay deletes and types again: a whole method, or only the lines between its braces. */
@@ -417,6 +417,16 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
         /** Answers that arrived for text that had changed since the request. */
         fun outdated(list: List<Request>) = list.count { it.answered && it.stampAtEnd != it.stamp }
 
+        /**
+         * Of the requests whose text changed before they were answered, how many were cancelled: the rest were
+         * answered for text nobody had any more, unless something still waited for them (completion, as its items
+         * are filtered by what's typed after).
+         */
+        fun cancelledOfChanged(): Pair<Int, Int> {
+            val changed = requests.filter { it.endedAt != 0L && it.stampAtEnd != it.stamp }
+            return changed.count { it.cancelled } to changed.size
+        }
+
         /** Answers from a check run for them (not one Cuttlebone kept). */
         fun checks(list: List<Request>) = list.count { it.answered && it.status != null && !it.status!!.cached }
 
@@ -436,6 +446,36 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
 
         fun daemonLatencies(): List<Long?> = settled.map { (stamp, at) ->
             daemonFinished.filter { it.second == stamp }.minOfOrNull { it.first }?.let { (it - at) / 1_000_000 }
+        }
+
+        /**
+         * Fails if typing made Cuttlebone do more, or answer later, than the limits allow: each is a few times what
+         * this session measured after its fixes, and well below what it measured before them, where that differed
+         * (docs/history/SESSION-typing-replay.md has both).
+         */
+        fun assertWithinLimits() {
+            val keys = keystrokes.toDouble()
+            fun perKeystroke(what: String, count: Int, limit: Double) =
+                assertTrue("$what per keystroke: $count for $keystrokes keystrokes, over $limit", count / keys <= limit)
+            perKeystroke("requests", requests.size, MAX_REQUESTS_PER_KEYSTROKE)
+            perKeystroke("checks", checks(requests), MAX_CHECKS_PER_KEYSTROKE)
+            perKeystroke("answers for text that had changed", outdated(requests), MAX_OUTDATED_PER_KEYSTROKE)
+            val (cancelled, changed) = cancelledOfChanged()
+            // A share of a handful says little (idoc's were 2 of 3); the answers per keystroke above cover those.
+            if (changed >= 5) {
+                assertTrue("of the $changed requests whose text changed before their answer, $cancelled were cancelled", cancelled >= changed * MIN_CANCELLED_SHARE)
+            }
+
+            val hints = latencies("textDocument/inlayHint")
+            assertTrue("inlay hints answered at ${hints.count { it != null }} of ${hints.size} pauses", hints.count { it != null } * 3 >= hints.size)
+            fun within(what: String, sorted: List<Long>, p: Double, limit: Long) {
+                val value = percentile(sorted, p) ?: return
+                assertTrue("$what: ${(p * 100).toInt()}th percentile $value ms, over $limit ms (all: $sorted)", value <= limit)
+            }
+            within("inlay hints at pauses", hints.filterNotNull().sorted(), 0.9, MAX_HINTS_AT_PAUSE_MS)
+            within("usage highlighting at pauses", latencies("textDocument/documentHighlight").filterNotNull().sorted(), 0.9, MAX_USAGES_AT_PAUSE_MS)
+            within("completion, keystroke to answer", current("textDocument/completion"), 0.9, MAX_COMPLETION_MS)
+            within("parameter info, keystroke to answer", current("textDocument/signatureHelp"), 1.0, MAX_PARAMETER_INFO_MS)
         }
 
         /** Every request, and every edit, as tab-separated lines, to PARAKEET_REPLAY_TRACE if it's set. */
@@ -458,8 +498,9 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
             write(label)
             println("REPLAY $label: typed for ${typedForNs / 1_000_000_000.0} s: $keystrokes keystrokes ($typos typos deleted), " +
                 "$accepted completions accepted, parameter info $parameterInfos times, ${stamps.size} versions, ${settled.size} paused at, $fixups fixups")
-            println("REPLAY $label: ${requests.size} requests, $cancelsSent \$/cancelRequest sent, ${outdated(requests)} answers for changed text, " +
-                "${checks(requests)} checks (${"%.0f".format(checkMs(requests))} ms)")
+            val (cancelled, changed) = cancelledOfChanged()
+            println("REPLAY $label: ${requests.size} requests, $cancelsSent \$/cancelRequest sent, ${outdated(requests)} answers for changed text " +
+                "($cancelled of $changed whose text changed cancelled), ${checks(requests)} checks (${"%.0f".format(checkMs(requests))} ms)")
             println("REPLAY | feature | sent | cancelled | answered | for changed text | checks | check ms | latency at pauses: answered, median, p90, max (ms) | keystroke to current answer: median, p90, max (ms) |")
             for ((feature, method) in FEATURES) {
                 val list = of(method)
@@ -476,6 +517,23 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
 
     private companion object {
         const val JSON_OBJECT = "  fn mut object -> Result[Json, Error[E]] {"
+
+        // The limits (Report.assertWithinLimits). On std's json.inko, both ways of typing, after the fixes / before
+        // them, per keystroke: requests 0.36 to 0.42 / 1.45 to 1.50, checks 0.26 to 0.29 / 1.10 to 1.45, answers for
+        // text that had changed up to 0.026 / 0.187 or more. Times after the fixes (as before them, but for usage
+        // highlighting, which now waits for typing to pause): at the 90th percentile, inlay hints at pauses up to
+        // 491 ms (300 of them the IDE's own delay after an edit), usage highlighting at pauses up to 394 ms, and
+        // completion up to 184 ms after its keystroke; parameter info, every answer, up to 289 ms.
+        const val MAX_REQUESTS_PER_KEYSTROKE = 0.7
+        const val MAX_CHECKS_PER_KEYSTROKE = 0.5
+        const val MAX_OUTDATED_PER_KEYSTROKE = 0.08
+        // Of the requests whose text changed before their answer, 78 to 89% were cancelled after the fixes (the rest
+        // had something still waiting for them); before them, and with the fixes but no cancelling, none.
+        const val MIN_CANCELLED_SHARE = 0.5
+        const val MAX_HINTS_AT_PAUSE_MS = 1200L
+        const val MAX_USAGES_AT_PAUSE_MS = 1200L
+        const val MAX_COMPLETION_MS = 800L
+        const val MAX_PARAMETER_INFO_MS = 1000L
 
         /** The [p]th of [sorted] (0 to 1), by the nearest rank below. */
         fun percentile(sorted: List<Long>, p: Double): Long? = sorted.getOrNull(((sorted.size - 1) * p).toInt())

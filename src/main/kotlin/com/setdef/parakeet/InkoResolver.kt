@@ -147,15 +147,15 @@ class InkoResolver private constructor(
 
         /**
          * What [name] refers to: each definition, with the element where its name
-         * is written. Cuttlebone's answer when it has a fresh one, else the heuristic.
+         * is written. Cuttlebone's answer when it has a fresh one (and [askCuttlebone]), else the heuristic.
          */
-        fun resolveDefinitions(name: InkoName): List<Pair<InkoDefinition, PsiElement>> {
+        fun resolveDefinitions(name: InkoName, askCuttlebone: Boolean = true): List<Pair<InkoDefinition, PsiElement>> {
             val file = name.containingFile ?: return emptyList()
             val path = Inko.pathOf(file.virtualFile) ?: return emptyList()
             val symbols = InkoDocIndex.getInstance(name.project).symbols(Inko.projectRoot(path)) ?: return emptyList()
             val imports = InkoImports.parse(file.text)
             val context = InkoNameContext.of(name, imports)
-            compiled(name, file, context, symbols)?.let { return listOf(it) }
+            if (askCuttlebone) compiled(name, file, context, symbols)?.let { return listOf(it) }
             val resolver = InkoResolver(symbols, symbols.moduleOf(path) ?: Inko.moduleName(path), imports, file, name.textRange.startOffset)
             return resolver.definitions(context).distinct().mapNotNull { definition ->
                 toPsi(file, definition)?.let { definition to it }

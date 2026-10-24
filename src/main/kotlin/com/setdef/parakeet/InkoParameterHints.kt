@@ -10,12 +10,13 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.PsiTreeUtil
+import org.eclipse.lsp4j.InlayHintKind
 
 /**
- * Parameter-name hints before positional arguments (`greet(name: 'Alice')`),
- * shown only when the call resolves to exactly one parameter list, so a hint
- * is never a guess. Arguments that are already named, or whose text is the
- * parameter's name, get none.
+ * Parameter-name hints before positional arguments (`greet(name: 'Alice')`):
+ * Cuttlebone's, or else shown only when the call resolves to exactly one
+ * parameter list, so a hint is never a guess. Arguments that are already
+ * named, or whose text is the parameter's name, get none.
  */
 class InkoParameterHintsProvider : InlayHintsProvider {
     override fun createCollector(file: PsiFile, editor: Editor): InlayHintsCollector? =
@@ -23,12 +24,22 @@ class InkoParameterHintsProvider : InlayHintsProvider {
 
     private class Collector : OwnBypassCollector {
         override fun collectHintsForFile(file: PsiFile, sink: InlayTreeSink) {
-            val parens = PsiTreeUtil.collectElements(file) { it.isToken(InkoTokens.LPAREN) }
-            InkoParameterHints.prefetch(file, parens.toList())
-            for (paren in parens) {
-                for ((offset, name) in InkoParameterHints.at(paren)) {
-                    sink.addPresentation(InlineInlayPosition(offset, false, 0), null, null, HintFormat.default) { text("$name:", null) }
-                }
+            for ((offset, name) in InkoParameterHints.inFile(file)) {
+                sink.addPresentation(InlineInlayPosition(offset, false, 0), null, null, HintFormat.default) { text("$name:", null) }
+            }
+        }
+    }
+}
+
+/** The types the compiler infers for `let` bindings and closure arguments that don't write one, from Cuttlebone. */
+class InkoTypeHintsProvider : InlayHintsProvider {
+    override fun createCollector(file: PsiFile, editor: Editor): InlayHintsCollector? =
+        if (file is InkoFile) Collector() else null
+
+    private class Collector : OwnBypassCollector {
+        override fun collectHintsForFile(file: PsiFile, sink: InlayTreeSink) {
+            for ((offset, label) in InkoParameterHints.types(file)) {
+                sink.addPresentation(InlineInlayPosition(offset, true, 0), null, null, HintFormat.default) { text(label, null) }
             }
         }
     }
@@ -36,31 +47,42 @@ class InkoParameterHintsProvider : InlayHintsProvider {
 
 object InkoParameterHints {
     /**
-     * Asks Cuttlebone for every call's method at once, and waits for the answers
-     * together (for at most [CuttleboneQueries.BULK_BUDGET_MS]): a highlighting
-     * pass otherwise only uses answers already cached.
+     * [file]'s parameter-name hints, as (offset, name): Cuttlebone's when it has
+     * a fresh answer (one request for the whole file), else the heuristic's.
      */
-    fun prefetch(file: PsiFile, openParens: List<PsiElement>) {
-        val imports = InkoImports.parse(file.text)
-        val callees = openParens.mapNotNull { paren ->
-            paren.previousToken()?.let { PsiTreeUtil.getParentOfType(it, InkoName::class.java, false) }
-                ?.takeIf { it !is InkoDeclaration && InkoResolver.isGuessed(InkoNameContext.of(it, imports)) }
-                ?.textRange?.startOffset
-        }
-        if (callees.isEmpty()) return
-        val queries = CuttleboneQueries.getInstance(file.project)
-        queries.awaitAll(queries.prefetchDefinitions(file, callees), CuttleboneQueries.BULK_BUDGET_MS)
+    fun inFile(file: PsiFile): List<Pair<Int, String>> {
+        cuttlebone(file)?.let { hints -> return hints.filter { it.third == InlayHintKind.Parameter }.map { it.first to it.second.removeSuffix(":") } }
+        return PsiTreeUtil.collectElements(file) { it.isToken(InkoTokens.LPAREN) }.flatMap { at(it, askCuttlebone = false) }
     }
 
-    /** For a call's `(`, the (offset, parameter name) hints for its arguments. */
-    fun at(openParen: PsiElement): List<Pair<Int, String>> {
+    /** [file]'s inferred types, as (offset, `: Type`): only Cuttlebone knows them. */
+    fun types(file: PsiFile): List<Pair<Int, String>> =
+        cuttlebone(file).orEmpty().filter { it.third == InlayHintKind.Type }.map { it.first to it.second }
+
+    /** Cuttlebone's hints for [file] as (offset, label, kind), or null without a fresh answer. */
+    private fun cuttlebone(file: PsiFile): List<Triple<Int, String, InlayHintKind?>>? {
+        val hints = CuttleboneQueries.getInstance(file.project).inlayHints(file)?.value ?: return null
+        val document = file.viewProvider.document ?: return null
+        return hints.mapNotNull { hint ->
+            val offset = CuttleboneQueries.offset(document, hint.position) ?: return@mapNotNull null
+            val label = if (hint.label.isLeft) hint.label.left else hint.label.right.joinToString("") { it.value }
+            Triple(offset, label, hint.kind)
+        }
+    }
+
+    /**
+     * For a call's `(`, the (offset, parameter name) hints for its arguments, from
+     * Parakeet's own resolve. Without [askCuttlebone], resolve doesn't ask Cuttlebone
+     * about the call: a file whose hints it can't give gets no definitions either.
+     */
+    fun at(openParen: PsiElement, askCuttlebone: Boolean = true): List<Pair<Int, String>> {
         val callee = openParen.previousToken()?.let { PsiTreeUtil.getParentOfType(it, InkoName::class.java, false) } ?: return emptyList()
         // `fn name(…)` declares parameters; it isn't a call.
         if (generateSequence(callee.previousToken()) { it.previousToken() }.takeWhile { it.isToken(InkoTokens.KEYWORD) }.any { it.text == "fn" }) return emptyList()
         val file = openParen.containingFile ?: return emptyList()
         val path = Inko.pathOf(file.virtualFile) ?: return emptyList()
         val symbols = InkoDocIndex.getInstance(file.project).symbols(Inko.projectRoot(path))
-        val parameterLists = InkoResolver.resolveDefinitions(callee).map { InkoCalls.parameters(it.first, symbols) }.distinct()
+        val parameterLists = InkoResolver.resolveDefinitions(callee, askCuttlebone).map { InkoCalls.parameters(it.first, symbols) }.distinct()
         val parameters = parameterLists.singleOrNull()?.map { it.substringBefore(':').trim().split(' ').last() } ?: return emptyList()
         return arguments(openParen).zip(parameters).mapNotNull { (argument, name) ->
             val (start, text) = argument

@@ -98,13 +98,17 @@ object FakeCuttlebone {
             "definitionProvider" to true,
             "typeDefinitionProvider" to true,
             "referencesProvider" to true,
+            "documentHighlightProvider" to true,
+            "signatureHelpProvider" to mapOf("triggerCharacters" to listOf("(", ",")),
+            "inlayHintProvider" to true,
             "experimental" to mapOf("cuttlebone" to mapOf("inko" to "0.21.1", "statusNotifications" to script.statusNotifications)),
         ),
         "serverInfo" to mapOf("name" to "cuttlebone", "version" to "0.0.0-fake"),
     )
 
     private fun answer(script: Script, method: String, params: JsonObject, id: JsonElement, output: OutputStream) {
-        val position = params.getAsJsonObject("position")
+        // A range request (inlay hints) is answered by its start.
+        val position = params.getAsJsonObject("position") ?: params.getAsJsonObject("range")?.getAsJsonObject("start")
         val line = position?.get("line")?.asInt
         val character = position?.get("character")?.asInt
         val found = script.answers.firstOrNull { it.method == method && it.line == line && it.character == character }

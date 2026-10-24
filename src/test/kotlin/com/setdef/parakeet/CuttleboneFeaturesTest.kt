@@ -88,13 +88,37 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         assertEquals("cached", 1, reference.multiResolve(false).size)
     }
 
-    fun testParameterHintsAndInfoUseTheResolvedMethod() {
+    /** Cuttlebone's answer for the whole file's hints: `scale:` before `2.0`, and `x`'s type. */
+    private fun inlayHints(status: String = "fresh") = FakeCuttlebone.Answer("textDocument/inlayHint", 0, 0, listOf(
+        hint(main.indexOf("2.0"), "scale:", kind = 2),
+        hint(main.indexOf("x = make") + 1, ": B", kind = 1),
+    ), status)
+
+    private fun hint(offset: Int, label: String, kind: Int): Map<String, Any> {
+        val line = main.substring(0, offset).count { it == '\n' }
+        return mapOf("position" to mapOf("line" to line, "character" to offset - (main.lastIndexOf('\n', offset - 1) + 1)), "label" to label, "kind" to kind)
+    }
+
+    fun testHintsComeFromOneRequestForTheWholeFile() {
+        start(inlayHints(), definitionOfSize())
+        repeat(2) {
+            assertEquals(listOf(main.indexOf("2.0") to "scale"), inBackground { InkoParameterHints.inFile(myFixture.file) })
+            assertEquals(listOf(main.indexOf("x = make") + 1 to ": B"), inBackground { InkoParameterHints.types(myFixture.file) })
+        }
+        assertEquals("one request for every hint, cached", 1, received("textDocument/inlayHint").size)
+        assertEquals("nothing asked per call", 0, received("textDocument/definition").size)
+    }
+
+    fun testWithoutAnAnswerParameterHintsAreParakeetsAndNothingIsAskedPerCall() {
+        start(inlayHints(status = "unavailable"), definitionOfSize())
+        assertEquals("two parameter lists fit: no hint", emptyList<Any>(), inBackground { InkoParameterHints.inFile(myFixture.file) })
+        assertEquals("only Cuttlebone knows types", emptyList<Any>(), inBackground { InkoParameterHints.types(myFixture.file) })
+        assertEquals(0, received("textDocument/definition").size)
+    }
+
+    fun testParameterInfoUsesTheResolvedMethod() {
         start(definitionOfSize())
-        val paren = myFixture.file.findElementAt(main.indexOf("(2.0)"))!!
-        assertEquals("two parameter lists fit: no hint", emptyList<Any>(), InkoParameterHints.at(paren))
-        // A highlighting pass asks for every call at once, then reads the answers.
-        inBackground { InkoParameterHints.prefetch(myFixture.file, listOf(paren)) }
-        assertEquals(listOf(main.indexOf("2.0") to "scale"), InkoParameterHints.at(paren))
+        targets("size(2.0)")
         val candidates = InkoResolver.resolveDefinitions(nameAt("size(2.0)")).map { it.first.signature }
         assertEquals("parameter info's candidates", listOf("fn pub size(scale: Float) -> Int"), candidates)
     }

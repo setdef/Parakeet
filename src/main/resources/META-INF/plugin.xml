@@ -121,6 +121,11 @@
                                               isEnabledByDefault="true" group="PARAMETERS_GROUP"
                                               providerId="parakeet.inko.parameters" bundle="messages.ParakeetBundle"
                                               nameKey="inlay.parameters.name" descriptionKey="inlay.parameters.description"/>
+        <codeInsight.declarativeInlayProvider language="Inko"
+                                              implementationClass="com.setdef.parakeet.InkoTypeHintsProvider"
+                                              isEnabledByDefault="true" group="TYPES_GROUP"
+                                              providerId="parakeet.inko.types" bundle="messages.ParakeetBundle"
+                                              nameKey="inlay.types.name" descriptionKey="inlay.types.description"/>
         <fileType name="Inko Package Manifest" implementationClass="com.setdef.parakeet.InkoManifestFileType" fieldName="INSTANCE"
                   language="InkoManifest" fileNames="inko.pkg"/>
         <lang.parserDefinition language="InkoManifest" implementationClass="com.setdef.parakeet.InkoManifestParserDefinition"/>

@@ -98,11 +98,34 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf("util.inko:2:size"), targets(document.text, "size(2.0)"))
     }
 
-    fun testParameterHintsForTheResolvedMethod() {
+    /** Whether this cuttlebone answers textDocument/inlayHint (milestone 4 and later). */
+    private fun hasInlayHints(): Boolean =
+        CuttleboneService.getInstance(project).server()?.initializeResult?.capabilities?.inlayHintProvider != null
+
+    // `y.get(0).or(0)`: Array's `get(index)`, and Option's `or(default)`, which Parakeet can tell too.
+    private val index get() = main.indexOf("0).or")
+    private val default get() = main.indexOf("0)\n")
+
+    fun testHintsForTheWholeFile() {
         open()
-        val paren = myFixture.file.findElementAt(main.indexOf("(2.0)"))!!
-        inBackground { InkoParameterHints.prefetch(myFixture.file, listOf(paren)) }
-        assertEquals(listOf(main.indexOf("2.0") to "scale"), InkoParameterHints.at(paren))
+        val parameters = inBackground { InkoParameterHints.inFile(myFixture.file) }
+        val types = inBackground { InkoParameterHints.types(myFixture.file) }
+        if (!hasInlayHints()) {
+            println("This cuttlebone has no inlay hints, so Parakeet's own are checked instead")
+            assertEquals("x.size: two parameter lists fit, so no hint", listOf(default to "default"), parameters)
+            assertEquals(emptyList<Any>(), types)
+            return
+        }
+        assertEquals(listOf(index to "index", default to "default", main.indexOf("2.0") to "scale"), parameters)
+        assertEquals(listOf(main.indexOf("x = make") + 1 to ": B", main.indexOf("y = [") + 1 to ": Array[Int]"), types)
+    }
+
+    fun testWithASyntaxErrorHintsFallBackToParakeet() {
+        // Cuttlebone has no answer for a file that doesn't parse; Parakeet's hints still name what it can resolve.
+        val text = main + "\nfn twice(value: Int) -> Int {\n  value * 2\n}\n\nfn uses -> Int {\n  twice(21)\n}\n\nfn broken( {\n"
+        open(text)
+        assertEquals(listOf(default to "default", text.indexOf("21") to "value"), inBackground { InkoParameterHints.inFile(myFixture.file) })
+        assertEquals("only Cuttlebone knows types", emptyList<Any>(), inBackground { InkoParameterHints.types(myFixture.file) })
     }
 
     fun testCompletionListsTheCompilersMembers() {

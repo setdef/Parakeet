@@ -7,7 +7,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.progress.EmptyProgressIndicator
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressIndicator
@@ -26,10 +25,13 @@ import org.eclipse.lsp4j.CompletionList
 import org.eclipse.lsp4j.CompletionParams
 import org.eclipse.lsp4j.DefinitionParams
 import org.eclipse.lsp4j.Hover
+import org.eclipse.lsp4j.InlayHint
+import org.eclipse.lsp4j.InlayHintParams
 import org.eclipse.lsp4j.HoverParams
 import org.eclipse.lsp4j.Location
 import org.eclipse.lsp4j.LocationLink
 import org.eclipse.lsp4j.Position
+import org.eclipse.lsp4j.Range
 import org.eclipse.lsp4j.TextDocumentIdentifier
 import org.eclipse.lsp4j.TypeDefinitionParams
 import org.eclipse.lsp4j.jsonrpc.messages.Either
@@ -86,20 +88,22 @@ class CuttleboneQueries(private val project: Project) {
             server.textDocumentService.completion(CompletionParams(document, position))
         }
 
-    /** Starts asking for [offsets]' definitions without waiting, so a later [definition] finds them cached. */
-    fun prefetchDefinitions(file: PsiFile, offsets: Collection<Int>): List<Pending> =
-        offsets.mapNotNull { offset -> start(file, offset, "textDocument/definition", ::locations) { server, document, position ->
-            server.textDocumentService.definition(DefinitionParams(document, position))
-        } }
-
-    /** Waits for [pending] together, for at most [budgetMs] in all. */
-    fun awaitAll(pending: List<Pending>, budgetMs: Long) {
-        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(budgetMs)
-        for (request in pending) {
-            val left = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())
-            if (left <= 0) return
-            await(request, left, wait = true)
-        }
+    /**
+     * Every inlay hint in [file] (inferred types, and parameter names at calls), in
+     * one request. Unlike other questions, a highlighting pass waits for it, as
+     * the hints pass is one.
+     */
+    fun inlayHints(file: PsiFile, budgetMs: Long = HINTS_BUDGET_MS): Answer<List<InlayHint>>? {
+        // Cuttlebone before milestone 4 has none.
+        if (CuttleboneService.getInstance(project).server()?.initializeResult?.capabilities?.inlayHintProvider?.let { it.isRight || it.left == true } != true) return null
+        val document = file.originalFile.virtualFile?.let { FileDocumentManager.getInstance().getDocument(it) } ?: return null
+        val end = position(document, document.textLength)
+        val pending = start(file, 0, "textDocument/inlayHint", { hints: List<InlayHint>? -> hints }) { server, identifier, start ->
+            server.textDocumentService.inlayHint(InlayHintParams(identifier, Range(start, end)))
+        } ?: return null
+        val application = ApplicationManager.getApplication()
+        @Suppress("UNCHECKED_CAST")
+        return await(pending, budgetMs, wait = !application.isDispatchThread && !application.isWriteAccessAllowed) as Answer<List<InlayHint>>?
     }
 
     private fun <R, T> query(
@@ -222,8 +226,8 @@ class CuttleboneQueries(private val project: Project) {
         const val RESOLVE_BUDGET_MS = 400L
         /** How long completion, documentation and Expression Type wait. */
         const val INTERACTIVE_BUDGET_MS = 1500L
-        /** How long a highlighting pass that fetches in bulk (parameter hints) waits in all. */
-        const val BULK_BUDGET_MS = 2000L
+        /** How long the inlay hints pass waits for a file's hints. */
+        const val HINTS_BUDGET_MS = 2000L
         private const val POLL_MS = 10L
         /** Cuttlebone stops a check after 5 s (`checkTimeoutMs`); this only guards against a server that stopped answering. */
         private const val REQUEST_TIMEOUT_MS = 30_000

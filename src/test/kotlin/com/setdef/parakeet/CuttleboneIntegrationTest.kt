@@ -167,10 +167,27 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf(text.indexOf("x = make") + 1 to ": B", text.indexOf("y = [") + 1 to ": Array[Int]"), inBackground { InkoParameterHints.types(myFixture.file) })
     }
 
-    fun testOpenedWithADeclarationErrorThereAreNoHints() {
-        // No check has typed a method body yet, and the error isn't in a change Cuttlebone saw, so it has no answer.
-        // Hints only inform, so none are guessed.
-        val text = main + twiceAndUses + "\nfn broken -> Missing {\n  1\n}\n"
+    fun testOpenedWithADeclarationErrorHintsAreCuttlebonesWhereTheErrorCantMatter() {
+        // Since milestone 8, Cuttlebone types every method body past a declaration error, and answers (fresh) in
+        // the units the error can't affect: not `broken`, whose signature has it, nor `calls_broken`, which names
+        // it, so neither `twice(3)` nor `v` has a hint. Hints only inform, so none are guessed there.
+        val text = main + twiceAndUses + "\nfn broken -> Missing {\n  1\n}\n" + "\nfn calls_broken {\n  let v = broken\n  twice(3)\n}\n"
+        open(text)
+        val answer = inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }!!
+        assertTrue("fresh: ${answer.status}", answer.status!!.fresh)
+        assertFalse(answer.repaired)
+        assertEquals(
+            listOf(index to "index", default to "default", text.indexOf("2.0") to "scale", text.indexOf("21") to "value"),
+            inBackground { InkoParameterHints.inFile(myFixture.file) },
+        )
+        assertEquals(listOf(text.indexOf("x = make") + 1 to ": B", text.indexOf("y = [") + 1 to ": Array[Int]"), inBackground { InkoParameterHints.types(myFixture.file) })
+    }
+
+    fun testOpenedWithAnImportOfAMissingModuleThereAreNoHints() {
+        // A file importing a module that doesn't exist isn't type checked (noHir), and no check of it has been
+        // good yet, so nothing stale answers either: Cuttlebone has no answer anywhere in it. Hints only inform,
+        // so none are guessed.
+        val text = "import app.nope\n" + main + twiceAndUses
         open(text)
         assertTrue("code being edited", inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }!!.editing)
         assertEquals(emptyList<Any>(), inBackground { InkoParameterHints.inFile(myFixture.file) })

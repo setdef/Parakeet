@@ -57,9 +57,12 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   project, including renaming a module's file; calls on values of unknown type
   are shown as possible usages
 - **Highlight usages** of the name at the caret within the file
-  (⌘⇧F7 / Ctrl+Shift+F7)
+  (⌘⇧F7 / Ctrl+Shift+F7), with assignments as writes when Cuttlebone answers
 - **Parameter info** (⌘P / Ctrl+P) in calls, and parameter-name hints before
   positional arguments
+- **Type hints** for `let` bindings and closure arguments that don't write a
+  type, with Cuttlebone. Types and parameter names each have a switch in
+  *Settings → Editor → Inlay Hints*
 - **Trait gutter icons** linking traits, their implementations, and the
   methods that implement them, with **Go to Implementation** (⌥⌘B /
   Ctrl+Alt+B) and **Go to Super Method** (⌘U / Ctrl+U)
@@ -156,10 +159,15 @@ compiler, so it always agrees with your installed Inko version.
   documented while your own files are read from source.
 - **Cuttlebone**, when it's installed, answers with the compiler's own types
   and definitions; see [Cuttlebone](#cuttlebone-optional) for which features
-  ask it. Each question has a time budget (0.4 s for resolving a name, 1.5 s
-  for completion, documentation and Expression Type, 2 s for all of a file's
-  parameter hints together), and answers are kept until the code changes.
-  Highlighting never waits for it. Without a fresh answer (no Cuttlebone, a
+  ask it. Each question has a time budget (0.4 s for resolving a name and for
+  usage highlighting, 1.5 s for completion, parameter info, documentation and
+  Expression Type, 2 s for a file's inlay hints, asked in one request), and
+  answers are kept until the code changes. Highlighting never waits for it,
+  except the inlay hints and usage highlighting passes, which only show
+  Cuttlebone's answers. Searches (Find Usages, Rename, Call Hierarchy, usage
+  counts) never ask it: they use answers already given, since asking about
+  every occurrence of a common name took a minute on a project the size of
+  std. Without a fresh answer (no Cuttlebone, a
   file that doesn't parse, a declaration with an error, a timeout), Parakeet
   falls back to its own reading of the code, below.
 - **Without Cuttlebone, types aren't inferred.** A method call like
@@ -304,15 +312,23 @@ bar can restart it by hand.
 
 | Feature | With a fresh answer | Without one |
 |---|---|---|
-| Go to definition, and everything built on references (Find Usages, Rename, Call Hierarchy, inspections, …) | `textDocument/definition`: the declaration the compiler resolves | Parakeet's guess |
+| Go to definition, and what's built on resolving a name (quick documentation, inspections, refactorings, …) | `textDocument/definition`: the declaration the compiler resolves | Parakeet's guess |
+| Find Usages, Rename, Call Hierarchy, usage counts | definitions already asked for (above), never asked per occurrence | Parakeet's guess, with possible usages |
 | Completion after `.` | `textDocument/completion` on the real buffer | Parakeet's guess |
-| Parameter info and parameter-name hints | the method the call resolves to | Parakeet's guess |
+| Parameter info | `textDocument/signatureHelp`: the resolved method's signature, with the receiver's type arguments, and the argument's parameter (named ones too) | Parakeet's guess |
+| Parameter-name and type hints | `textDocument/inlayHint`, once for the whole file | parameter names: Parakeet's guess; types: none |
+| Highlight usages | `textDocument/documentHighlight`: the same symbol by the compiler's ids, with assignments as writes | Parakeet's guess |
 | Quick documentation | the resolved definition, plus hover's type at the caret | the definition Parakeet resolves |
 | Expression Type | hover's type, when its range is the expression | the types the code states |
 | Go to Type Declaration | `textDocument/typeDefinition`, through IntelliJ's LSP support | not available |
 
-Errors and warnings still come from `inko check`, since Cuttlebone doesn't
-report diagnostics. Cuttlebone answers from each open file's unsaved text,
+Errors and warnings come from `inko check`, with or without Cuttlebone, and
+Parakeet turns off Cuttlebone's own diagnostics: IntelliJ's display of them
+would have no quick fixes, wouldn't be in Inspect Code, and wouldn't mark
+files that aren't open. Hints, parameter info and usage highlighting need
+a Cuttlebone that answers them (since its fourth milestone); with an
+older one, Parakeet uses its own. Every other LSP feature IntelliJ offers is
+turned off, so nothing shows twice. Cuttlebone answers from each open file's unsaved text,
 and from saved text for the rest. In code that doesn't parse, or has an error
 in a declaration, it has no answer, and Parakeet guesses.
 
@@ -395,6 +411,7 @@ Audits and session reports, oldest first:
 - [Guardrails, and trusting the compiler's output](docs/history/SESSION-guardrails-and-compiler-output.md)
 - [Fixing the rest of the audit](docs/history/SESSION-audit-fixes.md)
 - [Connecting to Cuttlebone](docs/history/SESSION-cuttlebone-integration.md)
+- [Who owns each LSP feature](docs/history/SESSION-lsp-ownership.md)
 
 ## Icon
 

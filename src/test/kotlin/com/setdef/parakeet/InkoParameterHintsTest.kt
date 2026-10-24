@@ -52,5 +52,8 @@ class InkoParameterHintsTest : InkoTestCase(onDisk = true) {
     fun testTheProviderIsRegisteredForInko() {
         myFixture.configureByText("main.inko", "")
         assertNotNull(InkoParameterHintsProvider().createCollector(myFixture.file, myFixture.editor))
+        assertNotNull(InkoTypeHintsProvider().createCollector(myFixture.file, myFixture.editor))
+        val providers = com.intellij.codeInsight.hints.declarative.InlayHintsProviderFactory.getProvidersForLanguage(InkoLanguage)
+        assertTrue(providers.map { it.providerId }.toString(), providers.map { it.providerId }.containsAll(listOf("parakeet.inko.parameters", "parakeet.inko.types")))
     }
 }

@@ -69,5 +69,15 @@ class FindUsagesMeasurementIntegrationTest : InkoTestCase(onDisk = true, realInk
         myFixture.configureFromExistingVirtualFile(myFixture.findFileInTempDir("src/std/array.inko")!!)
         PlatformTestUtil.waitWithEventsDispatching({ "no server: ${CuttleboneService.getInstance(project).status?.message}" }, { CuttleboneService.getInstance(project).server() != null }, 60)
         measure("with Cuttlebone")
+
+        // A whole file's inlay hints: one request, where parameter hints used to ask about each call.
+        val calls = myFixture.editor.document.text.count { it == '(' }
+        repeat(2) { run ->
+            val sentBefore = CuttleboneQueries.getInstance(project).sent.get()
+            val start = System.nanoTime()
+            val hints = inBackground { InkoParameterHints.inFile(myFixture.file).size + InkoParameterHints.types(myFixture.file).size }
+            println("MEASURE array.inko's inlay hints, run ${run + 1}: ${(System.nanoTime() - start) / 1_000_000} ms, $hints hints, " +
+                "${CuttleboneQueries.getInstance(project).sent.get() - sentBefore} requests ($calls parentheses in the file)")
+        }
     }
 }

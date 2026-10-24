@@ -135,6 +135,22 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(0, signature.activeParameter ?: help.value!!.activeParameter)
     }
 
+    fun testUsageHighlightingKnowsAssignments() {
+        val text = main + "\nfn pub count -> Int {\n  let mut total = 0\n  total = 1\n  total + 2\n}\n"
+        open(text)
+        val name = PsiTreeUtil.getParentOfType(myFixture.file.findElementAt(text.indexOf("total + 2")), InkoName::class.java, false)!!
+        val handler = InkoHighlightUsagesHandlerFactory().createHighlightUsagesHandler(myFixture.editor, myFixture.file, name) as InkoHighlightUsagesHandler
+        inBackground { handler.computeUsages(handler.targets) }
+        val writes = handler.writeUsages.map { it.startOffset }.sorted()
+        if (CuttleboneService.getInstance(project).server()?.initializeResult?.capabilities?.documentHighlightProvider == null) {
+            println("This cuttlebone has no document highlight, so usage highlighting is Parakeet's")
+            assertEquals(listOf(text.indexOf("total = 0")), writes)
+            return
+        }
+        assertEquals(listOf(text.indexOf("total = 0"), text.indexOf("total = 1")), writes)
+        assertEquals(listOf(text.indexOf("total + 2")), handler.readUsages.map { it.startOffset })
+    }
+
     fun testWithASyntaxErrorHintsFallBackToParakeet() {
         // Cuttlebone has no answer for a file that doesn't parse; Parakeet's hints still name what it can resolve.
         val text = main + "\nfn twice(value: Int) -> Int {\n  value * 2\n}\n\nfn uses -> Int {\n  twice(21)\n}\n\nfn broken( {\n"

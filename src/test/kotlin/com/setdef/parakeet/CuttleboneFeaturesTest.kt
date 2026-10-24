@@ -159,6 +159,44 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         assertEquals("both size methods fit", listOf("[unit: Int]", "[scale: Float]"), parameterInfo(main.indexOf("2.0")).sorted().reversed())
     }
 
+    private val reassigned = "fn pub run {\n  let mut total = 0\n  total = 1\n  total + 2\n}\n"
+
+    /** Usage highlighting at [marker] in [reassigned]: «=write» and «read». */
+    private fun highlighted(marker: String): String {
+        val name = inBackground { PsiTreeUtil.getParentOfType(myFixture.file.findElementAt(reassigned.indexOf(marker)), InkoName::class.java, false)!! }
+        val handler = InkoHighlightUsagesHandlerFactory().createHighlightUsagesHandler(myFixture.editor, myFixture.file, name) as InkoHighlightUsagesHandler
+        inBackground { handler.computeUsages(handler.targets) }
+        val marks = handler.writeUsages.map { it to "=" } + handler.readUsages.map { it to "" }
+        return marks.sortedByDescending { it.first.startOffset }.fold(reassigned) { result, (range, kind) ->
+            result.substring(0, range.startOffset) + "«$kind" + result.substring(range.startOffset, range.endOffset) + "»" + result.substring(range.endOffset)
+        }
+    }
+
+    private fun highlightsOfTotal(status: String = "fresh"): FakeCuttlebone.Answer {
+        fun range(marker: String, kind: Int): Map<String, Any> {
+            val offset = reassigned.indexOf(marker)
+            val line = reassigned.substring(0, offset).count { it == '\n' }
+            val character = offset - (reassigned.lastIndexOf('\n', offset - 1) + 1)
+            return mapOf("range" to mapOf("start" to mapOf("line" to line, "character" to character), "end" to mapOf("line" to line, "character" to character + 5)), "kind" to kind)
+        }
+        return answerAt(reassigned, "total + 2", "textDocument/documentHighlight", listOf(range("total = 0", 3), range("total = 1", 3), range("total + 2", 2)), status = status)
+    }
+
+    fun testUsageHighlightingIsCuttlebonesWhereItHasAnAnswer() {
+        useFake(FakeCuttlebone.Script(log = "", answers = listOf(highlightsOfTotal())))
+        open("src/main.inko", reassigned)
+        runningServer()
+        // The compiler knows `total = 1` assigns it.
+        assertEquals("fn pub run {\n  let mut «=total» = 0\n  «=total» = 1\n  «total» + 2\n}\n", highlighted("total + 2"))
+    }
+
+    fun testWithoutAnAnswerUsageHighlightingIsParakeets() {
+        useFake(FakeCuttlebone.Script(log = "", answers = listOf(highlightsOfTotal(status = "unavailable"))))
+        open("src/main.inko", reassigned)
+        runningServer()
+        assertEquals("fn pub run {\n  let mut «=total» = 0\n  «total» = 1\n  «total» + 2\n}\n", highlighted("total + 2"))
+    }
+
     fun testParameterInfoUsesTheResolvedMethod() {
         start(definitionOfSize())
         targets("size(2.0)")

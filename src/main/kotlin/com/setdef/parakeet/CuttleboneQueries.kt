@@ -24,6 +24,8 @@ import org.eclipse.lsp4j.CompletionItem
 import org.eclipse.lsp4j.CompletionList
 import org.eclipse.lsp4j.CompletionParams
 import org.eclipse.lsp4j.DefinitionParams
+import org.eclipse.lsp4j.DocumentHighlight
+import org.eclipse.lsp4j.DocumentHighlightParams
 import org.eclipse.lsp4j.Hover
 import org.eclipse.lsp4j.InlayHint
 import org.eclipse.lsp4j.InlayHintParams
@@ -100,12 +102,9 @@ class CuttleboneQueries(private val project: Project) {
         if (capabilities()?.inlayHintProvider?.let { it.isRight || it.left == true } != true) return null
         val document = file.originalFile.virtualFile?.let { FileDocumentManager.getInstance().getDocument(it) } ?: return null
         val end = position(document, document.textLength)
-        val pending = start(file, 0, "textDocument/inlayHint", { hints: List<InlayHint>? -> hints }) { server, identifier, start ->
+        return query(file, 0, "textDocument/inlayHint", budgetMs, { hints: List<InlayHint>? -> hints }, waitInHighlighting = true) { server, identifier, start ->
             server.textDocumentService.inlayHint(InlayHintParams(identifier, Range(start, end)))
-        } ?: return null
-        val application = ApplicationManager.getApplication()
-        @Suppress("UNCHECKED_CAST")
-        return await(pending, budgetMs, wait = !application.isDispatchThread && !application.isWriteAccessAllowed) as Answer<List<InlayHint>>?
+        }
     }
 
     /** The signature of the call whose parentheses contain [offset], and which of its parameters [offset] is in. */
@@ -113,6 +112,17 @@ class CuttleboneQueries(private val project: Project) {
         if (capabilities()?.signatureHelpProvider == null) return null
         return query(file, offset, "textDocument/signatureHelp", budgetMs, { help: SignatureHelp? -> help }) { server, document, position ->
             server.textDocumentService.signatureHelp(SignatureHelpParams(document, position))
+        }
+    }
+
+    /**
+     * The names in [file] that mean what the one at [offset] means, by the compiler's ids. The
+     * usage highlighting pass waits for it, cancelled (and the request with it) when the caret moves.
+     */
+    fun documentHighlights(file: PsiFile, offset: Int, budgetMs: Long = RESOLVE_BUDGET_MS): Answer<List<DocumentHighlight>>? {
+        if (capabilities()?.documentHighlightProvider?.let { it.isRight || it.left == true } != true) return null
+        return query(file, offset, "textDocument/documentHighlight", budgetMs, { highlights: List<DocumentHighlight>? -> highlights }, waitInHighlighting = true) { server, document, position ->
+            server.textDocumentService.documentHighlight(DocumentHighlightParams(document, position))
         }
     }
 
@@ -124,11 +134,12 @@ class CuttleboneQueries(private val project: Project) {
         method: String,
         budgetMs: Long,
         convert: (R?) -> T?,
+        waitInHighlighting: Boolean = false,
         send: (LanguageServer, TextDocumentIdentifier, Position) -> CompletableFuture<R>,
     ): Answer<T>? {
         val pending = start(file, offset, method, convert, send) ?: return null
         @Suppress("UNCHECKED_CAST")
-        return await(pending, budgetMs, wait = mayWait()) as Answer<T>?
+        return await(pending, budgetMs, wait = mayWait(waitInHighlighting)) as Answer<T>?
     }
 
     /** Sends [send]'s request. It must return lsp4j's own future, which IntelliJ cancels; [convert] reads the result. */
@@ -261,10 +272,11 @@ class CuttleboneQueries(private val project: Project) {
             return (start + position.character).coerceAtMost(document.getLineEndOffset(position.line))
         }
 
-        /** Highlighting passes (and the EDT, and write actions) use cached answers only. */
-        private fun mayWait(): Boolean {
+        /** Highlighting passes (unless [inHighlighting]), the EDT, and write actions use cached answers only. */
+        private fun mayWait(inHighlighting: Boolean = false): Boolean {
             val application = ApplicationManager.getApplication()
             if (application.isDispatchThread || application.isWriteAccessAllowed) return false
+            if (inHighlighting) return true
             val indicator = ProgressManager.getGlobalProgressIndicator()?.let(ProgressWrapper::unwrapAll)
             return indicator !is DaemonProgressIndicator
         }

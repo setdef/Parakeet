@@ -233,7 +233,7 @@ abstract class CuttleboneCustomization : LspCustomization() {
     override val inlayHintCustomizer: LspInlayHintCustomizer get() = LspInlayHintDisabled
     // Parakeet's parameter info shows Cuttlebone's signature, and falls back to `inko doc`'s where it has none.
     override val signatureHelpCustomizer: LspSignatureHelpCustomizer get() = LspSignatureHelpDisabled
-    // Parakeet's usage highlighting.
+    // Parakeet's usage highlighting asks Cuttlebone's documentHighlight, and falls back to its own in broken code.
     override val documentHighlightsCustomizer: LspDocumentHighlightsCustomizer get() = LspDocumentHighlightsDisabled
     // Parakeet's TextMate grammar highlights; the Structure view, folding and Go to Symbol are Parakeet's.
     override val semanticTokensCustomizer: LspSemanticTokensCustomizer get() = LspSemanticTokensDisabled

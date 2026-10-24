@@ -3,10 +3,12 @@ package com.setdef.parakeet
 import com.intellij.codeInsight.highlighting.HighlightUsagesHandlerBase
 import com.intellij.codeInsight.highlighting.HighlightUsagesHandlerFactoryBase
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.util.Consumer
+import org.eclipse.lsp4j.DocumentHighlightKind
 
 /** Highlights the other occurrences of the name at the caret that mean the same thing (and ⌘⇧F7 / Ctrl+Shift+F7). */
 class InkoHighlightUsagesHandlerFactory : HighlightUsagesHandlerFactoryBase() {
@@ -23,8 +25,24 @@ class InkoHighlightUsagesHandler(editor: Editor, file: PsiFile, private val name
     override fun selectTargets(targets: List<InkoName>, selectionConsumer: Consumer<in List<InkoName>>) = selectionConsumer.consume(targets)
 
     override fun computeUsages(targets: List<InkoName>) {
+        compiled()?.let { highlights ->
+            // Cuttlebone's Write (bindings and assignments) and Text (declarations) are writes; the rest are reads.
+            for ((range, kind) in highlights) (if (kind == DocumentHighlightKind.Read) myReadUsages else myWriteUsages) += range
+            return
+        }
         for ((occurrence, isDeclaration) in InkoUsages.inFile(name)) {
             (if (isDeclaration) myWriteUsages else myReadUsages) += occurrence.textRange
+        }
+    }
+
+    /** Cuttlebone's highlights for [name], matched by the compiler's ids, or null without a fresh, non-empty answer. */
+    private fun compiled(): List<Pair<TextRange, DocumentHighlightKind?>>? {
+        val highlights = CuttleboneQueries.getInstance(name.project).documentHighlights(myFile, name.textRange.startOffset)?.value
+        val document = myFile.viewProvider.document ?: return null
+        return highlights?.takeIf { it.isNotEmpty() }?.mapNotNull { highlight ->
+            val start = CuttleboneQueries.offset(document, highlight.range.start) ?: return@mapNotNull null
+            val end = CuttleboneQueries.offset(document, highlight.range.end) ?: return@mapNotNull null
+            TextRange(start, end) to highlight.kind
         }
     }
 }

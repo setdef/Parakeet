@@ -92,4 +92,65 @@ class InkoTraitNavigationTest : InkoTestCase(onDisk = true) {
     fun testSuperOfAnImplIsTheTrait() = assertEquals("1:Show", gotoSuperFrom("for Other"))
 
     fun testSuperOfATypeIsTheTraitItImplements() = assertEquals("1:Show", gotoSuperFrom("Helper {}"))
+
+    private val main = """
+        |import app.util (Helper, Show)
+        |
+        |fn shout[T: Show](value: ref T) -> String {
+        |  value.show
+        |}
+        |
+        |fn run(h: Helper) -> String {
+        |  h.show
+        |}
+        |""".trimMargin()
+
+    /** main.inko, with Cuttlebone's answers: `value.show` calls the trait's method, `h.show` Helper's. */
+    private fun withMain() {
+        putTempDirInProjectContent()
+        myFixture.addFileToProject("src/main.inko", main)
+        val traitMethod = At("src/app/util.inko", util, "show -> String\n")
+        Compiler()
+            .resolves(At("src/main.inko", main, "show\n}\n\nfn"), traitMethod)
+            .resolves(At("src/main.inko", main, "show\n}\n", nth = 1), At("src/app/util.inko", util, "show -> String {"))
+            .resolves(At("src/main.inko", main, "Show]"), At("src/app/util.inko", util, "Show {"))
+            .resolves(At("src/main.inko", main, "Helper)"), At("src/app/util.inko", util, "Helper {"))
+            .install()
+    }
+
+    // A call on a type that implements the trait calls the implementation, which the compiler gives an id of its
+    // own: Find Usages of the trait's method counts its implementations' calls too.
+    fun testFindUsagesOfATraitMethodIncludesItsImplementationsCalls() {
+        withMain()
+        val traitMethod = myFixture.file.findElementAt(offsetOf("show -> String\n"))!!.parent as InkoDeclaration
+        val usages = myFixture.findUsages(traitMethod).map { "${it.element!!.containingFile.name}:${it.element!!.textOffset}" }.sorted()
+        assertEquals(listOf("main.inko:${main.indexOf("show\n}\n\nfn")}", "main.inko:${main.lastIndexOf("show")}").sorted(), usages)
+    }
+
+    // Where references have no answer, each call is resolved, and the same rule counts the implementations' calls.
+    fun testWithoutReferencesATraitMethodStillIncludesItsImplementationsCalls() {
+        withMain()
+        InkoCompilerReferences.getInstance(project).eachCandidate = true
+        try {
+            val traitMethod = myFixture.file.findElementAt(offsetOf("show -> String\n"))!!.parent as InkoDeclaration
+            val usages = myFixture.findUsages(traitMethod).map { "${it.element!!.containingFile.name}:${it.element!!.textOffset}" }.sorted()
+            assertEquals(listOf("main.inko:${main.indexOf("show\n}\n\nfn")}", "main.inko:${main.lastIndexOf("show")}").sorted(), usages)
+        } finally {
+            InkoCompilerReferences.getInstance(project).eachCandidate = false
+        }
+    }
+
+    // Otherwise the implementations would no longer implement it.
+    fun testRenamingATraitMethodRenamesItsImplementations() {
+        withMain()
+        myFixture.renameElement(myFixture.file.findElementAt(offsetOf("show -> String\n"))!!.parent as InkoDeclaration, "display")
+        assertEquals(util.replace("show", "display"), myFixture.file.text)
+        assertEquals(main.replace(".show", ".display"), com.intellij.psi.PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/main.inko"))!!.text)
+    }
+
+    fun testRenamingAnImplementationRenamesTheTraitsMethod() {
+        withMain()
+        myFixture.renameElement(myFixture.file.findElementAt(offsetOf("show -> String {"))!!.parent as InkoDeclaration, "display")
+        assertEquals(util.replace("show", "display"), myFixture.file.text)
+    }
 }

@@ -211,15 +211,27 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
             .filter { it.element.containingFile.name == "main.inko" }.map { it.element.textRange.startOffset }
     }
 
-    fun testFindUsagesNeverAsksPerOccurrence() {
-        // A common name has an occurrence on nearly every line; asking about each took minutes.
-        start(definitionOfSize())
-        assertEquals("a possible usage, as without Cuttlebone", listOf(main.indexOf("size(2.0)")), usagesOfSize("size(unit"))
-        assertEquals(0, received("textDocument/definition").size)
-        // An answer Cuttlebone already gave (here, from Go to Declaration) is used.
-        targets("size(2.0)")
-        assertEquals(emptyList<Int>(), usagesOfSize("size(unit"))
+    /** `references` at the declaration of the `size` at [marker] in util.inko: the declaration and [uses] in main.inko. */
+    private fun referencesOfSize(marker: String, vararg uses: String, status: String = "fresh") = answerAt(util, marker, "textDocument/references",
+        listOf(locationAt("src/app/util.inko", util, marker.substringBefore('('))) + uses.map { locationAt("src/main.inko", main, it.substringBefore('(')) }, status = status)
+
+    fun testFindUsagesAsksForTheWholeProjectsReferencesOnce() {
+        // A common name has an occurrence on nearly every line: asking about each, one check each, took minutes.
+        start(referencesOfSize("size(scale", "size(2.0)"), referencesOfSize("size(unit"))
         assertEquals(listOf(main.indexOf("size(2.0)")), usagesOfSize("size(scale"))
+        assertEquals(emptyList<Int>(), usagesOfSize("size(unit"))
+        assertEquals(2, received("textDocument/references").size)
+        assertEquals(0, received("textDocument/definition").size)
+        // Kept until the code changes.
+        assertEquals(listOf(main.indexOf("size(2.0)")), usagesOfSize("size(scale"))
+        assertEquals(2, received("textDocument/references").size)
+    }
+
+    fun testWithoutReferencesEachOccurrenceIsResolved() {
+        // An error anywhere in the project stops the whole project's type check, but not this file's.
+        start(referencesOfSize("size(scale", status = "unavailable").copy(reason = "declarationErrors"), definitionOfSize())
+        assertEquals(listOf(main.indexOf("size(2.0)")), usagesOfSize("size(scale"))
+        assertEquals(1, received("textDocument/definition").size)
     }
 
     fun testParameterInfoUsesTheResolvedMethod() {

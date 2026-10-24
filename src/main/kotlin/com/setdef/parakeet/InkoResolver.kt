@@ -20,8 +20,15 @@ class InkoReference(element: InkoName) :
         return resolution.targets.map { PsiElementResolveResult(it, resolution.exact) }.toTypedArray()
     }
 
-    // Searches ask this of every occurrence of a name: Cuttlebone's cached answers only (CuttleboneQueries.cachedOnly).
-    override fun isReferenceTo(element: PsiElement): Boolean = CuttleboneQueries.cachedOnly { super.isReferenceTo(element) }
+    // Searches ask this of every occurrence of a name. Where the target depends on types, by the compiler's
+    // answers (InkoSearch); locals, imports and module paths, and a declaration's own name, by the code alone.
+    override fun isReferenceTo(element: PsiElement): Boolean {
+        val name = this.element
+        if (element !is InkoDeclaration || name is InkoDeclaration) return super.isReferenceTo(element)
+        val file = name.containingFile ?: return false
+        if (!InkoResolver.isGuessed(InkoNameContext.of(name, InkoImports.parse(file.text)))) return super.isReferenceTo(element)
+        return InkoSearch.isReferenceTo(name, element)
+    }
 
     override fun getVariants(): Array<Any> = emptyArray()
 

@@ -53,8 +53,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   goes to the method the compiler calls, from [Cuttlebone](#cuttlebone).
 - **Go to Type Declaration** (⇧⌘B / Ctrl+Shift+B)
 - **Find Usages** (⌥F7 / Alt+F7) and **Rename** (⇧F6 / Shift+F6) across the
-  project, including renaming a module's file; calls on values of unknown type
-  are shown as possible usages
+  project, by the compiler's answers, including renaming a module's file, and
+  a trait's method with the methods implementing it
 - **Highlight usages** of the name at the caret within the file
   (⌘⇧F7 / Ctrl+Shift+F7), with assignments as writes when Cuttlebone answers
 - **Parameter info** (⌘P / Ctrl+P) in calls, and parameter-name hints before
@@ -177,11 +177,22 @@ compiler, so it always agrees with your installed Inko version.
   `self`), and otherwise offers every `to_string` it can't rule out. It's
   never used where Cuttlebone has answered, or isn't running.
 - **Find Usages and Rename** search the IDE's word index for each name, then
-  keep the occurrences that resolve to the declaration. A method call whose
-  receiver type isn't known resolves to every candidate, so it's listed as a
-  possible usage. **Call Hierarchy, usage counts, and Safe Delete** build on
-  the same search (usage counts stop at 99+). **Moving files** rewrites the
-  import paths of the modules that move.
+  keep the occurrences Cuttlebone's `textDocument/references` lists: one
+  check of the whole project, once per search, matched by the compiler's ids.
+  For a declaration outside the project (the standard library, a
+  dependency), a use of it in the project is found first, by resolving
+  candidates a file at a time. A trait's method counts the calls to the
+  methods implementing it, since the compiler gives each its own id, and
+  renaming any of them renames them all. Where references have no answer (an
+  error anywhere in the project stops its type check), each candidate is
+  resolved through `textDocument/definition` instead, a file's requests sent
+  together. Only there, in code Cuttlebone can't check, does Find Usages show
+  what Parakeet's own reading finds, as possible usages; Rename leaves those
+  alone and lists them as conflicts first. **Call Hierarchy, usage counts,
+  Safe Delete, Change Signature, Inline Method, Move and Introduce Parameter**
+  build on the same search (usage counts stop at 99+), and like Rename use
+  fresh answers only. **Moving files** rewrites the import paths of the
+  modules that move.
 - **Type Hierarchy** uses the trait implementations `inko doc` reports, and the
   traits each trait requires in its signature.
 - **Dependencies need syncing** when `dep/hash` isn't the BLAKE3 hash of
@@ -202,8 +213,7 @@ compiler, so it always agrees with your installed Inko version.
   arguments (so new parameters need a value for calls to pass), named
   arguments after positional ones, no empty parentheses, parameters that can't
   be reassigned, and owned values that move unless borrowed. They update the
-  calls Find Usages finds, so calls on values of unknown type show in the
-  preview to exclude. Without types, Extract Method leaves placeholders for
+  calls the search finds (above). Without types, Extract Method leaves placeholders for
   types it can't work out, and `inko check` points out any left behind.
 - **Quick fixes** act on the diagnostic IDs `inko check` reports
   (`invalid-symbol`, `unused-symbol`, `unused-result`, `missing-field`,
@@ -314,7 +324,7 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | Feature | Cuttlebone's answer | Where Cuttlebone can't check the code being edited |
 |---|---|---|
 | Go to definition, and what's built on resolving a name (quick documentation, hierarchies, inspections, intentions, refactorings, …) | `textDocument/definition`: the declaration the compiler resolves | for navigation, documentation and hierarchies, a stale answer, else Parakeet's reading of the code; for what changes code (refactorings, intentions, quick fixes, imports), nothing |
-| Find Usages, Rename, Call Hierarchy, usage counts | definitions already asked for (above), never asked per occurrence | Parakeet's reading, with possible usages |
+| Find Usages, Rename, Call Hierarchy, usage counts, and the refactorings built on them | `textDocument/references`, once per search, for the whole project; a trait's method with its implementations' | each candidate's `textDocument/definition`, a file's at once; Find Usages alone adds Parakeet's reading, as possible usages, and Rename lists them as conflicts |
 | Completion after `.` | `textDocument/completion` on the real buffer | Parakeet's reading |
 | Parameter info | `textDocument/signatureHelp`: the resolved method's signature, with the receiver's type arguments, and the argument's parameter (named ones too). For a type's constructor (`Point(x: 1)`), which it has none for, the type's fields | Parakeet's reading |
 | Parameter-name and type hints | `textDocument/inlayHint`, once for the whole file | none: hints only inform |

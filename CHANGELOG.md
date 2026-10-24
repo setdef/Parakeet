@@ -15,7 +15,11 @@
 
 - Requires IntelliJ 2025.3 or newer (the first with the LSP API in every IDE), and is now verified against it.
 - Parameter-name hints ask Cuttlebone once per file instead of once per call.
-- Find Usages, Rename, Call Hierarchy and usage counts don't ask Cuttlebone about each occurrence, which made Find Usages of a common name take a minute in a large project; they use answers it has already given.
+- Find Usages, Rename, Call Hierarchy, usage counts and the refactorings built on them find uses by the compiler's ids: Cuttlebone's `textDocument/references`, once per search for the whole project (asking about each occurrence had made Find Usages of a common name take a minute in a large project). "Possible usages" only appear in code Cuttlebone can't check, and only in Find Usages; Rename lists such places as conflicts instead of renaming them. Find Usages of a trait's method includes the calls to its implementations, and renaming a trait's method renames the methods implementing it (and the other way round).
+
+### Fixed
+
+- Renaming a field renames it where a constructor sets it by name (`Point(x: 1)`), and Change Signature no longer renames a named argument of a call to another method in the same file.
 - Every LSP feature IntelliJ would run for Cuttlebone, other than Go to Type Declaration, is off, so none appears twice (inlay hints and parameter info did), and Cuttlebone's own diagnostics are turned off, as Parakeet's come from `inko check`.
 
 ## [0.11.0] - 2026-10-23

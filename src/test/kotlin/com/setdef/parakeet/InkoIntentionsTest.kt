@@ -29,7 +29,7 @@ class InkoIntentionsTest : InkoTestCase(onDisk = true) {
     private fun apply(text: String, title: String, types: Map<String, String> = emptyMap()): String? {
         val code = text.replace("<caret>", "")
         val compiler = Compiler()
-        Regex("""resize\(""").findAll(code).forEach { compiler.resolves(At("src/main.inko", code, "resize(", it.range.first - code.indexOf("resize(")), At("src/app/util.inko", util, "resize")) }
+        compiler.resolvesEvery("src/main.inko", code, "resize(", At("src/app/util.inko", util, "resize"))
         types.forEach { (marker, type) -> compiler.hover(At("src/main.inko", code, marker), type) }
         compiler.install()
         val file = myFixture.addFileToProject("src/main.inko", code)

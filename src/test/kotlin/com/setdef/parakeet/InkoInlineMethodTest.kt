@@ -60,10 +60,26 @@ class InkoInlineMethodTest : InkoTestCase(onDisk = true) {
 
     private fun line(text: String, marker: String) = text.substring(0, text.indexOf(marker)).count { it == '\n' } + 1
 
+    private fun inUtil(marker: String) = At("src/app/util.inko", util, marker)
+    private fun inMain(marker: String) = At("src/main.inko", main, marker)
+
+    /** Cuttlebone's answers for this code, as the compiler resolves it. */
+    private fun compiler() = Compiler()
+        .resolves(inUtil("SCALE\n"), inUtil("SCALE ="))
+        .resolves(inUtil("countdown(n - 1)"), inUtil("countdown(n:"))
+        .resolves(inUtil("@size +"), inUtil("@size:"))
+        .resolves(inUtil("grow(1)"), inUtil("grow(by"))
+        .resolves(inUtil("grow(2)"), inUtil("grow(by"))
+        .resolves(inMain("Box) ->"), inUtil("Box {"))
+        .resolves(inMain("area(w"), inUtil("area(width"))
+        .resolves(inMain("log('hi')"), inUtil("log(message"))
+        .resolves(inMain("repeat(w"), inUtil("repeat(value"))
+        .resolves(inMain("double(w"), inUtil("double(value"))
+        .resolves(inMain("grow(5)"), inUtil("grow(by"))
+
     override fun setUp() {
         super.setUp()
-        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
-        cuttleboneCantCheckTheCode()
+        compiler().install()
         putTempDirInProjectContent()
         useFakeInko(FakeInkoDoc.cli { mirror ->
             val utilFile = mirror.resolve("src/app/util.inko")
@@ -100,8 +116,6 @@ class InkoInlineMethodTest : InkoTestCase(onDisk = true) {
     }
 
     fun testIntoALetRenamingClashingLocalsAndImportingWhatItNeeds() {
-        // What the inlined body names is imported from what the compiler resolves it to.
-        Compiler().otherwiseEditing().resolves(At("src/app/util.inko", util, "SCALE\n"), At("src/app/util.inko", util, "SCALE =")).install()
         inlineCall("area", "src/main.inko", "area(w")
         val text = file("src/main.inko").text
         assertTrue(text, text.contains("  let w = 10\n  let w2 = w * SCALE\n  let a = w2 * 2\n"))

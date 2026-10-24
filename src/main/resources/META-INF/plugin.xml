@@ -199,6 +199,7 @@
         <referencesSearch implementation="com.setdef.parakeet.InkoModuleReferencesSearcher"/>
         <referencesSearch implementation="com.setdef.parakeet.InkoSetterReferencesSearcher"/>
         <usageTypeProvider implementation="com.setdef.parakeet.InkoUsageTypeProvider"/>
+        <findUsagesHandlerFactory implementation="com.setdef.parakeet.InkoFindUsagesHandlerFactory"/>
         <lang.namesValidator language="Inko" implementationClass="com.setdef.parakeet.InkoNamesValidator"/>
         <renameInputValidator implementation="com.setdef.parakeet.InkoRenameInputValidator"/>
         <renamePsiElementProcessor implementation="com.setdef.parakeet.InkoInstanceMethodRenameProcessor" order="first"/>

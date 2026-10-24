@@ -15,8 +15,17 @@ class InkoSetterTest : InkoTestCase(onDisk = true) {
 
     override fun setUp() {
         super.setUp()
-        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
-        cuttleboneCantCheckTheCode()
+        // Cuttlebone's answers for this code, as the compiler resolves it.
+        fun inCounter(marker: String) = At("src/app/counter.inko", counter, marker)
+        fun inMain(marker: String) = At("src/main.inko", main, marker)
+        Compiler()
+            .resolves(inCounter("@value = v"), inCounter("@value:"))
+            .resolves(inCounter("@value\n"), inCounter("@value:"))
+            .resolves(inMain("Counter)"), inCounter("Counter {"))
+            .resolves(inMain("value = 2"), inCounter("value=("))
+            .resolves(inMain("value=3"), inCounter("value=("))
+            .resolves(inMain("value\n}"), inCounter("value ->"))
+            .install()
         putTempDirInProjectContent()
         myFixture.addFileToProject("inko.pkg", "")
         // An `inko doc` that documents nothing: definitions come from the files' own source.
@@ -32,7 +41,9 @@ class InkoSetterTest : InkoTestCase(onDisk = true) {
 
     private fun mainText() = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/main.inko"))!!.text
 
-    fun testAnAssignmentResolvesToTheSetter() {
+    fun testInCodeBeingEditedAnAssignmentResolvesToTheSetter() {
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        cuttleboneCantCheckTheCode()
         myFixture.configureFromTempProjectFile("src/main.inko")
         fun targets(marker: String): List<String> {
             val name = PsiTreeUtil.getParentOfType(myFixture.file.findElementAt(main.indexOf(marker)), InkoName::class.java, false)!!

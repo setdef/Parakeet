@@ -78,9 +78,17 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
         CuttleboneQueries.Answer<Any>(null, CuttleboneStatus(method, file.url, "unavailable", reason, 1.0))
     }
 
-    /** A place in this test's code: [marker]'s position (plus [shift]) in the project file [path], whose text is [text]. */
-    class At(val path: String, val text: String, val marker: String, val shift: Int = 0) {
-        val offset: Int get() = text.indexOf(marker).also { check(it >= 0) { "no $marker in $path" } } + shift
+    /**
+     * A place in this test's code: the [nth] [marker]'s position (plus [shift]) in the project file [path],
+     * whose text is [text]. What's there runs to the marker's end.
+     */
+    class At(val path: String, val text: String, val marker: String, val shift: Int = 0, val nth: Int = 0) {
+        val offset: Int
+            get() {
+                var at = -1
+                repeat(nth + 1) { at = text.indexOf(marker, at + 1).also { check(it >= 0) { "no $marker in $path" } } }
+                return at + shift
+            }
         val line: Int get() = text.substring(0, offset).count { it == '\n' }
         val character: Int get() = offset - (text.lastIndexOf('\n', offset - 1) + 1)
     }
@@ -89,6 +97,8 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
      * Cuttlebone, in-process, as a compiler that knows this test's code: [resolves] says where each use's
      * definition is, [hover] what type is at a place, and [editing] where it can't check the code (it's being
      * edited). Every other question is answered: nothing there, or with [otherwiseEditing], can't check it.
+     * `references` lists a declaration and every use resolving to it, as one check of the whole project does,
+     * so it has no answer while any of the code can't be checked.
      */
     inner class Compiler {
         private val definitions = mutableListOf<Pair<At, At>>()
@@ -100,11 +110,7 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
 
         /** Every use of [marker] in [path] (whose text is [text]) resolves to [declaration]. */
         fun resolvesEvery(path: String, text: String, marker: String, declaration: At) = apply {
-            var at = text.indexOf(marker)
-            while (at >= 0) {
-                resolves(At(path, text, marker, at - text.indexOf(marker)), declaration)
-                at = text.indexOf(marker, at + 1)
-            }
+            for (nth in 0 until Regex(Regex.escape(marker)).findAll(text).count()) resolves(At(path, text, marker, nth = nth), declaration)
         }
 
         fun otherwiseEditing() = apply { otherwiseEditing = true }
@@ -124,6 +130,16 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
                 "textDocument/definition" -> definitions.firstOrNull { matches(it.first, file, offset) }?.second?.let { declaration ->
                     val target = myFixture.findFileInTempDir(declaration.path) ?: error("no ${declaration.path}")
                     listOf(org.eclipse.lsp4j.Location(target.url, range(declaration, declaration.marker.length - declaration.shift)))
+                }
+                "textDocument/references" -> {
+                    if (editing.isNotEmpty() || otherwiseEditing) return@stubCuttlebone CuttleboneQueries.Answer<Any>(null, status("unavailable", "declarationErrors"))
+                    val declaration = definitions.firstOrNull { matches(it.first, file, offset) }?.second
+                        ?: definitions.map { it.second }.firstOrNull { matches(it, file, offset) }
+                    declaration?.let { target ->
+                        (listOf(target) + definitions.filter { it.second.path == target.path && it.second.offset == target.offset }.map { it.first }).map { at ->
+                            org.eclipse.lsp4j.Location(myFixture.findFileInTempDir(at.path)!!.url, range(at, at.marker.length - at.shift))
+                        }
+                    }
                 }
                 "textDocument/hover" -> hovers.firstOrNull { matches(it.first, file, offset) }?.let { (at, type, length) ->
                     org.eclipse.lsp4j.Hover(org.eclipse.lsp4j.MarkupContent("markdown", "```inko\n$type\n```"), range(at, length))

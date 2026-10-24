@@ -48,10 +48,25 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
         |}
         |""".trimMargin()
 
+    private fun inUtil(marker: String, shift: Int = 0) = At("src/app/util.inko", util, marker, shift)
+    private fun inMain(marker: String, shift: Int = 0) = At("src/main.inko", main, marker, shift)
+
+    /** Cuttlebone's answers for this code, as the compiler resolves it. `x.value` doesn't: `Int` has no `value`. */
+    private fun compiler() = Compiler()
+        .resolves(inUtil("new -> Helper", 7), inUtil("Helper {"))
+        .resolves(inUtil("Helper(count"), inUtil("Helper {"))
+        .resolves(inUtil("count: 0"), inUtil("@count: Int"))
+        .resolves(inUtil("@count\n  }\n}\n\ntype"), inUtil("@count: Int"))
+        .resolves(inUtil("@count\n  }\n}\n\nfn"), At("src/app/util.inko", util, "@count: Int", nth = 1))
+        .resolves(inMain("Helper = "), inUtil("Helper {"))
+        .resolves(inMain("Helper.new"), inUtil("Helper {"))
+        .resolves(inMain("new\n"), inUtil("new -> Helper"))
+        .resolves(inMain("helper +"), inUtil("helper ->"))
+        .resolves(inMain("value\n  x"), inUtil("value ->"))
+
     override fun setUp() {
         super.setUp()
-        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
-        cuttleboneCantCheckTheCode()
+        compiler().install()
         // Like a real project: the files are in the project's content, so project-wide searches see them.
         putTempDirInProjectContent()
         myFixture.addFileToProject("src/app/util.inko", util)
@@ -100,6 +115,21 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
 
     private fun usagesOf(element: PsiElement): List<String> = myFixture.findUsages(element).map { it.describe() }.sorted()
 
+    fun testWhereCuttleboneAnswersThereAreNoPossibleUsages() {
+        val usages = myFixture.findUsages(declaration("src/app/util.inko", "value ->"))
+        assertEquals(mapOf("main.inko:6" to null), usages.associate { it.describe() to InkoUsageTypeProvider().getUsageType(it.element!!) })
+    }
+
+    fun testRenameDoesntTouchWhatCuttleboneCantCheck() {
+        compiler().editing(inMain("value\n  total")).install()
+        try {
+            myFixture.renameElement(declaration("src/app/util.inko", "value ->"), "amount")
+            fail("Expected a conflict")
+        } catch (e: com.intellij.refactoring.BaseRefactoringProcessor.ConflictsInTestsException) {
+            assertEquals(listOf("Cuttlebone can't check the code at main.inko:7 (it doesn't type check), so `value` there isn't renamed."), e.messages.toList())
+        }
+    }
+
     fun testAFunctionAcrossFiles() = assertEquals(listOf("main.inko:1", "main.inko:5"), usagesOf(declaration("src/app/util.inko", "helper ->")))
 
     fun testATypeIncludingImportsAndStaticCalls() = assertEquals(
@@ -111,18 +141,17 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
 
     fun testAParameter() = assertEquals(listOf("main.inko:5", "main.inko:7"), usagesOf(declaration("src/main.inko", "x: Int")))
 
-    fun testAFieldOnlyInItsOwnType() = assertEquals(listOf("util.inko:9"), usagesOf(declaration("src/app/util.inko", "@count")))
+    // The constructor's `count:` sets the field by name: the real cuttlebone lists it too (util.inko:5:11).
+    fun testAFieldOnlyInItsOwnType() = assertEquals(listOf("util.inko:5", "util.inko:9"), usagesOf(declaration("src/app/util.inko", "@count")))
 
     fun testAModulesImports() {
         val util = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/app/util.inko"))!!
         assertEquals(listOf("main.inko:1"), usagesOf(util))
     }
 
-    // `h` is a Helper, but `x.value` could be Helper's or Other's (both are imported).
-    fun testCallsOnUnknownTypesArePossibleUsages() {
-        // `h` is a Helper, so the compiler knows `h.value`; `Int` has no `value`, so it can't type `x.value`.
-        Compiler().otherwiseEditing().resolves(At("src/main.inko", main, "value\n  x"), At("src/app/util.inko", util, "value ->"))
-            .editing(At("src/main.inko", main, "value\n  total")).install()
+    // In code being edited, where Cuttlebone can't check `x.value`, Parakeet's reading says it could be Helper's or Other's.
+    fun testInCodeCuttleboneCantCheckCallsArePossibleUsages() {
+        compiler().editing(inMain("value\n  total")).install()
         val usages = myFixture.findUsages(declaration("src/app/util.inko", "value ->"))
         val types = usages.associate { it.describe() to InkoUsageTypeProvider().getUsageType(it.element!!) }
         assertEquals(mapOf("main.inko:6" to null, "main.inko:7" to InkoUsageTypeProvider.POSSIBLE), types)
@@ -145,6 +174,7 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
         myFixture.renameElement(declaration("src/app/util.inko", "@count"), "total")
         val text = myFixture.file.text
         assertEquals(2, Regex("@total").findAll(text).count())
+        assertTrue(text, text.contains("Helper(total: 0)"))
         assertEquals(2, Regex("@count").findAll(text).count()) // Other's field is untouched.
     }
 
@@ -153,13 +183,6 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
         myFixture.renameElement(util, "tools.inko")
         val text = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/main.inko"))!!.text
         assertTrue(text, text.startsWith("import app.tools (Helper, Other, helper)"))
-    }
-
-    fun testRenamingInstanceMethodsAlwaysShowsThePreview() {
-        val processor = RenamePsiElementProcessor.forElement(declaration("src/app/util.inko", "value ->"))
-        assertTrue(processor.forcesShowPreview())
-        assertFalse(RenamePsiElementProcessor.forElement(declaration("src/app/util.inko", "new ->")).forcesShowPreview())
-        assertFalse(RenamePsiElementProcessor.forElement(declaration("src/app/util.inko", "helper ->")).forcesShowPreview())
     }
 
     fun testNewNamesMustSuitWhatTheyName() {

@@ -7,8 +7,8 @@ import com.intellij.refactoring.safeDelete.SafeDeleteHandler
 class InkoSafeDeleteTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
-        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
-        cuttleboneCantCheckTheCode()
+        // Cuttlebone, answering what each test's code needs (and that nothing is anywhere else).
+        Compiler().install()
     }
 
     private fun declaration(marker: String): InkoDeclaration =
@@ -45,6 +45,7 @@ class InkoSafeDeleteTest : InkoTestCase(onDisk = true) {
             listOf(FakeInkoDoc.module("main", file, methods = listOf(FakeInkoDoc.member("helper", file, 1, 1), FakeInkoDoc.member("a", file, 5, 1))))
         })
         myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/main.inko", source).virtualFile)
+        Compiler().resolves(At("src/main.inko", source, "helper\n}"), At("src/main.inko", source, "helper ->")).install()
         try {
             SafeDeleteHandler.invoke(project, arrayOf(declaration("helper ->")), true)
             fail("expected a usage conflict")

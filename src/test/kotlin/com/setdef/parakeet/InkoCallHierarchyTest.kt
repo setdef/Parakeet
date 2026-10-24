@@ -35,10 +35,24 @@ class InkoCallHierarchyTest : InkoTestCase(onDisk = true) {
         |}
         |""".trimMargin()
 
+    private fun inUtil(marker: String) = At("src/app/util.inko", util, marker)
+    private fun inMain(marker: String) = At("src/main.inko", main, marker)
+
+    /** Cuttlebone's answers for this code, as the compiler resolves it. */
+    private fun compiler() = Compiler()
+        .resolves(At("src/app/util.inko", util, "Helper {", shift = 0, nth = 1), inUtil("Helper {"))
+        .resolves(inUtil("Helper()"), inUtil("Helper {"))
+        .resolves(inUtil("helper\n  }"), inUtil("helper -> Int"))
+        .resolves(inMain("Helper.new"), inUtil("Helper {"))
+        .resolves(inMain("new.value"), inUtil("new -> Helper"))
+        .resolves(inMain("value + helper"), inUtil("value -> Int"))
+        .resolves(inMain("helper\n}"), inUtil("helper -> Int"))
+        .resolvesEvery("src/main.inko", main, "run +", At("src/main.inko", main, "run -> Int"))
+        .resolves(inMain("twice\n}"), At("src/main.inko", main, "twice -> Int"))
+
     override fun setUp() {
         super.setUp()
-        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
-        cuttleboneCantCheckTheCode()
+        compiler().install()
         putTempDirInProjectContent()
         myFixture.addFileToProject("src/app/util.inko", util)
         myFixture.addFileToProject("src/main.inko", main)
@@ -112,7 +126,9 @@ class InkoCallHierarchyTest : InkoTestCase(onDisk = true) {
 
     fun testUsageCountsStopAtNinetyNinePlus() {
         val calls = (1..120).joinToString("\n") { "  helper" }
-        myFixture.addFileToProject("src/many.inko", "import app.util (helper)\n\nfn many {\n$calls\n}\n")
+        val many = "import app.util (helper)\n\nfn many {\n$calls\n}\n"
+        myFixture.addFileToProject("src/many.inko", many)
+        compiler().resolvesEvery("src/many.inko", many, "helper\n", inUtil("helper -> Int")).install()
         val util = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/app/util.inko"))!!
         assertEquals("99+ usages", InkoUsagesCodeVisionProvider().getHint(declaration("src/app/util.inko", "helper"), util))
     }

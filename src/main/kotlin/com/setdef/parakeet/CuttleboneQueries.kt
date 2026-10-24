@@ -34,6 +34,8 @@ import org.eclipse.lsp4j.Location
 import org.eclipse.lsp4j.LocationLink
 import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.Range
+import org.eclipse.lsp4j.ReferenceContext
+import org.eclipse.lsp4j.ReferenceParams
 import org.eclipse.lsp4j.SignatureHelp
 import org.eclipse.lsp4j.SignatureHelpParams
 import org.eclipse.lsp4j.ServerCapabilities
@@ -108,6 +110,18 @@ class CuttleboneQueries(private val project: Project) {
             server.textDocumentService.definition(DefinitionParams(document, position))
         }
     }
+
+    /**
+     * Every use of the symbol at [offset] in the project's `src/` and `test/`, and its declaration if it's
+     * there, by the compiler's ids, from one check of the whole project (kept, like any other). Fresh only:
+     * Rename changes code from it, and Cuttlebone never gives another kind. The usage counts' highlighting pass
+     * waits for it too.
+     */
+    fun references(file: PsiFile, offset: Int, budgetMs: Long = SEARCH_BUDGET_MS): Answer<List<Location>>? =
+        query(file, offset, "textDocument/references", budgetMs, { result: List<Location>? -> result?.toList() }, waitInHighlighting = true) { server, document, position ->
+            @Suppress("UNCHECKED_CAST")
+            (server.textDocumentService.references(ReferenceParams(document, position, ReferenceContext(true))) as CompletableFuture<List<Location>>)
+        }
 
     fun typeDefinition(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<List<Location>>? =
         query(file, offset, "textDocument/typeDefinition", budgetMs, ::locations) { server, document, position ->
@@ -237,8 +251,6 @@ class CuttleboneQueries(private val project: Project) {
         if (cachedAt.getAndSet(stamp) != stamp) cache.clear()
         val key = Key(System.identityHashCode(server), method, identifier.uri, offset)
         cache[key]?.let { if (!it.answer.isCancelled) return it }
-        // Not asked: a search decides from Parakeet's reading of the code, as in code being edited.
-        if (CACHED_ONLY.get() > 0) return Pending(CompletableFuture.completedFuture(Answer<Any>(null, null, editing = true)), EmptyProgressIndicator())
         val pending = Pending(CompletableFuture(), EmptyProgressIndicator())
         cache.putIfAbsent(key, pending)?.let { return it }
         sent.incrementAndGet()
@@ -320,22 +332,6 @@ class CuttleboneQueries(private val project: Project) {
 
     companion object {
         private val LOG = logger<CuttleboneQueries>()
-        private val CACHED_ONLY = ThreadLocal.withInitial { 0 }
-
-        /**
-         * Runs [action] using only answers already cached: nothing is asked or waited for. For searches
-         * (Find Usages, Rename, Call Hierarchy, usage counts), which resolve every occurrence of a name:
-         * Cuttlebone answers one position per check, so asking about each took a minute on a common name.
-         */
-        fun <T> cachedOnly(action: () -> T): T {
-            CACHED_ONLY.set(CACHED_ONLY.get() + 1)
-            try {
-                return action()
-            } finally {
-                CACHED_ONLY.set(CACHED_ONLY.get() - 1)
-            }
-        }
-
         /** The reasons Cuttlebone gives for no answer in code being edited ([Answer.editing]). */
         val EDITING = setOf("noHir", "declarationErrors", "untyped")
 
@@ -346,6 +342,8 @@ class CuttleboneQueries(private val project: Project) {
         const val RESOLVE_BUDGET_MS = 400L
         /** How long completion, documentation and Expression Type wait. */
         const val INTERACTIVE_BUDGET_MS = 1500L
+        /** How long a search waits for one answer: it runs in the background, and can be cancelled. */
+        const val SEARCH_BUDGET_MS = 10_000L
         /** How long the inlay hints pass waits for a file's hints. */
         const val HINTS_BUDGET_MS = 2000L
         private const val POLL_MS = 10L

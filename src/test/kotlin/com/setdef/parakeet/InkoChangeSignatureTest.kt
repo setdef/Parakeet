@@ -68,10 +68,27 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
 
     private fun line(text: String, marker: String) = text.substring(0, text.indexOf(marker)).count { it == '\n' } + 1
 
+    private fun inUtil(marker: String, shift: Int = 0) = At("src/app/util.inko", util, marker, shift)
+    private fun inMain(marker: String, shift: Int = 0) = At("src/main.inko", main, marker, shift)
+
+    /** Cuttlebone's answers for this code, as the compiler resolves it. `make` is undefined, so `make.greet` doesn't resolve. */
+    private fun compiler() = Compiler()
+        .resolves(inUtil("Greeter {\n    Greeter", 0), inUtil("Greeter {"))
+        .resolves(inUtil("Greeter(name"), inUtil("Greeter {"))
+        .resolves(inUtil("@name}"), inUtil("@name: String"))
+        .resolvesEvery("src/app/util.inko", util, "add(a,", inUtil("add(a: Int"))
+        .resolves(inMain("Greeter.new"), inUtil("Greeter {"))
+        .resolves(inMain("new('World"), inUtil("new(name"))
+        .resolvesEvery("src/main.inko", main, "log(", inUtil("log(message"))
+        .resolves(inMain("ping(3"), inUtil("ping(times"))
+        .resolves(inMain("greet('Hello'"), inUtil("greet(greeting"))
+        .resolves(inMain("Greeter, maybe"), inUtil("Greeter {"))
+        .resolves(inMain("greet('a'"), inUtil("greet(greeting"))
+        .resolvesEvery("src/main.inko", main, "add(", inUtil("add(a: Int"))
+
     override fun setUp() {
         super.setUp()
-        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
-        cuttleboneCantCheckTheCode()
+        compiler().install()
         putTempDirInProjectContent()
         useFakeInko(FakeInkoDoc.cli { mirror ->
             val utilFile = mirror.resolve("src/app/util.inko")
@@ -182,8 +199,8 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
 
     // A call on a value of unknown type might be Parrot's greet, so the preview shows it to be excluded or kept.
     fun testCallsOnValuesOfUnknownTypeAreUncertain() {
-        // `make` is undefined, so the compiler can't type `make.greet`: Cuttlebone has no answer there.
-        Compiler().resolves(At("src/main.inko", main, "greet('a'"), At("src/app/util.inko", util, "greet(greeting")).editing(At("src/main.inko", main, "greet('c'")).install()
+        // In code being edited, Cuttlebone has no answer for `make.greet`.
+        compiler().editing(inMain("greet('c'")).install()
         val file = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/main.inko"))!!
         fun nameAt(marker: String) = file.findElementAt(main.indexOf(marker))!!
         assertFalse(InkoChangeSignature.isUncertain(nameAt("greet('a'")))
@@ -191,7 +208,6 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
     }
 
     fun testFindsTheMethodFromItsNameOrACall() {
-        Compiler().resolves(At("src/main.inko", main, "add(3"), At("src/app/util.inko", util, "add(a: Int")).install()
         val file = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/main.inko"))!!
         val handler = InkoChangeSignatureHandler()
         assertEquals(method("add"), handler.findTargetMember(file.findElementAt(main.indexOf("add(3"))!!))

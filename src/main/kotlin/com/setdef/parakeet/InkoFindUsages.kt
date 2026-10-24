@@ -70,20 +70,18 @@ class InkoSetterReferencesSearcher : QueryExecutorBase<PsiReference, ReferencesS
 }
 
 /**
- * Marks method calls whose receiver's type isn't known, which may mean a
- * same-named method on another type, so Find Usages and Rename's preview show
- * them apart (like RubyMine's and PyCharm's dynamic usages).
+ * Marks the usages Find Usages found without the compiler's answer, in code Cuttlebone can't check (it
+ * doesn't parse there, or a declaration has an error), by Parakeet's own reading of the code, so they show
+ * apart (like RubyMine's and PyCharm's dynamic usages). Wherever Cuttlebone answers there are none.
  */
 class InkoUsageTypeProvider : UsageTypeProvider {
     override fun getUsageType(element: PsiElement): UsageType? {
         val name = PsiTreeUtil.getParentOfType(element, InkoName::class.java, false) ?: return null
-        if (name is InkoDeclaration || !name.previousToken().isToken(InkoTokens.DOT)) return null
-        // Asked of every usage found, so with Cuttlebone's cached answers only.
-        return if (!CuttleboneQueries.cachedOnly { InkoResolver.resolution(name, exact = false) }.exact) POSSIBLE else null
+        return if (InkoSearch.isPossible(name)) POSSIBLE else null
     }
 
     companion object {
-        val POSSIBLE = UsageType { "Possible usage (the receiver's type isn't known)" }
+        val POSSIBLE = UsageType { "Possible usage (Cuttlebone can't check the code there)" }
     }
 }
 
@@ -117,13 +115,38 @@ class InkoRenameInputValidator : RenameInputValidator {
 }
 
 /**
- * Renaming a method that's called on values always shows the preview, since
- * calls whose receiver type isn't known may mean a same-named method instead.
+ * Renaming a trait's method renames the methods implementing it, and renaming one of those renames the
+ * trait's method and the others: otherwise they'd no longer implement it. Calls are found by the compiler's
+ * answers; one it can't check (in code that doesn't type check) isn't renamed, and the conflicts say where.
  */
 class InkoInstanceMethodRenameProcessor : RenamePsiElementProcessor() {
     override fun canProcessElement(element: PsiElement): Boolean = element is InkoDeclaration && InkoDeclarations.isInstanceMethod(element)
 
-    override fun forcesShowPreview(): Boolean = true
+    override fun prepareRenaming(element: PsiElement, newName: String, allRenames: MutableMap<PsiElement, String>) {
+        val method = element as? InkoDeclaration ?: return
+        val traitMethods = InkoTraitNavigation.supers(method.containingFile, method.textRange.startOffset).filterIsInstance<InkoDeclaration>()
+        for (traitMethod in traitMethods.ifEmpty { listOf(method) }) {
+            if (traitMethod != method && InkoRenameVeto().value(traitMethod)) continue
+            allRenames[traitMethod] = newName
+            for (implementation in InkoTraitNavigation.implementations(traitMethod)) {
+                if (implementation != method && !InkoRenameVeto().value(implementation)) allRenames[implementation] = newName
+            }
+        }
+    }
+
+    override fun findExistingNameConflicts(element: PsiElement, newName: String, conflicts: com.intellij.util.containers.MultiMap<PsiElement, String>) {
+        val method = element as? InkoDeclaration ?: return
+        // A method implementing a trait's method from outside the project, which can't be renamed with it.
+        for (traitMethod in InkoTraitNavigation.supers(method.containingFile, method.textRange.startOffset).filterIsInstance<InkoDeclaration>()) {
+            if (InkoRenameVeto().value(traitMethod)) {
+                conflicts.putValue(method, "`${method.name}` implements a trait's method from outside the project, which can't be renamed, so it would no longer implement it.")
+            }
+        }
+        for (name in InkoSearch.unchecked(method)) {
+            val line = name.containingFile.viewProvider.document?.getLineNumber(name.textRange.startOffset)?.plus(1)
+            conflicts.putValue(name, "Cuttlebone can't check the code at ${name.containingFile.name}${line?.let { ":$it" }.orEmpty()} (it doesn't type check), so `${name.text}` there isn't renamed.")
+        }
+    }
 }
 
 /** Declarations outside the project (the standard library, dependencies) can't be renamed, nor, without Cuttlebone, ones its uses need it for. */

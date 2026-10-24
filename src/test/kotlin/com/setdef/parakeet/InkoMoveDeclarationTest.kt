@@ -10,8 +10,8 @@ import java.nio.file.Path
 class InkoMoveDeclarationTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
-        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
-        cuttleboneCantCheckTheCode()
+        // Cuttlebone, answering what each test's code needs (and that nothing is anywhere else).
+        Compiler().install()
         putTempDirInProjectContent()
         myFixture.addFileToProject("inko.pkg", "")
         // An `inko doc` that documents nothing: the index falls back to the project's own sources, as when it doesn't compile.
@@ -51,8 +51,19 @@ class InkoMoveDeclarationTest : InkoTestCase(onDisk = true) {
         |""".trimMargin()
 
     fun testMovesATypeWithItsImplsAndUpdatesImports() {
+        val main = "import app.util (Helper, make)\n\nfn main {\n  let h: Helper = make\n}\n"
         myFixture.addFileToProject("src/app/util.inko", util)
-        myFixture.addFileToProject("src/main.inko", "import app.util (Helper, make)\n\nfn main {\n  let h: Helper = make\n}\n")
+        myFixture.addFileToProject("src/main.inko", main)
+        fun inUtil(marker: String) = At("src/app/util.inko", util, marker)
+        Compiler()
+            .resolves(inUtil("LIMIT.to_string"), inUtil("LIMIT ="))
+            .resolves(inUtil("Helper {\n  Helper"), inUtil("Helper {"))
+            .resolves(inUtil("Helper(count"), inUtil("Helper {"))
+            .resolves(inUtil("count: LIMIT"), inUtil("@count"))
+            .resolves(inUtil("LIMIT)"), inUtil("LIMIT ="))
+            .resolves(At("src/main.inko", main, "Helper = "), inUtil("Helper {"))
+            .resolves(At("src/main.inko", main, "make\n"), inUtil("make ->"))
+            .install()
         move("src/app/util.inko", "Helper", "app.helpers")
 
         assertEquals(
@@ -83,7 +94,9 @@ class InkoMoveDeclarationTest : InkoTestCase(onDisk = true) {
     }
 
     fun testPrivateDeclarationsStillUsedElsewhereConflict() {
-        myFixture.addFileToProject("src/app/util.inko", "let LIMIT = 10\n\nfn pub twice -> Int {\n  LIMIT * 2\n}\n")
+        val util = "let LIMIT = 10\n\nfn pub twice -> Int {\n  LIMIT * 2\n}\n"
+        myFixture.addFileToProject("src/app/util.inko", util)
+        Compiler().resolves(At("src/app/util.inko", util, "LIMIT *"), At("src/app/util.inko", util, "LIMIT =")).install()
         try {
             move("src/app/util.inko", "LIMIT", "app.limits")
             fail("Expected a conflict")

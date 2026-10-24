@@ -164,7 +164,7 @@ usable answers, as before.
   Merging the two needs to know which units Cuttlebone answered for, which
   it doesn't say.
 - **A flaky test.** `CuttleboneIntegrationTest.testUsageHighlightingKnowsAssignments`
-  failed once in six full runs (Parakeet's highlights instead of
+  failed once in eight full runs (check.sh and the pre-commit hook) (Parakeet's highlights instead of
   Cuttlebone's), and passed alone three times in a row. Usage highlighting
   waits 0.4 s, and a cold check under the full suite's load probably took
   longer. I didn't change the test or the budget.

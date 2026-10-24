@@ -167,16 +167,20 @@ compiler, so it always agrees with your installed Inko version.
   Cuttlebone's answers. Searches (Find Usages, Rename, Call Hierarchy, usage
   counts) never ask it: they use answers already given, since asking about
   every occurrence of a common name took a minute on a project the size of
-  std. Without a fresh answer (no Cuttlebone, a
-  file that doesn't parse, a declaration with an error, a timeout), Parakeet
-  falls back to its own reading of the code, below.
+  std. In code being edited, Cuttlebone answers from a copy with the broken
+  lines blank, or else from the last version that type checked ("stale",
+  shown only where nothing changes code; see
+  [Answers in code being edited](#answers-in-code-being-edited)). Without an
+  answer it may use (no Cuttlebone, a timeout, or code it can't answer for,
+  like the method being edited after the edit), Parakeet falls back to its
+  own reading of the code, below.
 - **Without Cuttlebone, types aren't inferred.** A method call like
   `x.to_string` narrows to `x`'s type when it's written or obvious (`x: Foo`,
   `let x = Foo.new`, `self`), and otherwise offers every `to_string` it can't
   rule out, preferring types mentioned in the file. Parameter-name hints only
   appear when exactly one parameter list fits. Local variables and parameters
   are found from the file's own tokens. The same happens with Cuttlebone
-  whenever it has no answer, which includes any file with a syntax error.
+  whenever it has no answer Parakeet may use.
 - **Find Usages and Rename** search the IDE's word index for each name, then
   keep the occurrences that resolve to the declaration. A method call whose
   receiver type isn't known resolves to every candidate, so it's listed as a
@@ -329,8 +333,35 @@ files that aren't open. Hints, parameter info and usage highlighting need
 a Cuttlebone that answers them (since its fourth milestone); with an
 older one, Parakeet uses its own. Every other LSP feature IntelliJ offers is
 turned off, so nothing shows twice. Cuttlebone answers from each open file's unsaved text,
-and from saved text for the rest. In code that doesn't parse, or has an error
-in a declaration, it has no answer, and Parakeet guesses.
+and from saved text for the rest.
+
+### Answers in code being edited
+
+Since its fifth milestone, Cuttlebone answers in code that doesn't parse, or
+has an error in a declaration, where an answer still holds. It says how in
+each answer's status:
+
+- **Fresh, from a repaired copy**: the documents as they are, with the lines
+  in the way blank. Parakeet uses these like any fresh answer.
+- **Stale**: from the last version that type checked, in text that hasn't
+  changed since. Parakeet uses these only where an answer is shown and
+  changes no code:
+
+| Feature | Stale answer | Shown as |
+|---|---|---|
+| Parameter-name and type hints | used | the hint's tooltip says "possibly outdated" |
+| Parameter info | used | "(possibly outdated)" after the signature |
+| Quick documentation's "Type here" | used | "(possibly outdated)" after the type |
+| Expression Type | used | "(possibly outdated)" after the type |
+| Highlight usages | used | as a fresh answer: there's nowhere to mark it |
+| Go to Type Declaration | used (IntelliJ's own) | as a fresh answer |
+| Go to definition, and everything built on resolving a name | not used: Rename, the refactorings, quick fixes and imports change code from it | Parakeet's guess |
+| Completion | not used: choosing an item inserts it (Cuttlebone never sends one) | Parakeet's guess |
+
+Where Cuttlebone still has no answer (the method being edited after the
+edit, or a project opened with an error in a declaration), Parakeet guesses.
+A Cuttlebone before milestone 5 never sends either kind, and has no answer
+in such code.
 
 ## Development
 
@@ -412,6 +443,7 @@ Audits and session reports, oldest first:
 - [Fixing the rest of the audit](docs/history/SESSION-audit-fixes.md)
 - [Connecting to Cuttlebone](docs/history/SESSION-cuttlebone-integration.md)
 - [Who owns each LSP feature](docs/history/SESSION-lsp-ownership.md)
+- [Stale and repaired answers](docs/history/SESSION-stale-and-repaired.md)
 
 ## Icon
 

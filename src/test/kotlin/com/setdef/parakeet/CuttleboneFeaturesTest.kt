@@ -315,6 +315,15 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         assertFalse(answer.stale)
     }
 
+    fun testWithoutStatusNotificationsNoAnswerIsUsed() {
+        // A server that sends no status can't say an answer is fresh.
+        myFixture.addFileToProject("src/app/util.inko", util)
+        useFake(FakeCuttlebone.Script(log = "", answers = listOf(definitionOfSize()), statusNotifications = false))
+        open("src/main.inko", main)
+        runningServer()
+        assertEquals(listOf("util.inko:2:size", "util.inko:8:size"), targets("size(2.0)").sorted())
+    }
+
     fun testAStatusParakeetDoesntKnowIsNoAnswer() {
         start(definitionOfSize().copy(status = "someday"), inlayHints(status = "someday"))
         assertEquals(listOf("util.inko:2:size", "util.inko:8:size"), targets("size(2.0)").sorted())

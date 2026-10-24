@@ -17,14 +17,32 @@ import com.intellij.platform.lsp.api.LspServerNotificationsHandler
 import com.intellij.platform.lsp.api.LspServerState
 import com.intellij.platform.lsp.api.LspServerSupportProvider
 import com.intellij.platform.lsp.api.ProjectWideLspServerDescriptor
+import com.intellij.platform.lsp.api.customization.LspCallHierarchyCustomizer
+import com.intellij.platform.lsp.api.customization.LspCallHierarchyDisabled
+import com.intellij.platform.lsp.api.customization.LspCodeActionsCustomizer
 import com.intellij.platform.lsp.api.customization.LspCodeActionsDisabled
+import com.intellij.platform.lsp.api.customization.LspCodeLensCustomizer
+import com.intellij.platform.lsp.api.customization.LspCodeLensDisabled
+import com.intellij.platform.lsp.api.customization.LspCommandsCustomizer
+import com.intellij.platform.lsp.api.customization.LspCommandsDisabled
 import com.intellij.platform.lsp.api.customization.LspCompletionCustomizer
 import com.intellij.platform.lsp.api.customization.LspCompletionDisabled
 import com.intellij.platform.lsp.api.customization.LspCustomization
 import com.intellij.platform.lsp.api.customization.LspDiagnosticsCustomizer
 import com.intellij.platform.lsp.api.customization.LspDiagnosticsDisabled
+import com.intellij.platform.lsp.api.customization.LspDocumentColorCustomizer
+import com.intellij.platform.lsp.api.customization.LspDocumentColorDisabled
+import com.intellij.platform.lsp.api.customization.LspDocumentHighlightsCustomizer
+import com.intellij.platform.lsp.api.customization.LspDocumentHighlightsDisabled
+import com.intellij.platform.lsp.api.customization.LspDocumentLinkCustomizer
+import com.intellij.platform.lsp.api.customization.LspDocumentLinkDisabled
+import com.intellij.platform.lsp.api.customization.LspDocumentSymbolCustomizer
+import com.intellij.platform.lsp.api.customization.LspDocumentSymbolDisabled
 import com.intellij.platform.lsp.api.customization.LspFindReferencesCustomizer
 import com.intellij.platform.lsp.api.customization.LspFindReferencesDisabled
+import com.intellij.platform.lsp.api.customization.LspFoldingRangeCustomizer
+import com.intellij.platform.lsp.api.customization.LspFoldingRangeDisabled
+import com.intellij.platform.lsp.api.customization.LspFormattingCustomizer
 import com.intellij.platform.lsp.api.customization.LspFormattingDisabled
 import com.intellij.platform.lsp.api.customization.LspGoToDefinitionCustomizer
 import com.intellij.platform.lsp.api.customization.LspGoToDefinitionDisabled
@@ -32,10 +50,25 @@ import com.intellij.platform.lsp.api.customization.LspGoToTypeDefinitionCustomiz
 import com.intellij.platform.lsp.api.customization.LspGoToTypeDefinitionSupport
 import com.intellij.platform.lsp.api.customization.LspHoverCustomizer
 import com.intellij.platform.lsp.api.customization.LspHoverDisabled
-import com.intellij.platform.lsp.api.customization.LspCodeActionsCustomizer
-import com.intellij.platform.lsp.api.customization.LspFormattingCustomizer
+import com.intellij.platform.lsp.api.customization.LspInlayHintCustomizer
+import com.intellij.platform.lsp.api.customization.LspInlayHintDisabled
+import com.intellij.platform.lsp.api.customization.LspOnTypeFormattingCustomizer
+import com.intellij.platform.lsp.api.customization.LspOnTypeFormattingDisabled
+import com.intellij.platform.lsp.api.customization.LspOptimizeImportsCustomizer
+import com.intellij.platform.lsp.api.customization.LspOptimizeImportsDisabled
+import com.intellij.platform.lsp.api.customization.LspRenameCustomizer
+import com.intellij.platform.lsp.api.customization.LspRenameDisabled
+import com.intellij.platform.lsp.api.customization.LspSelectionRangeCustomizer
+import com.intellij.platform.lsp.api.customization.LspSelectionRangeDisabled
 import com.intellij.platform.lsp.api.customization.LspSemanticTokensCustomizer
 import com.intellij.platform.lsp.api.customization.LspSemanticTokensDisabled
+import com.intellij.platform.lsp.api.customization.LspSignatureHelpCustomizer
+import com.intellij.platform.lsp.api.customization.LspSignatureHelpDisabled
+import com.intellij.platform.lsp.api.customization.LspSymbolKindCustomizer
+import com.intellij.platform.lsp.api.customization.LspTypeHierarchyCustomizer
+import com.intellij.platform.lsp.api.customization.LspTypeHierarchyDisabled
+import com.intellij.platform.lsp.api.customization.LspWorkspaceSymbolCustomizer
+import com.intellij.platform.lsp.api.customization.LspWorkspaceSymbolDisabled
 import com.intellij.util.concurrency.AppExecutorUtil
 import org.eclipse.lsp4j.ClientCapabilities
 import org.eclipse.lsp4j.GeneralClientCapabilities
@@ -141,28 +174,75 @@ class CuttleboneDescriptor(project: Project) : ProjectWideLspServerDescriptor(pr
         override fun serverStopped(shutdownNormally: Boolean) = CuttleboneService.getInstance(project).stopped(shutdownNormally)
     }
 
-    /**
-     * Which of IntelliJ's LSP features run. Each feature has one owner: Parakeet
-     * keeps the ones that have a heuristic to fall back on when Cuttlebone has no
-     * answer (and asks Cuttlebone itself), and IntelliJ gets the rest.
-     */
-    override val lspCustomization: LspCustomization = object : LspCustomization() {
-        // Parakeet's references resolve through Cuttlebone's definition (InkoResolver).
-        override val goToDefinitionCustomizer: LspGoToDefinitionCustomizer = LspGoToDefinitionDisabled
-        // Parakeet has no Go to Type Declaration of its own.
-        override val goToTypeDefinitionCustomizer: LspGoToTypeDefinitionCustomizer = LspGoToTypeDefinitionSupport()
-        // Parakeet's documentation shows the signature and doc comment, and adds hover's type.
-        override val hoverCustomizer: LspHoverCustomizer = LspHoverDisabled
-        // Parakeet's completion uses Cuttlebone's members after `.`, and its own names elsewhere.
-        override val completionCustomizer: LspCompletionCustomizer = LspCompletionDisabled
-        // Find Usages is Parakeet's, on IntelliJ's PSI.
-        override val findReferencesCustomizer: LspFindReferencesCustomizer = LspFindReferencesDisabled
-        // Errors come from `inko check`; Cuttlebone reports none.
-        override val diagnosticsCustomizer: LspDiagnosticsCustomizer = LspDiagnosticsDisabled
-        override val semanticTokensCustomizer: LspSemanticTokensCustomizer = LspSemanticTokensDisabled
-        override val codeActionsCustomizer: LspCodeActionsCustomizer = LspCodeActionsDisabled
-        override val formattingCustomizer: LspFormattingCustomizer = LspFormattingDisabled
+    override val lspCustomization: LspCustomization = CuttleboneCustomization.create()
+}
+
+/**
+ * Which of IntelliJ's LSP features run. IntelliJ turns on every feature the
+ * server advertises unless this turns it off, so each one is set here, and
+ * CuttleboneOwnershipTest fails when an IDE adds one that isn't. Each feature
+ * has one owner: Parakeet keeps the ones that have a heuristic to fall back on
+ * when Cuttlebone has no answer (and asks Cuttlebone itself), and IntelliJ
+ * gets the ones where it can't make things worse.
+ */
+open class CuttleboneCustomization : LspCustomization() {
+    // Parakeet's references resolve through Cuttlebone's definition (InkoResolver).
+    override val goToDefinitionCustomizer: LspGoToDefinitionCustomizer get() = LspGoToDefinitionDisabled
+    // Parakeet has no Go to Type Declaration of its own.
+    override val goToTypeDefinitionCustomizer: LspGoToTypeDefinitionCustomizer get() = LspGoToTypeDefinitionSupport()
+    // Parakeet's documentation shows the signature and doc comment, and adds hover's type.
+    override val hoverCustomizer: LspHoverCustomizer get() = LspHoverDisabled
+    // Parakeet's completion uses Cuttlebone's members after `.`, and its own names elsewhere.
+    override val completionCustomizer: LspCompletionCustomizer get() = LspCompletionDisabled
+    // Find Usages is Parakeet's, on IntelliJ's PSI.
+    override val findReferencesCustomizer: LspFindReferencesCustomizer get() = LspFindReferencesDisabled
+    // Errors come from `inko check`.
+    override val diagnosticsCustomizer: LspDiagnosticsCustomizer get() = LspDiagnosticsDisabled
+    // Parakeet's parameter-name hints.
+    override val inlayHintCustomizer: LspInlayHintCustomizer get() = LspInlayHintDisabled
+    // Parakeet's parameter info.
+    override val signatureHelpCustomizer: LspSignatureHelpCustomizer get() = LspSignatureHelpDisabled
+    // Parakeet's usage highlighting.
+    override val documentHighlightsCustomizer: LspDocumentHighlightsCustomizer get() = LspDocumentHighlightsDisabled
+    // Parakeet's TextMate grammar highlights; the Structure view, folding and Go to Symbol are Parakeet's.
+    override val semanticTokensCustomizer: LspSemanticTokensCustomizer get() = LspSemanticTokensDisabled
+    override val documentSymbolCustomizer: LspDocumentSymbolCustomizer get() = LspDocumentSymbolDisabled
+    override val workspaceSymbolCustomizer: LspWorkspaceSymbolCustomizer get() = LspWorkspaceSymbolDisabled
+    override val foldingRangeCustomizer: LspFoldingRangeCustomizer get() = LspFoldingRangeDisabled
+    // Only used for symbols, which are off.
+    override val symbolKindCustomizer: LspSymbolKindCustomizer get() = LspSymbolKindCustomizer()
+    // Parakeet's quick fixes and intentions; `inko fmt` formats.
+    override val codeActionsCustomizer: LspCodeActionsCustomizer get() = LspCodeActionsDisabled
+    override val commandsCustomizer: LspCommandsCustomizer get() = LspCommandsDisabled
+    override val formattingCustomizer: LspFormattingCustomizer get() = LspFormattingDisabled
+    // Inko has no colors or links to show.
+    override val documentColorCustomizer: LspDocumentColorCustomizer get() = LspDocumentColorDisabled
+    override val documentLinkCustomizer: LspDocumentLinkCustomizer get() = LspDocumentLinkDisabled
+
+    companion object {
+        /** The customization for this IDE: 2026.1 added features (rename, for one) that 2025.3 has no classes for. */
+        fun create(): CuttleboneCustomization {
+            val loader = LspCustomization::class.java.classLoader
+            val newer = runCatching { Class.forName("com.intellij.platform.lsp.api.customization.LspRenameCustomizer", false, loader) }.isSuccess
+            return if (newer) CuttleboneCustomization261() else CuttleboneCustomization()
+        }
     }
+}
+
+/**
+ * The features IntelliJ 2026.1 added. Only loaded there and later ([CuttleboneCustomization.create]):
+ * in 2025.3 these classes don't exist, and neither do the features.
+ */
+class CuttleboneCustomization261 : CuttleboneCustomization() {
+    // Parakeet's Rename, Call and Type Hierarchy, Extend Selection and Optimize Imports.
+    override val renameCustomizer: LspRenameCustomizer get() = LspRenameDisabled
+    override val callHierarchyCustomizer: LspCallHierarchyCustomizer get() = LspCallHierarchyDisabled
+    override val typeHierarchyCustomizer: LspTypeHierarchyCustomizer get() = LspTypeHierarchyDisabled
+    override val selectionRangeCustomizer: LspSelectionRangeCustomizer get() = LspSelectionRangeDisabled
+    override val optimizeImportsCustomizer: LspOptimizeImportsCustomizer get() = LspOptimizeImportsDisabled
+    // Parakeet's usage counts; Parakeet's typing aids.
+    override val codeLensCustomizer: LspCodeLensCustomizer get() = LspCodeLensDisabled
+    override val onTypeFormattingCustomizer: LspOnTypeFormattingCustomizer get() = LspOnTypeFormattingDisabled
 }
 
 /** A `cuttlebone/status` notification: whether the response that follows it is a fresh answer, and if not, why. */

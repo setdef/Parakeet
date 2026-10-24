@@ -151,10 +151,25 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf(text.indexOf("total + 2")), handler.readUsages.map { it.startOffset })
     }
 
-    fun testWithASyntaxErrorHintsFallBackToParakeet() {
-        // Cuttlebone has no answer for a file that doesn't parse; Parakeet's hints still name what it can resolve.
-        val text = main + "\nfn twice(value: Int) -> Int {\n  value * 2\n}\n\nfn uses -> Int {\n  twice(21)\n}\n\nfn broken( {\n"
+    private val twiceAndUses = "\nfn twice(value: Int) -> Int {\n  value * 2\n}\n\nfn uses -> Int {\n  twice(21)\n}\n"
+
+    fun testWithASyntaxErrorHintsAreCuttlebones() {
+        // Since milestone 5, Cuttlebone answers a file that doesn't parse from a repaired copy (the broken line blank).
+        val text = main + twiceAndUses + "\nfn broken( {\n"
         open(text)
+        assertEquals(
+            listOf(index to "index", default to "default", text.indexOf("2.0") to "scale", text.indexOf("21") to "value"),
+            inBackground { InkoParameterHints.inFile(myFixture.file) },
+        )
+        assertEquals(listOf(text.indexOf("x = make") + 1 to ": B", text.indexOf("y = [") + 1 to ": Array[Int]"), inBackground { InkoParameterHints.types(myFixture.file) })
+    }
+
+    fun testOpenedWithADeclarationErrorHintsFallBackToParakeet() {
+        // No check has typed a method body yet, and the error isn't in a change Cuttlebone saw, so it has no answer.
+        // Parakeet's hints still name what it can resolve.
+        val text = main + twiceAndUses + "\nfn broken -> Missing {\n  1\n}\n"
+        open(text)
+        assertNull(inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) })
         assertEquals(listOf(default to "default", text.indexOf("21") to "value"), inBackground { InkoParameterHints.inFile(myFixture.file) })
         assertEquals("only Cuttlebone knows types", emptyList<Any>(), inBackground { InkoParameterHints.types(myFixture.file) })
     }
@@ -170,10 +185,22 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf("size"), myFixture.lookupElementStrings)
     }
 
-    // The trade-off for completion: with a syntax error anywhere in the file, Cuttlebone has
-    // no answer (noHir), and Parakeet's own member completion still offers something.
-    fun testWithASyntaxErrorElsewhereCompletionFallsBackToParakeet() {
+    fun testWithASyntaxErrorElsewhereCompletionIsCuttlebones() {
+        // Since milestone 5, Cuttlebone completes from a repaired copy: the broken line elsewhere is blank.
         val text = main.replace("x.size(2.0)", "x.") + "\nfn broken( {\n"
+        open(text)
+        val offset = text.indexOf("x.\n") + 2
+        myFixture.editor.caretModel.moveToOffset(offset)
+        val answer = inBackground { CuttleboneQueries.getInstance(project).completion(myFixture.file, offset) }
+        assertEquals(listOf("size" to "fn pub size(scale: Float) -> Int"), answer!!.value!!.map { it.label to it.detail })
+        myFixture.completeBasic()
+        assertEquals(listOf("size"), myFixture.lookupElementStrings)
+    }
+
+    // Completion after a syntax error in the same method is what Cuttlebone still can't answer
+    // (noHir): Parakeet's own member completion still offers something.
+    fun testAfterASyntaxErrorInTheSameMethodCompletionFallsBackToParakeet() {
+        val text = main.replace("let y = [10, 20]", "let y = [10, 20").replace("x.size(2.0)", "x.")
         open(text)
         val offset = text.indexOf("x.\n") + 2
         myFixture.editor.caretModel.moveToOffset(offset)

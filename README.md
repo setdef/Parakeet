@@ -472,6 +472,7 @@ Audits and session reports, oldest first:
 - [Who owns each LSP feature](docs/history/SESSION-lsp-ownership.md)
 - [Stale and repaired answers](docs/history/SESSION-stale-and-repaired.md)
 - [Requiring Cuttlebone](docs/history/SESSION-require-cuttlebone.md)
+- [Replaying typing against Cuttlebone](docs/history/SESSION-typing-replay.md)
 
 ## Icon
 

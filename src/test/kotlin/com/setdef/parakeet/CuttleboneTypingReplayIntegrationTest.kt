@@ -439,10 +439,14 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
 
         /**
          * For each answer that arrived while its text was still the document's, how long after the edit that made the
-         * text: what completion and parameter info, asked right after a keystroke, take to show.
+         * text: what completion, which pops up as a member is typed, takes to show.
          */
         fun current(method: String): List<Long> = requests.filter { it.method == method && it.answered && it.stampAtEnd == it.stamp }
             .mapNotNull { r -> changedAt[r.stamp]?.let { (r.endedAt - it) / 1_000_000 } }.sorted()
+
+        /** For each answer that arrived while its text was still the document's, how long after it was asked for. */
+        fun asked(method: String): List<Long> = requests.filter { it.method == method && it.answered && it.stampAtEnd == it.stamp }
+            .map { (it.endedAt - it.sentAt) / 1_000_000 }.sorted()
 
         fun daemonLatencies(): List<Long?> = settled.map { (stamp, at) ->
             daemonFinished.filter { it.second == stamp }.minOfOrNull { it.first }?.let { (it - at) / 1_000_000 }
@@ -475,7 +479,7 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
             within("inlay hints at pauses", hints.filterNotNull().sorted(), 0.9, MAX_HINTS_AT_PAUSE_MS)
             within("usage highlighting at pauses", latencies("textDocument/documentHighlight").filterNotNull().sorted(), 0.9, MAX_USAGES_AT_PAUSE_MS)
             within("completion, keystroke to answer", current("textDocument/completion"), 0.9, MAX_COMPLETION_MS)
-            within("parameter info, keystroke to answer", current("textDocument/signatureHelp"), 1.0, MAX_PARAMETER_INFO_MS)
+            within("parameter info, ⌘P to answer", asked("textDocument/signatureHelp"), 1.0, MAX_PARAMETER_INFO_MS)
         }
 
         /** Every request, and every edit, as tab-separated lines, to PARAKEET_REPLAY_TRACE if it's set. */
@@ -501,7 +505,7 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
             val (cancelled, changed) = cancelledOfChanged()
             println("REPLAY $label: ${requests.size} requests, $cancelsSent \$/cancelRequest sent, ${outdated(requests)} answers for changed text " +
                 "($cancelled of $changed whose text changed cancelled), ${checks(requests)} checks (${"%.0f".format(checkMs(requests))} ms)")
-            println("REPLAY | feature | sent | cancelled | answered | for changed text | checks | check ms | latency at pauses: answered, median, p90, max (ms) | keystroke to current answer: median, p90, max (ms) |")
+            println("REPLAY | feature | sent | cancelled | answered | for changed text | checks | check ms | latency at pauses: answered, median, p90, max (ms) | keystroke to current answer: median, p90, max (ms) | asked to current answer: median, max (ms) |")
             for ((feature, method) in FEATURES) {
                 val list = of(method)
                 val latencies = if (method == DAEMON) daemonLatencies() else latencies(method)
@@ -510,7 +514,8 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
                 val answers = current(method)
                 println("REPLAY | $feature | ${list.size} | ${list.count { it.cancelled }} | ${list.count { it.answered }} | ${outdated(list)} | " +
                     "${checks(list)} | ${"%.0f".format(checkMs(list))} | ${known.size}/${latencies.size}, ${pct(0.5)}, ${pct(0.9)}, ${known.lastOrNull()} | " +
-                    "${percentile(answers, 0.5)}, ${percentile(answers, 0.9)}, ${answers.lastOrNull()} |")
+                    "${percentile(answers, 0.5)}, ${percentile(answers, 0.9)}, ${answers.lastOrNull()} | " +
+                    "${percentile(asked(method), 0.5)}, ${asked(method).lastOrNull()} |")
             }
         }
     }
@@ -523,7 +528,7 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
         // text that had changed up to 0.026 / 0.187 or more. Times after the fixes (as before them, but for usage
         // highlighting, which now waits for typing to pause): at the 90th percentile, inlay hints at pauses up to
         // 491 ms (300 of them the IDE's own delay after an edit), usage highlighting at pauses up to 394 ms, and
-        // completion up to 184 ms after its keystroke; parameter info, every answer, up to 289 ms.
+        // completion up to 184 ms after its keystroke; parameter info, every answer, up to 146 ms after ⌘P.
         const val MAX_REQUESTS_PER_KEYSTROKE = 0.7
         const val MAX_CHECKS_PER_KEYSTROKE = 0.5
         const val MAX_OUTDATED_PER_KEYSTROKE = 0.08
@@ -533,7 +538,7 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
         const val MAX_HINTS_AT_PAUSE_MS = 1200L
         const val MAX_USAGES_AT_PAUSE_MS = 1200L
         const val MAX_COMPLETION_MS = 800L
-        const val MAX_PARAMETER_INFO_MS = 1000L
+        const val MAX_PARAMETER_INFO_MS = 600L
 
         /** The [p]th of [sorted] (0 to 1), by the nearest rank below. */
         fun percentile(sorted: List<Long>, p: Double): Long? = sorted.getOrNull(((sorted.size - 1) * p).toInt())

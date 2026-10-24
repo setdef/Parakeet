@@ -325,7 +325,7 @@ object InkoInlineMethod {
         if (definition.stream.tokens.any { body.contains(it.range) && (it.isKeyword("self") || it.type == InkoTokens.FIELD) }) return true
         return PsiTreeUtil.findChildrenOfType(file, InkoName::class.java)
             .filter { body.contains(it.textRange) && it.tokenType == InkoTokens.IDENTIFIER && !it.previousToken().isToken(InkoTokens.DOT) }
-            .any { name -> InkoResolver.resolveDefinitions(name).any { it.first.kind == Kind.INSTANCE_METHOD } }
+            .any { name -> InkoResolver.resolveDefinitions(name, exact = true).any { it.first.kind == Kind.INSTANCE_METHOD } }
     }
 }
 

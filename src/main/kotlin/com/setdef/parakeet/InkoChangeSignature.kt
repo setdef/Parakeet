@@ -93,10 +93,10 @@ object InkoChangeSignature {
     fun renderCall(call: InkoCallSite, name: String, arguments: List<String>): String =
         name + call.typeArguments + if (arguments.isEmpty()) "" else arguments.joinToString(", ", "(", ")")
 
-    /** Whether a use of a method might mean a same-named method on another type (the receiver's type isn't known). */
+    /** Whether a use of a method might mean another method: Cuttlebone had no fresh answer for it. */
     fun isUncertain(element: PsiElement): Boolean {
         val name = PsiTreeUtil.getParentOfType(element, InkoName::class.java, false) ?: return false
-        return name !is InkoDeclaration && InkoResolver.resolve(name).size > 1
+        return name !is InkoDeclaration && !InkoResolver.resolution(name, exact = false).exact
     }
 }
 
@@ -149,7 +149,7 @@ class InkoChangeSignatureProcessor(
         for ((index, parameter) in signature.parameters.withIndex()) {
             if (change.parameters.any { it.oldIndex == index }) continue
             val declaration = parameterDeclaration(index) ?: continue
-            if (InkoUsages.inFile(declaration).any { (name, isDeclaration) -> !isDeclaration && name != declaration && replacements.none { it.contains(name.textRange) } }) {
+            if (usesInTheBody(declaration).any { (name, isDeclaration) -> !isDeclaration && name != declaration && replacements.none { it.contains(name.textRange) } }) {
                 conflicts.putValue(declaration, "Parameter `${parameter.name}` is removed, but the method's body still uses it.")
             }
         }
@@ -195,6 +195,15 @@ class InkoChangeSignatureProcessor(
         return showConflicts(conflicts, refUsages.get())
     }
 
+    /**
+     * A parameter's uses in the method itself. Not a named argument (`height: 1`) in a call elsewhere in the
+     * file, which the compiler also counts as one: calls are rewritten as a whole.
+     */
+    private fun usesInTheBody(parameter: InkoName): List<Pair<InkoName, Boolean>> {
+        val extent = InkoDeclarations.extent(method) ?: return emptyList()
+        return InkoUsages.inFile(parameter).filter { (name, _) -> extent.contains(name.textRange) }
+    }
+
     override fun performRefactoring(usages: Array<out UsageInfo>) {
         val manager = PsiDocumentManager.getInstance(myProject)
         // Within a file, later calls first: an inner call (`add(a, add(a, 0))`) starts after the outer one, and
@@ -215,7 +224,7 @@ class InkoChangeSignatureProcessor(
             val old = signature.parameters[parameter.oldIndex]
             if (old.name == parameter.name) continue
             val declaration = parameterDeclaration(parameter.oldIndex) ?: continue
-            for ((name, isDeclaration) in InkoUsages.inFile(declaration)) {
+            for ((name, isDeclaration) in usesInTheBody(declaration)) {
                 // The declaration is part of the header, which is rewritten as a whole.
                 if (isDeclaration || name == declaration || replacements.any { it.contains(name.textRange) }) continue
                 edits += name.textRange to parameter.name

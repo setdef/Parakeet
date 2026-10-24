@@ -40,8 +40,12 @@ class InkoIntroduceParameterTest : InkoTestCase(onDisk = true) {
 
     override fun setUp() {
         super.setUp()
-        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
-        cuttleboneCantCheckTheCode()
+        // The compiler's answers for the constants the expressions name; elsewhere, Parakeet's own reading of the
+        // code, which stands in only where Cuttlebone can't check it.
+        Compiler().otherwiseEditing()
+            .resolvesEvery("src/app/util.inko", util, "LIMIT *", At("src/app/util.inko", util, "LIMIT ="))
+            .resolvesEvery("src/app/util.inko", util, "MAX +", At("src/app/util.inko", util, "MAX ="))
+            .install()
         putTempDirInProjectContent()
         useFakeInko(FakeInkoDoc.cli { mirror ->
             val utilFile = mirror.resolve("src/app/util.inko")

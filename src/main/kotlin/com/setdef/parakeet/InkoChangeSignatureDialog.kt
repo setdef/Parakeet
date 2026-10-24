@@ -25,7 +25,7 @@ import javax.swing.table.AbstractTableModel
 class InkoChangeSignatureHandler : ChangeSignatureHandler {
     override fun findTargetMember(element: PsiElement): PsiElement? {
         val name = PsiTreeUtil.getParentOfType(element, InkoName::class.java, false) ?: return null
-        val declaration = name as? InkoDeclaration ?: InkoResolver.resolve(name).singleOrNull() as? InkoDeclaration ?: return null
+        val declaration = name as? InkoDeclaration ?: InkoResolver.resolveExactly(name).singleOrNull() as? InkoDeclaration ?: return null
         return declaration.takeIf(InkoCallHierarchy::isMethod)
     }
 

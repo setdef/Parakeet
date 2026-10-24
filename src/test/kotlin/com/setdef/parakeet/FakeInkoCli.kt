@@ -78,6 +78,62 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
         CuttleboneQueries.Answer<Any>(null, CuttleboneStatus(method, file.url, "unavailable", reason, 1.0))
     }
 
+    /** A place in this test's code: [marker]'s position (plus [shift]) in the project file [path], whose text is [text]. */
+    class At(val path: String, val text: String, val marker: String, val shift: Int = 0) {
+        val offset: Int get() = text.indexOf(marker).also { check(it >= 0) { "no $marker in $path" } } + shift
+        val line: Int get() = text.substring(0, offset).count { it == '\n' }
+        val character: Int get() = offset - (text.lastIndexOf('\n', offset - 1) + 1)
+    }
+
+    /**
+     * Cuttlebone, in-process, as a compiler that knows this test's code: [resolves] says where each use's
+     * definition is, [hover] what type is at a place, and [editing] where it can't check the code (it's being
+     * edited). Every other question is answered: nothing there, or with [otherwiseEditing], can't check it.
+     */
+    inner class Compiler {
+        private val definitions = mutableListOf<Pair<At, At>>()
+        private val hovers = mutableListOf<Triple<At, String, Int>>()
+        private val editing = mutableListOf<At>()
+        private var otherwiseEditing = false
+
+        fun resolves(use: At, declaration: At) = apply { definitions += use to declaration }
+
+        /** Every use of [marker] in [path] (whose text is [text]) resolves to [declaration]. */
+        fun resolvesEvery(path: String, text: String, marker: String, declaration: At) = apply {
+            var at = text.indexOf(marker)
+            while (at >= 0) {
+                resolves(At(path, text, marker, at - text.indexOf(marker)), declaration)
+                at = text.indexOf(marker, at + 1)
+            }
+        }
+
+        fun otherwiseEditing() = apply { otherwiseEditing = true }
+        fun hover(at: At, type: String, length: Int = at.marker.length - at.shift) = apply { hovers += Triple(at, type, length) }
+        fun editing(at: At) = apply { editing += at }
+
+        private fun matches(at: At, file: com.intellij.openapi.vfs.VirtualFile, offset: Int) = file.path.endsWith("/${at.path}") && at.offset == offset
+
+        private fun range(at: At, length: Int) = org.eclipse.lsp4j.Range(
+            org.eclipse.lsp4j.Position(at.line, at.character), org.eclipse.lsp4j.Position(at.line, at.character + length))
+
+        fun install() = stubCuttlebone { method, file, offset ->
+            fun status(status: String, reason: String? = null) = CuttleboneStatus(method, file.url, status, reason, 1.0)
+            val known = definitions.any { matches(it.first, file, offset) } || hovers.any { matches(it.first, file, offset) }
+            if (editing.any { matches(it, file, offset) } || (otherwiseEditing && !known)) return@stubCuttlebone CuttleboneQueries.Answer<Any>(null, status("unavailable", "declarationErrors"))
+            val value: Any? = when (method) {
+                "textDocument/definition" -> definitions.firstOrNull { matches(it.first, file, offset) }?.second?.let { declaration ->
+                    val target = myFixture.findFileInTempDir(declaration.path) ?: error("no ${declaration.path}")
+                    listOf(org.eclipse.lsp4j.Location(target.url, range(declaration, declaration.marker.length - declaration.shift)))
+                }
+                "textDocument/hover" -> hovers.firstOrNull { matches(it.first, file, offset) }?.let { (at, type, length) ->
+                    org.eclipse.lsp4j.Hover(org.eclipse.lsp4j.MarkupContent("markdown", "```inko\n$type\n```"), range(at, length))
+                }
+                else -> null
+            }
+            CuttleboneQueries.Answer(value, status("fresh"))
+        }
+    }
+
     override fun createTempDirTestFixture(): TempDirTestFixture = if (onDisk) TempDirTestFixtureImpl() else super.createTempDirTestFixture()
 
     /** Makes the (on-disk) test directory part of the project's content, as a real project's files are. */

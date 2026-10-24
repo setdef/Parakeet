@@ -79,7 +79,7 @@ class InkoUsageTypeProvider : UsageTypeProvider {
         val name = PsiTreeUtil.getParentOfType(element, InkoName::class.java, false) ?: return null
         if (name is InkoDeclaration || !name.previousToken().isToken(InkoTokens.DOT)) return null
         // Asked of every usage found, so with Cuttlebone's cached answers only.
-        return if (CuttleboneQueries.cachedOnly { InkoResolver.resolve(name) }.size > 1) POSSIBLE else null
+        return if (!CuttleboneQueries.cachedOnly { InkoResolver.resolution(name, exact = false) }.exact) POSSIBLE else null
     }
 
     companion object {

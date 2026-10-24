@@ -62,7 +62,7 @@ object InkoIntroduceParameter {
         for (name in names) {
             if (InkoNameContext.of(name, imports) is InkoNameContext.Local) return fail("The expression uses `${name.text}`, a variable callers don't have.")
             if (name.previousToken().isToken(InkoTokens.DOT)) continue
-            if (InkoResolver.resolveDefinitions(name).any { it.first.kind == Kind.INSTANCE_METHOD || it.first.kind == Kind.STATIC_METHOD }) {
+            if (InkoResolver.resolveDefinitions(name, exact = true).any { it.first.kind == Kind.INSTANCE_METHOD || it.first.kind == Kind.STATIC_METHOD }) {
                 return fail("The expression calls `${name.text}` on `self`, which callers don't have.")
             }
         }
@@ -144,7 +144,7 @@ object InkoPortableNames {
             if (name.previousToken().isToken(InkoTokens.DOT)) continue
             if (InkoNameContext.of(name, imports) is InkoNameContext.Local) continue
             imports.symbol(name.text)?.let { (from, original) -> needed += from to original; continue }
-            val resolved = InkoResolver.resolveDefinitions(name)
+            val resolved = InkoResolver.resolveDefinitions(name, exact = true)
             val (definition, site) = resolved.firstOrNull { it.first.kind in setOf(Kind.TYPE, Kind.TRAIT, Kind.CONSTANT, Kind.MODULE_METHOD) } ?: continue
             if (module == null || definition.module != module) continue
             needed += module to name.text

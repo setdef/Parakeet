@@ -63,17 +63,59 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertTrue(result.stderr, result.succeeded)
     }
 
+    /**
+     * Whether the real `cuttlebone` is there (CUTTLEBONE, which scripts/check.sh sets, else where Parakeet
+     * looks), and if so, uses it: what changes code takes only the compiler's fresh answers. Without it the
+     * test says it's skipped; `scripts/check.sh --full` requires it.
+     */
+    private val askingCuttlebone: Boolean
+        get() {
+            val executable = System.getenv("CUTTLEBONE")?.takeIf { it.isNotEmpty() }
+                ?: run { InkoProjectSettings.getInstance(project).cuttlebone = ""; Cuttlebone.executable(project)?.toString() }
+            if (executable == null) println("$name: skipped, as it needs cuttlebone (set CUTTLEBONE)") else useCuttlebone(executable)
+            return executable != null
+        }
+
+    /**
+     * Asks Cuttlebone about every name in [paths] (saved first, so it reads them from disk) in the background,
+     * as the editor's passes would, so that what the test then runs on the EDT, where nothing waits for
+     * Cuttlebone, has its answers.
+     */
+    private fun askCuttleboneAbout(vararg paths: String) {
+        FileDocumentManager.getInstance().saveAllDocuments()
+        val service = CuttleboneService.getInstance(project)
+        if (service.server() == null) myFixture.configureFromExistingVirtualFile(myFixture.findFileInTempDir(paths.first()))
+        com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("Cuttlebone to start (${service.status?.message})", { service.server() != null }, 60)
+        val files = paths.map { PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir(it))!! }
+        com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("Cuttlebone to have the files", {
+            val server = service.server()
+            server != null && files.all { service.isSynced(server, it.virtualFile, it.viewProvider.document!!) }
+        }, 30)
+        val queries = CuttleboneQueries.getInstance(project)
+        val asked = com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+            com.intellij.openapi.application.ReadAction.run<Throwable> {
+                for (file in files) for (name in PsiTreeUtil.findChildrenOfType(file, InkoName::class.java)) {
+                    queries.definition(file, name.textRange.startOffset, budgetMs = 10_000)
+                    queries.hover(file, name.textRange.startOffset, budgetMs = 10_000)
+                }
+            }
+        }
+        com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("Cuttlebone's answers", { asked.isDone }, 120)
+        asked.get()
+    }
+
     private fun declaration(path: String, name: String): InkoDeclaration {
         val file = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir(path))!!
         return PsiTreeUtil.findChildrenOfType(file, InkoDeclaration::class.java).first { it.name == name }
     }
 
     fun testChangedSignaturesStillCompile() {
-        // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
-        cuttleboneCantCheckTheCode()
+        // What changes code takes only the compiler's fresh answers.
         putTempDirInProjectContent()
+        if (!askingCuttlebone) return
         myFixture.addFileToProject("src/app/util.inko", "fn pub area(width: Int, height: Int) -> Int {\n  width * height\n}\n\nfn pub square(side: Int) -> Int {\n  area(side, height: side)\n}\n")
         myFixture.addFileToProject("src/main.inko", "import app.util (area)\n\nfn total -> Int {\n  area(2, 3) + area(width: 4, height: area(1, 1))\n}\n")
+        askCuttleboneAbout("src/app/util.inko", "src/main.inko")
         InkoChangeSignatureProcessor(project, declaration("src/app/util.inko", "area"), InkoSignatureChange(
             "rectangle",
             listOf(InkoParameterChange(1, "tall", "Int"), InkoParameterChange(0, "wide", "Int"), InkoParameterChange(-1, "scale", "Int", "1")),
@@ -84,12 +126,13 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     fun testIntroducedParametersStillCompile() {
-        // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
-        cuttleboneCantCheckTheCode()
+        // What changes code takes only the compiler's fresh answers.
         putTempDirInProjectContent()
+        if (!askingCuttlebone) return
         val util = "let pub LIMIT = 10\n\nfn pub clamp(value: Int) -> Int {\n  let doubled = LIMIT * 2\n  if value > doubled { LIMIT * 2 } else { value }\n}\n"
         myFixture.addFileToProject("src/app/util.inko", util)
         myFixture.addFileToProject("src/main.inko", "import app.util (clamp)\n\nfn total -> Int {\n  clamp(5) + clamp(value: 7)\n}\n")
+        askCuttleboneAbout("src/app/util.inko", "src/main.inko")
         val file = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/app/util.inko"))!!
         val start = util.indexOf("LIMIT * 2")
         val plan = InkoIntroduceParameter.plan(file, com.intellij.openapi.util.TextRange(start, start + "LIMIT * 2".length)).getOrThrow()
@@ -109,10 +152,15 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     /** Extracts the text between `<selection>` markers in [path]'s [text], with the real compiler checking the result. */
-    /** Applies the intention titled [title] at `<caret>` in a fresh module, and checks the project still compiles. */
-    private fun intentionCompiles(text: String, title: String) {
+    /**
+     * Applies the intention titled [title] at `<caret>` in a fresh module, and checks the project still compiles.
+     * One that needs [cuttlebone]'s answers has them asked for first.
+     */
+    private fun intentionCompiles(text: String, title: String, cuttlebone: Boolean = false) {
         putTempDirInProjectContent()
+        if (cuttlebone && !askingCuttlebone) return
         open("src/app/rewrite.inko", text.replace("<caret>", ""))
+        if (cuttlebone) askCuttleboneAbout("src/app/rewrite.inko")
         myFixture.editor.caretModel.moveToOffset(text.indexOf("<caret>"))
         val intention = myFixture.availableIntentions.firstOrNull { it.text == title } ?: error("'$title' wasn't offered")
         myFixture.launchAction(intention)
@@ -133,13 +181,11 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     fun testFlippedComparisonStillCompiles() =
         intentionCompiles("fn pub check(a: Int, b: Int) -> Bool {\n  a + 1 <caret>< b and b > 2\n}\n", "Flip '<' to '>'")
 
-    // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
-    fun testNamedArgumentsStillCompile() = cuttleboneCantCheckTheCode().let {
-        intentionCompiles("fn pub area(width: Int, height: Int) -> Int {\n  width * height\n}\n\nfn pub twice -> Int {\n  area(<caret>2, 3)\n}\n", "Add argument names")
-    }
+    fun testNamedArgumentsStillCompile() =
+        intentionCompiles("fn pub area(width: Int, height: Int) -> Int {\n  width * height\n}\n\nfn pub twice -> Int {\n  area(<caret>2, 3)\n}\n", "Add argument names", cuttlebone = true)
 
     fun testSpecifiedTypeStillCompiles() =
-        intentionCompiles("fn pub area(width: Int, height: Int) -> Int {\n  let <caret>total = width * height\n  total\n}\n", "Specify type explicitly")
+        intentionCompiles("fn pub area(width: Int, height: Int) -> Int {\n  let <caret>total = width * height\n  total\n}\n", "Specify type explicitly", cuttlebone = true)
 
     fun testProjectCheckFindsErrorsInUnopenedModules() {
         putTempDirInProjectContent()
@@ -165,12 +211,13 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     fun testMovedDeclarationsStillCompile() {
-        // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
-        cuttleboneCantCheckTheCode()
+        // What changes code takes only the compiler's fresh answers.
         putTempDirInProjectContent()
+        if (!askingCuttlebone) return
         myFixture.addFileToProject("src/app/util.inko", "import std.stdio (Stdout)\n\nlet pub LIMIT = 10\n\ntype pub Helper {\n  let @count: Int\n}\n\nimpl Helper {\n  fn pub show {\n    Stdout.new.print(LIMIT.to_string)\n  }\n}\n\nfn pub make -> Helper {\n  Helper(count: LIMIT)\n}\n")
         myFixture.addFileToProject("src/main.inko", "import app.util (Helper, make)\n\ntype async Main {\n  fn async main {\n    let h: Helper = make\n    h.show\n  }\n}\n")
         assertCompiles()
+        askCuttleboneAbout("src/app/util.inko", "src/main.inko")
         InkoMoveDeclarationProcessor(project, declaration("src/app/util.inko", "Helper"), "app.helpers").run()
         assertCompiles()
     }
@@ -260,11 +307,12 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
 
     // AUDIT.md finding 1.6: `recv.value = x` calls the setter `value=`, so renaming the setter renames the call.
     fun testRenamedSettersStillCompile() {
-        // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
-        cuttleboneCantCheckTheCode()
+        // What changes code takes only the compiler's fresh answers.
         putTempDirInProjectContent()
+        if (!askingCuttlebone) return
         myFixture.addFileToProject("src/app/counter.inko", "type pub Counter {\n  let mut @value: Int\n\n  fn pub mut value=(v: Int) {\n    @value = v\n  }\n}\n")
         myFixture.addFileToProject("src/main.inko", "import app.counter (Counter)\n\nfn bump(c: mut Counter) {\n  c.value = 2\n}\n")
+        askCuttleboneAbout("src/app/counter.inko", "src/main.inko")
         myFixture.renameElement(declaration("src/app/counter.inko", "value="), "amount=")
         assertTrue(PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/main.inko"))!!.text.contains("c.amount = 2"))
         assertCompiles()
@@ -288,18 +336,6 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf("Show"), InkoTypeHierarchy.related(debug, supertypes = true).map { InkoTypeHierarchy.definition(it)!!.name })
     }
 
-    // AUDIT.md finding 1.14: inko doc gives a constant's type as `let pub LIMIT: Int`.
-    fun testConstantTypesFromInkoDoc() {
-        // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
-        cuttleboneCantCheckTheCode()
-        myFixture.addFileToProject("src/app/limits.inko", "let pub LIMIT = 10\n")
-        val text = "import app.limits (LIMIT)\n\nfn pub twice -> Int {\n  LIMIT * 2\n}\n"
-        open("src/app/twice.inko", text)
-        FileDocumentManager.getInstance().saveAllDocuments()
-        val start = text.indexOf("LIMIT *")
-        assertEquals("Int", InkoExpressionTypes.of(myFixture.file, com.intellij.openapi.util.TextRange(start, start + "LIMIT".length)))
-    }
-
     // AUDIT.md section 3: the Code Style preview must be valid Inko.
     fun testTheCodeStyleSampleCompiles() {
         val sample = InkoCodeStyleSettingsProvider().getCodeSample(com.intellij.psi.codeStyle.LanguageCodeStyleSettingsProvider.SettingsType.INDENT_SETTINGS)
@@ -308,9 +344,9 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     fun testInlinedMethodsStillCompile() {
-        // Parakeet's own reading of the code, with the real `inko doc`: it stands in only where Cuttlebone can't check the code.
-        cuttleboneCantCheckTheCode()
+        // What changes code takes only the compiler's fresh answers.
         putTempDirInProjectContent()
+        if (!askingCuttlebone) return
         myFixture.addFileToProject(
             "src/app/util.inko",
             "let pub SCALE = 3\n\nfn pub double(value: Int) -> Int {\n  value * 2\n}\n\nfn pub area(width: Int, height: Int) -> Int {\n  let w = width * SCALE\n  w * height\n}\n\nfn pub repeat(value: Int) -> Int {\n  value + value\n}\n",
@@ -320,6 +356,8 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
             "import app.util (area, double, repeat)\n\nfn run -> Int {\n  let w = 10\n  let a = area(w, 2)\n  let r = repeat(w + 1)\n  double(w + 1) * 3 + a + r\n}\n",
         )
         for (name in listOf("area", "double", "repeat")) {
+            // Each inlining changes the code, so the next one asks again.
+            askCuttleboneAbout("src/app/util.inko", "src/main.inko")
             InkoInlineMethodProcessor(project, declaration("src/app/util.inko", name), null, keepMethod = false).run()
         }
         assertCompiles()

@@ -100,6 +100,8 @@ class InkoInlineMethodTest : InkoTestCase(onDisk = true) {
     }
 
     fun testIntoALetRenamingClashingLocalsAndImportingWhatItNeeds() {
+        // What the inlined body names is imported from what the compiler resolves it to.
+        Compiler().otherwiseEditing().resolves(At("src/app/util.inko", util, "SCALE\n"), At("src/app/util.inko", util, "SCALE =")).install()
         inlineCall("area", "src/main.inko", "area(w")
         val text = file("src/main.inko").text
         assertTrue(text, text.contains("  let w = 10\n  let w2 = w * SCALE\n  let a = w2 * 2\n"))

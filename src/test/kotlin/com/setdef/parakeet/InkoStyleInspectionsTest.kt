@@ -149,6 +149,10 @@ class InkoStyleInspectionsTest : InkoTestCase(onDisk = true) {
         assertEmpty(messages(text))
     }
 
+    /** Cuttlebone's answers for [text]: each call to `slice` is to app.text's. */
+    private fun compilerResolvesSlice(text: String) =
+        Compiler().resolvesEvery("src/main.inko", text, "slice(", At("src/app/text.inko", "fn pub slice(start: Int, chars: Int) -> Int {\n  start\n}\n", "slice")).install()
+
     fun testRedundantArgumentNames() {
         val text = """
             |import app.text (slice)
@@ -161,12 +165,14 @@ class InkoStyleInspectionsTest : InkoTestCase(onDisk = true) {
             |  slice(start: chars, chars: start)
             |}
             |""".trimMargin()
+        compilerResolvesSlice(text)
         // Only the first call's names can go: the second's are out of order, the third's don't match.
         assertSameElements(messages(text), "start: start: Redundant argument name 'start:'")
     }
 
     fun testRemovingARedundantArgumentName() {
         val text = "import app.text (slice)\n\nfn main {\n  let start = 1\n  slice(start: start, chars: 2)\n}\n"
+        compilerResolvesSlice(text)
         assertEquals(
             "import app.text (slice)\n\nfn main {\n  let start = 1\n  slice(start, chars: 2)\n}\n",
             fix(text, "Remove redundant argument name"),

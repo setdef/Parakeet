@@ -158,7 +158,7 @@ class InkoRedundantNamedArgumentInspection : InkoStyleInspection() {
             if (arguments.none { isRedundant(tokens, it) }) return@forEachIndexed
             val callee = PsiTreeUtil.getParentOfType(file.findElementAt(calleeToken.start), InkoName::class.java, false) ?: return@forEachIndexed
             if (callee is InkoDeclaration) return@forEachIndexed
-            val parameters = InkoResolver.resolveDefinitions(callee).map { it.first }
+            val parameters = InkoResolver.resolveDefinitions(callee, exact = true).map { it.first }
                 .filter { it.kind != InkoDefinitionKind.TYPE }
                 .map { InkoCalls.parameters(it, null).map { p -> p.substringBefore(':').trim() } }
                 .distinct()

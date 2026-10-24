@@ -214,18 +214,31 @@ class CuttleboneClientTest : CuttleboneTestCase() {
         waitFor("\$/cancelRequest") { received("\$/cancelRequest").isNotEmpty() }
     }
 
-    fun testHighlightingNeverWaits() {
-        useFake(answered().copy(delayMs = 500))
+    fun testHighlightingDoesntWaitForWhatOnlyTheEditorsActionsShow() {
+        val hover = "textDocument/hover"
+        useFake(answered().copy(delayMs = 500, answers = answered().answers + answerAt(text, "to_string", hover, mapOf("contents" to "Int"))))
         open("src/main.inko", text)
         runningServer()
         val file = myFixture.file
-        val answer = inBackground {
-            val indicator = com.intellij.codeInsight.daemon.impl.DaemonProgressIndicator()
-            ProgressManager.getInstance().runProcess<Any?>({ CuttleboneQueries.getInstance(project).definition(file, text.indexOf("to_string"), 5000) }, indicator)
-        }
+        fun hover() = CuttleboneQueries.getInstance(project).hover(file, text.indexOf("to_string"), 5000)
+        val answer = inBackground { inHighlighting { hover() } }
         assertNull(answer)
-        waitFor("the answer, for the next pass") { query(budgetMs = 0) != null }
+        waitFor("the answer, for the next pass") { inBackground { inHighlighting { hover() } } != null }
     }
+
+    // Inspections and intentions resolve names in the highlighting passes, and after a file's first check
+    // Cuttlebone answers from the check it kept, so resolving waits there, within its budget.
+    fun testHighlightingWaitsForADefinitionWithinItsBudget() {
+        useFake(answered().copy(delayMs = 200))
+        open("src/main.inko", text)
+        runningServer()
+        val file = myFixture.file
+        val answer = inBackground { inHighlighting { CuttleboneQueries.getInstance(project).definition(file, text.indexOf("to_string")) } }
+        assertNotNull(answer?.value)
+    }
+
+    private fun <T> inHighlighting(action: () -> T): T =
+        ProgressManager.getInstance().runProcess<T>({ action() }, com.intellij.codeInsight.daemon.impl.DaemonProgressIndicator())
 
     fun testStopsWithShutdownAndExit() {
         useFake(answered())

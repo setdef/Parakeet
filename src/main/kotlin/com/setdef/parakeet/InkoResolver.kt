@@ -9,13 +9,16 @@ import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiPolyVariantReferenceBase
 import com.intellij.psi.ResolveResult
 import com.intellij.psi.util.PsiTreeUtil
-import org.eclipse.lsp4j.Location
 import com.setdef.parakeet.InkoDefinitionKind as Kind
 
 class InkoReference(element: InkoName) :
     PsiPolyVariantReferenceBase<InkoName>(element, TextRange(0, element.textLength), false) {
-    override fun multiResolve(incompleteCode: Boolean): Array<ResolveResult> =
-        InkoResolver.resolve(element).map { PsiElementResolveResult(it) }.toTypedArray()
+    // Only an exact resolution is valid: resolve() (Rename at the caret, for one) then has a single target.
+    // Navigation still offers the others, from a stale answer or Parakeet's reading of code being edited.
+    override fun multiResolve(incompleteCode: Boolean): Array<ResolveResult> {
+        val resolution = InkoResolver.resolution(element, exact = false)
+        return resolution.targets.map { PsiElementResolveResult(it, resolution.exact) }.toTypedArray()
+    }
 
     // Searches ask this of every occurrence of a name: Cuttlebone's cached answers only (CuttleboneQueries.cachedOnly).
     override fun isReferenceTo(element: PsiElement): Boolean = CuttleboneQueries.cachedOnly { super.isReferenceTo(element) }
@@ -137,8 +140,18 @@ class InkoResolver private constructor(
     }
 
     companion object {
-        fun resolve(name: InkoName): List<PsiElement> =
-            localDeclaration(name)?.let(::listOf) ?: resolveDefinitions(name).map { it.second }
+        /**
+         * What [name] refers to, for what only reads or shows: navigation, documentation, hierarchies.
+         * A fresh answer, else a stale one, else in code being edited, Parakeet's own reading ([resolution]).
+         */
+        fun resolve(name: InkoName): List<PsiElement> = resolution(name, exact = false).targets
+
+        /** What [name] refers to by a fresh answer only, or the code alone: for what changes code ([resolution]). */
+        fun resolveExactly(name: InkoName): List<PsiElement> = resolution(name, exact = true).targets
+
+        /** [resolve]'s (or with [exact], [resolveExactly]'s) targets that Parakeet knows the definition of. */
+        fun resolveDefinitions(name: InkoName, exact: Boolean = false): List<Pair<InkoDefinition, PsiElement>> =
+            resolution(name, exact).definitions.mapNotNull { (definition, target) -> definition?.let { it to target } }
 
         /** Where a local variable or parameter is declared, found from the file alone (no index needed). */
         private fun localDeclaration(name: InkoName): PsiElement? {
@@ -149,41 +162,44 @@ class InkoResolver private constructor(
             return PsiTreeUtil.getParentOfType(leaf, InkoName::class.java, false) ?: leaf
         }
 
-        /**
-         * What [name] refers to: each definition, with the element where its name is written. Names whose
-         * targets depend on types (members, calls, constants, fields) need Cuttlebone's answer: without one
-         * they resolve to nothing, except in code being edited ([CuttleboneQueries.Answer.editing]), where
-         * Parakeet's own reading of the code stands in. Imports, module paths and locals follow from the
-         * code alone.
-         */
-        fun resolveDefinitions(name: InkoName, askCuttlebone: Boolean = true): List<Pair<InkoDefinition, PsiElement>> {
-            val file = name.containingFile ?: return emptyList()
-            val path = Inko.pathOf(file.virtualFile) ?: return emptyList()
-            val symbols = InkoDocIndex.getInstance(name.project).symbols(Inko.projectRoot(path)) ?: return emptyList()
-            val imports = InkoImports.parse(file.text)
-            val context = InkoNameContext.of(name, imports)
-            if (isGuessed(context) && askCuttlebone) {
-                val answer = CuttleboneQueries.getInstance(name.project).definition(file, name.textRange.startOffset) ?: return emptyList()
-                if (!answer.editing) return compiled(name, answer, symbols)?.let(::listOf).orEmpty()
-            }
-            return heuristic(name, file, path, symbols, imports, context)
+        /** What a name refers to: each target, with Parakeet's definition there if it knows one, and whether it's [exact]. */
+        class Resolution(val definitions: List<Pair<InkoDefinition?, PsiElement>>, val exact: Boolean) {
+            val targets: List<PsiElement> get() = definitions.map { it.second }
         }
 
-        private fun heuristic(name: InkoName, file: PsiFile, path: java.nio.file.Path, symbols: InkoSymbols, imports: InkoImports, context: InkoNameContext): List<Pair<InkoDefinition, PsiElement>> {
+        private val NOTHING = Resolution(emptyList(), exact = true)
+
+        /**
+         * What [name] refers to. Locals, imports and module paths follow from the code alone, so they're
+         * [Resolution.exact]. Names whose targets depend on types (members, calls, constants, fields) need
+         * Cuttlebone's `textDocument/definition`: a fresh answer is exact. Without [exact], a stale one counts
+         * too, and in code being edited ([CuttleboneQueries.Answer.editing]) Parakeet's own reading stands in;
+         * neither is exact, and what changes code never uses them. Without an answer, nothing.
+         */
+        fun resolution(name: InkoName, exact: Boolean): Resolution {
+            localDeclaration(name)?.let { return Resolution(listOf(null to it), exact = true) }
+            val file = name.containingFile ?: return NOTHING
+            val path = Inko.pathOf(file.virtualFile) ?: return NOTHING
+            val symbols = InkoDocIndex.getInstance(name.project).symbols(Inko.projectRoot(path))
+            val imports = InkoImports.parse(file.text)
+            val context = InkoNameContext.of(name, imports)
+            if (!isGuessed(context)) return Resolution(symbols?.let { heuristic(name, file, path, it, imports, context) }.orEmpty(), exact = true)
+            val queries = CuttleboneQueries.getInstance(name.project)
+            val answer = queries.definition(file, name.textRange.startOffset, stale = !exact) ?: return NOTHING
+            if (!answer.editing) {
+                // Where Parakeet doesn't know a definition (one `inko doc` hasn't seen yet), the target still counts.
+                val targets = answer.value.orEmpty().take(1).mapNotNull(queries::target).map { target -> symbols?.let { definitionAt(target, it) } to target }
+                return Resolution(targets, exact = !answer.stale)
+            }
+            if (exact || symbols == null) return NOTHING
+            return Resolution(heuristic(name, file, path, symbols, imports, context), exact = false)
+        }
+
+        private fun heuristic(name: InkoName, file: PsiFile, path: java.nio.file.Path, symbols: InkoSymbols, imports: InkoImports, context: InkoNameContext): List<Pair<InkoDefinition?, PsiElement>> {
             val resolver = InkoResolver(symbols, symbols.moduleOf(path) ?: Inko.moduleName(path), imports, file, name.textRange.startOffset)
             return resolver.definitions(context).distinct().mapNotNull { definition ->
                 toPsi(file, definition)?.let { definition to it }
             }
-        }
-
-        /**
-         * The definition Cuttlebone's `textDocument/definition` [answer] gives, as Parakeet's own definition
-         * there. Null when it's empty, or points somewhere Parakeet doesn't know a definition.
-         */
-        private fun compiled(name: InkoName, answer: CuttleboneQueries.Answer<List<Location>>, symbols: InkoSymbols): Pair<InkoDefinition, PsiElement>? {
-            val location = answer.value?.firstOrNull() ?: return null
-            val target = CuttleboneQueries.getInstance(name.project).target(location) ?: return null
-            return definitionAt(target, symbols)?.let { it to target }
         }
 
         /** The kinds of names whose targets the heuristic guesses at, which Cuttlebone is asked about. */

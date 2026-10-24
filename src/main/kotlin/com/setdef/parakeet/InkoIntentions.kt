@@ -115,7 +115,7 @@ object InkoArgumentNames {
         if (generateSequence(call.callee.previousToken()) { it.previousToken() }.takeWhile { it.isToken(InkoTokens.KEYWORD) }.any { it.text == "fn" }) return null
         val path = Inko.pathOf(file.virtualFile) ?: return null
         val symbols = InkoDocIndex.getInstance(file.project).symbols(Inko.projectRoot(path))
-        val parameters = InkoResolver.resolveDefinitions(call.callee).map { InkoCalls.parameters(it.first, symbols) }.distinct().singleOrNull()
+        val parameters = InkoResolver.resolveDefinitions(call.callee, exact = true).map { InkoCalls.parameters(it.first, symbols) }.distinct().singleOrNull()
             ?.map { it.substringBefore(':').trim().split(' ').last() } ?: return null
         val open = tokens.indexOfFirst { it.start == call.openParen }.takeIf { it >= 0 } ?: return null
         val close = stream.match(open).takeIf { it > open } ?: return null
@@ -146,22 +146,56 @@ object InkoArgumentNames {
 object InkoLetTypes {
     private class Let(val name: InkoToken, val annotation: TextRange?, val value: TextRange)
 
-    /** `let x = value` → `let x: Type = value`, when the value's type is known. */
+    /** `let x = value` → `let x: Type = value`, with the compiler's (fresh) type for `x`, from Cuttlebone. */
     fun add(file: PsiFile, offset: Int): InkoRewrite? {
         val let = letAt(file.text, offset) ?: return null
         if (let.annotation != null) return null
-        val type = InkoExpressionTypes.of(file, let.value) ?: return null
+        val type = InkoCompilerTypes.ofBinding(file as? InkoFile ?: return null, let.name.start) ?: return null
         return InkoRewrite("Specify type explicitly", listOf(InkoEdit(TextRange(let.name.end, let.name.end), ": $type")))
     }
 
-    /** `let x: Type = value` → `let x = value`, only when the value's type is known to be the same. */
+    /**
+     * `let x: Type = value` → `let x = value`, only where the value says its type itself (so the annotation
+     * can't be what decides it) and the compiler's (fresh) type for the value is the one written.
+     */
     fun remove(file: PsiFile, offset: Int): InkoRewrite? {
         val let = letAt(file.text, offset) ?: return null
         val annotation = let.annotation ?: return null
         val written = annotation.substring(file.text).substringAfter(':').trim()
-        val inferred = InkoExpressionTypes.of(file, let.value) ?: return null
+        val owner = evidentOwner(file.text, let.value) ?: return null
+        val inferred = InkoCompilerTypes.of(file as? InkoFile ?: return null, let.value, stale = false)?.type ?: return null
         if (written.replace(" ", "") != inferred.replace(" ", "")) return null
+        if (owner.isNotEmpty() && inferred.replace(Regex("^((ref|mut|uni)\\s+)+"), "").substringBefore('[') != owner) return null
         return InkoRewrite("Remove explicit type", listOf(InkoEdit(annotation, "")))
+    }
+
+    /**
+     * Whether [value] says its type itself, as Cuttlebone's type hints count it: a literal, a cast, a type's
+     * constructor `Point(…)`, or a static method `Type.name(…)` (which must return that type). Gives the type
+     * it names (empty for a literal or a cast), or null when the type comes from elsewhere.
+     */
+    private fun evidentOwner(text: CharSequence, value: TextRange): String? {
+        val stream = InkoTokenStream(text)
+        val all = stream.tokens
+        val first = all.indexOfFirst { it.start >= value.startOffset }.takeIf { it >= 0 } ?: return null
+        val last = all.indexOfLast { it.end <= value.endOffset }.takeIf { it >= first } ?: return null
+        val head = all[first]
+        if (first == last && (head.type == InkoTokens.STRING || head.type == InkoTokens.NUMBER || head.isKeyword("true", "false", "nil"))) return ""
+        if (head.type == InkoTokens.STRING_START && stream.match(first) == last) return ""
+        var depth = 0
+        for (i in first..last) {
+            if (all[i].opens) depth++ else if (all[i].closes) depth--
+            if (depth == 0 && i > first && all[i].isKeyword("as")) return ""
+        }
+        if (head.type != InkoTokens.CONSTANT) return null
+        var end = first + 1
+        if (all.getOrNull(end)?.type == InkoTokens.DOT) {
+            if (all.getOrNull(end + 1)?.type != InkoTokens.IDENTIFIER) return null
+            end += 2
+        }
+        if (end == last + 1) return head.text.takeIf { end > first + 1 }
+        if (all.getOrNull(end)?.type == InkoTokens.LPAREN && stream.match(end) == last) return head.text
+        return null
     }
 
     /** The `let` whose `let … =` part holds [offset]. */

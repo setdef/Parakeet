@@ -5,12 +5,10 @@ package com.setdef.parakeet
 class InkoIntentionsTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
-        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
-        cuttleboneCantCheckTheCode()
         // Intentions are only offered in project content; on-disk test files aren't in the light project's content root.
         putTempDirInProjectContent()
         myFixture.addFileToProject("inko.pkg", "")
-        myFixture.addFileToProject("src/app/util.inko", "fn pub resize(width: Int, height: Int) -> Int {\n  width * height\n}\n")
+        myFixture.addFileToProject("src/app/util.inko", util)
         useFakeInko(FakeInkoDoc.cli { mirror ->
             val util = mirror.resolve("src/app/util.inko")
             listOf(
@@ -22,9 +20,19 @@ class InkoIntentionsTest : InkoTestCase(onDisk = true) {
         })
     }
 
-    /** Applies the intention titled [title] at `<caret>` and returns the text; null if it isn't offered. */
-    private fun apply(text: String, title: String): String? {
-        val file = myFixture.addFileToProject("src/main.inko", text.replace("<caret>", ""))
+    private val util = "fn pub resize(width: Int, height: Int) -> Int {\n  width * height\n}\n"
+
+    /**
+     * Applies the intention titled [title] at `<caret>` and returns the text; null if it isn't offered.
+     * Cuttlebone's answers: each call to `resize` resolves to it, and the compiler's [types] are at their markers.
+     */
+    private fun apply(text: String, title: String, types: Map<String, String> = emptyMap()): String? {
+        val code = text.replace("<caret>", "")
+        val compiler = Compiler()
+        Regex("""resize\(""").findAll(code).forEach { compiler.resolves(At("src/main.inko", code, "resize(", it.range.first - code.indexOf("resize(")), At("src/app/util.inko", util, "resize")) }
+        types.forEach { (marker, type) -> compiler.hover(At("src/main.inko", code, marker), type) }
+        compiler.install()
+        val file = myFixture.addFileToProject("src/main.inko", code)
         myFixture.configureFromExistingVirtualFile(file.virtualFile)
         myFixture.editor.caretModel.moveToOffset(text.indexOf("<caret>"))
         val intention = myFixture.availableIntentions.firstOrNull { it.text == title } ?: return null
@@ -110,14 +118,24 @@ class InkoIntentionsTest : InkoTestCase(onDisk = true) {
 
     // let types.
 
-    fun testSpecifiesAKnownType() = assertEquals(body("  let count: Int = 0"), apply(body("  let <caret>count = 0"), "Specify type explicitly"))
+    // The compiler's type for the variable.
+    fun testSpecifiesAKnownType() = assertEquals(body("  let count: Int = 0"), apply(body("  let <caret>count = 0"), "Specify type explicitly", mapOf("count" to "Int")))
 
     fun testSpecifiesACallsReturnType() =
-        assertEquals(body("  let area: Int = resize(1, 2)"), apply(body("  let <caret>area = resize(1, 2)"), "Specify type explicitly"))
+        assertEquals(body("  let area: Int = resize(1, 2)"), apply(body("  let <caret>area = resize(1, 2)"), "Specify type explicitly", mapOf("area" to "Int")))
+
+    fun testNoTypeTheCompilerCouldntInferFully() =
+        assertNull(apply(body("  let <caret>items = []"), "Specify type explicitly", mapOf("items" to "Array[?]")))
 
     fun testNoTypeWhenUnknown() = assertNull(apply(body("  let <caret>x = a.unknown"), "Specify type explicitly"))
 
-    fun testRemovesAMatchingType() = assertEquals(body("  let count = 0"), apply(body("  let <caret>count: Int = 0"), "Remove explicit type"))
+    // The value says its type itself, and the compiler's type for it is the one written.
+    fun testRemovesAMatchingType() = assertEquals(body("  let count = 0"), apply(body("  let <caret>count: Int = 0"), "Remove explicit type", mapOf("0" to "Int")))
 
-    fun testKeepsATypeTheValueDoesNotShow() = assertNull(apply(body("  let <caret>items: Array[Int] = []"), "Remove explicit type"))
+    fun testKeepsATypeTheCompilerDisagreesWith() =
+        assertNull(apply(body("  let <caret>count: Float = 0"), "Remove explicit type", mapOf("0" to "Int")))
+
+    // The annotation may be what decides the value's type: the compiler's type for `[]` is `Array[Int]` because of it.
+    fun testKeepsATypeTheValueDoesNotShow() =
+        assertNull(apply(body("  let <caret>items: Array[Int] = []"), "Remove explicit type", mapOf("[]" to "Array[Int]")))
 }

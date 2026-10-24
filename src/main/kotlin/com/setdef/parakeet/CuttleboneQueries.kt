@@ -89,13 +89,25 @@ class CuttleboneQueries(private val project: Project) {
     val sent = AtomicLong()
 
     /**
-     * Fresh answers only: resolve is built on it, and Rename, the refactorings, quick fixes and
-     * imports change code from what resolve says.
+     * Fresh answers only, unless [stale]: resolve is built on it, and Rename, the refactorings, quick fixes
+     * and imports change code from what it says, so only navigation and what only shows takes a stale one.
+     * The highlighting passes wait for it (inspections and intentions resolve): after a file's first check,
+     * Cuttlebone answers it from the check it kept.
      */
-    fun definition(file: PsiFile, offset: Int, budgetMs: Long = RESOLVE_BUDGET_MS): Answer<List<Location>>? =
-        query(file, offset, "textDocument/definition", budgetMs, ::locations) { server, document, position ->
+    fun definition(file: PsiFile, offset: Int, budgetMs: Long = RESOLVE_BUDGET_MS, stale: Boolean = false): Answer<List<Location>>? =
+        query(file, offset, "textDocument/definition", budgetMs, ::locations, waitInHighlighting = true, stale = stale) { server, document, position ->
             server.textDocumentService.definition(DefinitionParams(document, position))
         }
+
+    /**
+     * Asks for the definition at [offset] without waiting, so that what resolves the name at the caret on the
+     * EDT (where nothing waits: Change Signature or Inline from a call, an intention's action) has it already.
+     */
+    fun prefetchDefinition(file: PsiFile, offset: Int) {
+        start(file, offset, "textDocument/definition", ::locations) { server, document, position ->
+            server.textDocumentService.definition(DefinitionParams(document, position))
+        }
+    }
 
     fun typeDefinition(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<List<Location>>? =
         query(file, offset, "textDocument/typeDefinition", budgetMs, ::locations) { server, document, position ->
@@ -292,8 +304,11 @@ class CuttleboneQueries(private val project: Project) {
     /** Where [location] points, as Parakeet's own element: the declaration's name, or a module's file. */
     fun target(location: Location): PsiElement? {
         // Not the server's descriptor: 2026.1 changed LspServer.getDescriptor's type, so no call to it works in both.
-        val path = runCatching { java.nio.file.Path.of(java.net.URI(location.uri)) }.getOrNull() ?: return null
-        val file = com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByNioFile(path) ?: return null
+        // Cuttlebone sends file: URIs; a stub in tests may name an in-memory file by its URL.
+        val path = runCatching { java.nio.file.Path.of(java.net.URI(location.uri)) }.getOrNull()
+        val file = path?.let { com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByNioFile(it) }
+            ?: (if (stub != null) com.intellij.openapi.vfs.VirtualFileManager.getInstance().findFileByUrl(location.uri) else null)
+            ?: return null
         val psiFile = PsiManager.getInstance(project).findFile(file) as? InkoFile ?: return null
         val range = location.range
         // A module's location is empty, at the start of its file.

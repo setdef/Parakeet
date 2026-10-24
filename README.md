@@ -160,9 +160,11 @@ compiler, so it always agrees with your installed Inko version.
   project opens. Each question has a time budget (0.4 s for resolving a name and for
   usage highlighting, 1.5 s for completion, parameter info, documentation and
   Expression Type, 2 s for a file's inlay hints, asked in one request), and
-  answers are kept until the code changes. Highlighting never waits for it,
-  except the inlay hints and usage highlighting passes, which only show
-  Cuttlebone's answers. In code being edited, Cuttlebone answers from a copy
+  answers are kept until the code changes. Highlighting only waits for
+  resolving names (inspections and intentions resolve them), the inlay hints
+  and usage highlighting: Cuttlebone answers questions about unchanged text
+  from the check it kept, in under a millisecond after a file's first check.
+  In code being edited, Cuttlebone answers from a copy
   with the broken lines blank, or else from the last version that type
   checked ("stale", shown only where nothing changes code; see
   [Answers in code being edited](#answers-in-code-being-edited)).
@@ -232,13 +234,13 @@ compiler, so it always agrees with your installed Inko version.
   names are only removed when each named argument is in its parameter's
   position, since Inko accepts named arguments in any order.
 - **Expression Type** uses Cuttlebone's type when hover's range is exactly
-  the chosen expression. In code Cuttlebone can't check, it, and
-  **"Specify type explicitly"** (which writes the type into the code, so never
-  uses Cuttlebone's) everywhere, only use types
-  the code states: literals, annotations, constructors, `self`, fields, comparisons,
-  casts, and signatures' return types. A method's type is only trusted when its
-  receiver's type is known, and return types using type parameters aren't
-  filled in.
+  the chosen expression. **"Specify type explicitly"** writes the compiler's
+  type for the variable, and **"Remove explicit type"** is offered only when
+  the value says its type itself (a literal, a cast, `Point(…)`, or
+  `Type.method` returning that type, as Cuttlebone's type hints count it), so
+  the annotation can't be what decides it, and the compiler's type for the
+  value is the one written. Both use fresh answers only, since they write
+  code, and types the compiler couldn't infer fully (with a `?`) never.
 - **Move** rewrites imports from the usages Find Usages finds, and adds the
   imports the moved code needs the same way **imports on paste** does: copying
   records the imported and module-level names the copied code uses, and
@@ -311,14 +313,15 @@ Without Cuttlebone, every feature below is unavailable. With it:
 
 | Feature | Cuttlebone's answer | Where Cuttlebone can't check the code being edited |
 |---|---|---|
-| Go to definition, and what's built on resolving a name (quick documentation, inspections, refactorings, …) | `textDocument/definition`: the declaration the compiler resolves | Parakeet's reading of the code |
+| Go to definition, and what's built on resolving a name (quick documentation, hierarchies, inspections, intentions, refactorings, …) | `textDocument/definition`: the declaration the compiler resolves | for navigation, documentation and hierarchies, a stale answer, else Parakeet's reading of the code; for what changes code (refactorings, intentions, quick fixes, imports), nothing |
 | Find Usages, Rename, Call Hierarchy, usage counts | definitions already asked for (above), never asked per occurrence | Parakeet's reading, with possible usages |
 | Completion after `.` | `textDocument/completion` on the real buffer | Parakeet's reading |
 | Parameter info | `textDocument/signatureHelp`: the resolved method's signature, with the receiver's type arguments, and the argument's parameter (named ones too). For a type's constructor (`Point(x: 1)`), which it has none for, the type's fields | Parakeet's reading |
-| Parameter-name and type hints | `textDocument/inlayHint`, once for the whole file | parameter names: Parakeet's reading; types: none |
+| Parameter-name and type hints | `textDocument/inlayHint`, once for the whole file | none: hints only inform |
 | Highlight usages | `textDocument/documentHighlight`: the same symbol by the compiler's ids, with assignments as writes | Parakeet's reading |
-| Quick documentation | the resolved definition, plus hover's type at the caret | the definition Parakeet's reading resolves |
-| Expression Type | hover's type, when its range is the expression | the types the code states |
+| Quick documentation | the resolved definition, plus hover's type at the caret | the definition resolved as for navigation (above) |
+| Expression Type | hover's type, when its range is the expression | none, and it says why |
+| "Specify type explicitly" and "Remove explicit type" | hover's fresh type, of the variable or of a value that says its type itself | not offered |
 | Go to Type Declaration | `textDocument/typeDefinition`, through IntelliJ's LSP support | nothing |
 
 Where Cuttlebone answers that there's nothing there (a name that doesn't
@@ -355,7 +358,8 @@ each answer's status:
 | Expression Type | used | "(possibly outdated)" after the type |
 | Highlight usages | used | as a fresh answer: there's nowhere to mark it |
 | Go to Type Declaration | used (IntelliJ's own) | as a fresh answer |
-| Go to definition, and everything built on resolving a name | not used: Rename, the refactorings, quick fixes and imports change code from it | as no answer: Parakeet's reading |
+| Go to definition, documentation, Call and Type Hierarchy | used | as a fresh answer, but not one Rename at the caret takes |
+| Rename, the refactorings, intentions, quick fixes and imports | not used: they change code from it | as no answer: nothing |
 | Completion | not used: choosing an item inserts it (Cuttlebone never sends one) | as no answer: Parakeet's reading |
 
 Where Cuttlebone has no answer in code being edited (the method being edited

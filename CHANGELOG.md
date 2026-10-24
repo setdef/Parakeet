@@ -11,6 +11,8 @@
 
 ### Changed
 
+- Where Cuttlebone can't check the code being edited, parameter-name hints, Expression Type, and "Specify type explicitly" and "Remove explicit type" show nothing instead of Parakeet's guess (the last two now always use the compiler's type), and go to definition, documentation and the hierarchies use Cuttlebone's stale answer before Parakeet's own reading. What changes code (refactorings, intentions, quick fixes, imports) only uses the compiler's fresh answers.
+
 - Requires IntelliJ 2025.3 or newer (the first with the LSP API in every IDE), and is now verified against it.
 - Parameter-name hints ask Cuttlebone once per file instead of once per call.
 - Find Usages, Rename, Call Hierarchy and usage counts don't ask Cuttlebone about each occurrence, which made Find Usages of a common name take a minute in a large project; they use answers it has already given.

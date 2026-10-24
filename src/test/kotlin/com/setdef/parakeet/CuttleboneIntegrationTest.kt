@@ -167,13 +167,13 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf(text.indexOf("x = make") + 1 to ": B", text.indexOf("y = [") + 1 to ": Array[Int]"), inBackground { InkoParameterHints.types(myFixture.file) })
     }
 
-    fun testOpenedWithADeclarationErrorHintsFallBackToParakeet() {
+    fun testOpenedWithADeclarationErrorThereAreNoHints() {
         // No check has typed a method body yet, and the error isn't in a change Cuttlebone saw, so it has no answer.
-        // Parakeet's hints still name what it can resolve.
+        // Hints only inform, so none are guessed.
         val text = main + twiceAndUses + "\nfn broken -> Missing {\n  1\n}\n"
         open(text)
         assertTrue("code being edited", inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }!!.editing)
-        assertEquals(listOf(default to "default", text.indexOf("21") to "value"), inBackground { InkoParameterHints.inFile(myFixture.file) })
+        assertEquals(emptyList<Any>(), inBackground { InkoParameterHints.inFile(myFixture.file) })
         assertEquals("only Cuttlebone knows types", emptyList<Any>(), inBackground { InkoParameterHints.types(myFixture.file) })
     }
 
@@ -241,14 +241,15 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(CuttleboneQueries.OUTDATED, inBackground { InkoParameterHints.tooltip(myFixture.file) })
     }
 
-    fun testAfterAnEditNoCheckCanAnswerResolveDoesntUseAStaleDefinition() {
+    fun testAfterAnEditNoCheckCanAnswerOnlyNavigationUsesAStaleDefinition() {
         val text = openThenBreakTheImports()
-        // Cuttlebone has a stale definition here, but Rename and the refactorings resolve with it.
-        // Only a stale one: the code can't be checked as it is, so Parakeet reads it.
+        // Cuttlebone has a stale definition here: navigation takes it, Rename and the refactorings don't.
+        assertEquals(listOf("util.inko:8:size"), targets(text, "size(2.0)"))
+        assertEquals(emptyList<Any>(), inBackground { InkoResolver.resolveExactly(nameAt(text, "size(2.0)")) })
+        // To what takes only fresh answers, the code can't be checked as it is: it's being edited.
         val answer = inBackground { CuttleboneQueries.getInstance(project).definition(myFixture.file, text.indexOf("size(2.0)")) }!!
         assertNull(answer.value)
         assertTrue(answer.editing)
-        assertEquals(listOf("util.inko:2:size", "util.inko:8:size"), targets(text, "size(2.0)").sorted())
     }
 
     fun testAfterAnEditNoCheckCanAnswerDocumentationMarksTheTypeOutdated() {

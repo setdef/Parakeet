@@ -120,6 +120,9 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
 
     // `h` is a Helper, but `x.value` could be Helper's or Other's (both are imported).
     fun testCallsOnUnknownTypesArePossibleUsages() {
+        // `h` is a Helper, so the compiler knows `h.value`; `Int` has no `value`, so it can't type `x.value`.
+        Compiler().otherwiseEditing().resolves(At("src/main.inko", main, "value\n  x"), At("src/app/util.inko", util, "value ->"))
+            .editing(At("src/main.inko", main, "value\n  total")).install()
         val usages = myFixture.findUsages(declaration("src/app/util.inko", "value ->"))
         val types = usages.associate { it.describe() to InkoUsageTypeProvider().getUsageType(it.element!!) }
         assertEquals(mapOf("main.inko:6" to null, "main.inko:7" to InkoUsageTypeProvider.POSSIBLE), types)

@@ -182,6 +182,8 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
 
     // A call on a value of unknown type might be Parrot's greet, so the preview shows it to be excluded or kept.
     fun testCallsOnValuesOfUnknownTypeAreUncertain() {
+        // `make` is undefined, so the compiler can't type `make.greet`: Cuttlebone has no answer there.
+        Compiler().resolves(At("src/main.inko", main, "greet('a'"), At("src/app/util.inko", util, "greet(greeting")).editing(At("src/main.inko", main, "greet('c'")).install()
         val file = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/main.inko"))!!
         fun nameAt(marker: String) = file.findElementAt(main.indexOf(marker))!!
         assertFalse(InkoChangeSignature.isUncertain(nameAt("greet('a'")))
@@ -189,6 +191,7 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
     }
 
     fun testFindsTheMethodFromItsNameOrACall() {
+        Compiler().resolves(At("src/main.inko", main, "add(3"), At("src/app/util.inko", util, "add(a: Int")).install()
         val file = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/main.inko"))!!
         val handler = InkoChangeSignatureHandler()
         assertEquals(method("add"), handler.findTargetMember(file.findElementAt(main.indexOf("add(3"))!!))

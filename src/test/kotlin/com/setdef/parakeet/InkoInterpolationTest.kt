@@ -75,10 +75,6 @@ class InkoInterpolationTest : InkoTestCase() {
         val stream = InkoTokenStream(text)
         val candidates = InkoIntroduceVariable.candidatesAt(stream, text.indexOf("items"))
         assertEquals(listOf("'\${x} items'", "'\${x} items'.size"), candidates.map { it.substring(text) })
-        assertEquals("String", run {
-            myFixture.configureByText("main.inko", text)
-            InkoExpressionTypes.of(myFixture.file, candidates.first())
-        })
     }
 
     fun testExtendSelectionGrowsFromTheCodeToTheString() {

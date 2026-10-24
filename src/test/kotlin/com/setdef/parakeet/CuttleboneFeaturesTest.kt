@@ -109,9 +109,9 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         assertEquals("nothing asked per call", 0, received("textDocument/definition").size)
     }
 
-    fun testWithoutAnAnswerParameterHintsAreParakeetsAndNothingIsAskedPerCall() {
-        start(inlayHints(status = "unavailable"), definitionOfSize())
-        assertEquals("two parameter lists fit: no hint", emptyList<Any>(), inBackground { InkoParameterHints.inFile(myFixture.file) })
+    fun testInCodeBeingEditedThereAreNoHintsAndNothingIsAskedPerCall() {
+        start(inlayHints(status = "unavailable").copy(reason = "noHir"), definitionOfSize())
+        assertEquals("no guessed names", emptyList<Any>(), inBackground { InkoParameterHints.inFile(myFixture.file) })
         assertEquals("only Cuttlebone knows types", emptyList<Any>(), inBackground { InkoParameterHints.types(myFixture.file) })
         assertEquals(0, received("textDocument/definition").size)
     }
@@ -335,10 +335,13 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         assertEquals(emptyList<Any>(), inBackground { InkoParameterHints.types(myFixture.file) })
     }
 
-    fun testAStaleDefinitionIsNotUsedSinceRenameAndRefactoringsResolveWithIt() {
+    fun testAStaleDefinitionIsOnlyUsedWhereNothingChangesCode() {
         start(definitionOfSize().copy(status = "stale"))
-        // Only a stale answer means the code can't be checked as it is: it's being edited, so Parakeet reads it.
-        assertEquals(listOf("util.inko:2:size", "util.inko:8:size"), targets("size(2.0)").sorted())
+        // Navigation takes it, as an answer that isn't exact: Rename at the caret and the refactorings don't.
+        assertEquals(listOf("util.inko:8:size"), targets("size(2.0)"))
+        assertFalse(inBackground { (nameAt("size(2.0)").reference as InkoReference).multiResolve(false).single().isValidResult })
+        assertEquals(emptyList<Any>(), inBackground { InkoResolver.resolveExactly(nameAt("size(2.0)")) })
+        // To what takes only fresh answers, the code can't be checked as it is: it's being edited.
         val answer = inBackground { CuttleboneQueries.getInstance(project).definition(myFixture.file, main.indexOf("size(2.0)")) }!!
         assertNull(answer.value)
         assertTrue(answer.editing)

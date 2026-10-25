@@ -156,11 +156,11 @@ sealed class CuttleboneLookup {
 }
 
 /**
- * Where Cuttlebone's releases are listed: the latest release's manifest, and the releases before it.
- * Cuttlebone has no index of every release's Inko versions yet, so older releases are found through
- * GitHub's releases API: only those with an archive for the Inko version are fetched.
+ * Where Cuttlebone's releases are listed: the latest release's manifest, its index of every release's Inko
+ * versions (from Cuttlebone 0.11.0), and GitHub's releases API, for releases before there was an index: of
+ * those, only the ones with an archive for the Inko version have their manifest fetched.
  */
-open class CuttleboneReleases(private val latestManifest: String, private val releasesApi: String) {
+open class CuttleboneReleases(private val latestManifest: String, private val latestIndex: String, private val releasesApi: String) {
     /** The newest build for [inko] on [platform]: the latest release's, else the newest older release's that has one. */
     open fun find(inko: String, platform: CuttlebonePlatform, indicator: ProgressIndicator?): CuttleboneLookup {
         val latest = try {
@@ -173,7 +173,7 @@ open class CuttleboneReleases(private val latestManifest: String, private val re
         val latestVersion = latest.firstOrNull()?.cuttlebone
         pick(latest, inko, platform)?.let { return it }
         val older = try {
-            olderManifests(inko, latestVersion, indicator)
+            indexedManifests(inko, latestVersion, indicator) ?: olderManifests(inko, latestVersion, indicator)
         } catch (e: ProcessCanceledException) {
             throw e
         } catch (e: IOException) {
@@ -191,6 +191,34 @@ open class CuttleboneReleases(private val latestManifest: String, private val re
             pick(builds, inko, platform)?.let { return it }
         }
         return CuttleboneLookup.NoBuild(inko, platform, latestVersion)
+    }
+
+    /**
+     * The manifests of releases other than [latest] that the release index says have builds for [inko], newest
+     * first; null when there's no index (before Cuttlebone 0.11.0), or it's in a schema this Parakeet doesn't read.
+     */
+    private fun indexedManifests(inko: String, latest: String?, indicator: ProgressIndicator?): List<String>? {
+        val index = try {
+            JsonParser.parseString(fetch(latestIndex, indicator)).asJsonObject
+        } catch (e: ProcessCanceledException) {
+            throw e
+        } catch (e: Exception) {
+            LOG.info("no release index: ${if (e is IOException) describe(latestIndex, e) else e.toString()}")
+            return null
+        }
+        val schema = index.get("schema")?.takeIf { it.isJsonPrimitive }?.asInt
+        if (schema != 1) {
+            LOG.info("the release index's schema is $schema, which this Parakeet doesn't read")
+            return null
+        }
+        val releases = index.get("releases")?.takeIf { it.isJsonArray }?.asJsonArray ?: return null
+        return releases.mapNotNull { element ->
+            val release = element.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
+            val version = release.get("cuttlebone")?.takeIf { it.isJsonPrimitive }?.asString ?: return@mapNotNull null
+            val inkos = release.get("inko")?.takeIf { it.isJsonArray }?.asJsonArray?.mapNotNull { it.takeIf { it.isJsonPrimitive }?.asString }.orEmpty()
+            if (version == latest || inko !in inkos) return@mapNotNull null
+            release.get("manifest")?.takeIf { it.isJsonPrimitive }?.asString?.let { version to it }
+        }.sortedWith(compareBy(VERSIONS) { it.first }).map { it.second }
     }
 
     private fun pick(builds: List<CuttleboneBuild>, inko: String, platform: CuttlebonePlatform): CuttleboneLookup? {
@@ -234,6 +262,7 @@ open class CuttleboneReleases(private val latestManifest: String, private val re
 
         val GITHUB = CuttleboneReleases(
             "https://github.com/setdef/Cuttlebone/releases/latest/download/manifest.json",
+            "https://github.com/setdef/Cuttlebone/releases/latest/download/index.json",
             "https://api.github.com/repos/setdef/Cuttlebone/releases?per_page=100",
         )
 

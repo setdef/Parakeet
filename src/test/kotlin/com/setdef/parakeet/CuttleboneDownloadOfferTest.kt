@@ -63,6 +63,15 @@ class CuttleboneDownloadOfferTest : CuttleboneTestCase() {
 
     private val service get() = CuttleboneService.getInstance(project)
 
+    /**
+     * Waits until the running server was sent the open file: stopping it before that (to restart it) makes
+     * IntelliJ log an error, which fails the test, about the document it was about to send.
+     */
+    private fun opened() = waitFor("the open file to be sent") {
+        val server = service.server()
+        server != null && service.sentVersions[server.getDocumentIdentifier(myFixture.file.virtualFile).uri] != null
+    }
+
     fun testOffersTheBuildForThisInkoAndDownloadsItOnlyWhenClicked() {
         server.publish("0.10.0", listOf("0.20.0", "0.21.1"), fake("0.10.0", "0.21.1"))
         open("src/main.inko", text)
@@ -121,6 +130,7 @@ class CuttleboneDownloadOfferTest : CuttleboneTestCase() {
         open("src/main.inko", text)
         waitFor("the download in use") { service.status is Cuttlebone.Status.Running }
         assertEquals(Cuttlebone.Source.DOWNLOADED, service.located?.source)
+        opened()
 
         // ivm switched to 0.20.0: there's no download for it, so it's offered, from the older release that has one.
         inko = "0.20.0"
@@ -131,6 +141,7 @@ class CuttleboneDownloadOfferTest : CuttleboneTestCase() {
         waitFor("the 0.20.0 build in use") { service.versionOutput == "cuttlebone 0.9.5 (Inko 0.20.0)" && service.status is Cuttlebone.Status.Running }
 
         // And back: its download is there, so it's used without asking.
+        opened()
         expireAll()
         inko = "0.21.1"
         service.inkoMayHaveChanged()
@@ -185,9 +196,11 @@ class CuttleboneDownloadOfferTest : CuttleboneTestCase() {
 
         // Said once: not again after a restart, nor in the next session.
         update.expire()
+        opened()
         useCuttlebone("")
         open("src/other.inko", text)
         waitFor("a restart") { service.status is Cuttlebone.Status.Running }
+        opened()
         CuttleboneDownloads.forgetUpdatesThisSession()
         useCuttlebone("")
         open("src/third.inko", text)
@@ -203,6 +216,7 @@ class CuttleboneDownloadOfferTest : CuttleboneTestCase() {
         server.publish("0.11.0", listOf("0.21.1"), fake("0.11.0", "0.21.1"))
         open("src/main.inko", text)
         waitFor("the update notification") { notifications("Cuttlebone 0.11.0 is available").isNotEmpty() }
+        opened()
         click(notifications("Cuttlebone 0.11.0 is available").single(), "Download Cuttlebone 0.11.0")
         waitFor("the update in use") { service.versionOutput == "cuttlebone 0.11.0 (Inko 0.21.1)" && service.status is Cuttlebone.Status.Running }
         assertEquals(cuttleboneLocations.downloads.resolve("cuttlebone-0.11.0-inko-0.21.1/cuttlebone"), service.located!!.path)

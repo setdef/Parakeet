@@ -338,8 +338,9 @@ IntelliJ's own LSP support, and stops it when the project closes.
 Cuttlebone has builds for macOS 15 or newer and Linux, on ARM64 and
 x86-64. Each build works with one Inko version, the compiler it links. When
 the newest release has none for your Inko, Parakeet looks for an older
-release that has one, and if none does, says so instead of offering a build
-that wouldn't run.
+release that has one (in Cuttlebone's release index, or, for releases from
+before it had one, through GitHub's releases API), and if none does, says
+so instead of offering a build that wouldn't run.
 
 - **Downloads** come from [Cuttlebone's GitHub
   releases](https://github.com/setdef/Cuttlebone/releases), through the

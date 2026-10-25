@@ -122,6 +122,53 @@ class CuttleboneDownloadTest : InkoTestCase() {
         assertFalse("only the manifests of releases with an archive for it are fetched", "/releases/download/v0.9.0/manifest.json" in server.requests)
     }
 
+    fun testWithoutAnIndexTheReleasesApiIsAsked() {
+        server.publish("0.9.5", listOf("0.20.0"), binary("0.9.5", "0.20.0"))
+        server.publish("0.10.0", listOf("0.21.1"), binary("0.10.0", "0.21.1"))
+        assertEquals("0.9.5", (find("0.20.0") as CuttleboneLookup.Found).build.cuttlebone)
+        assertEquals(
+            listOf("/releases/latest/download/manifest.json", "/releases/latest/download/index.json", "/api/releases", "/releases/download/v0.9.5/manifest.json"),
+            server.requests,
+        )
+    }
+
+    fun testTheReleaseIndexFindsAnOlderReleaseForAnOlderInko() {
+        server.publish("0.9.0", listOf("0.20.0"), binary("0.9.0", "0.20.0"))
+        server.publish("0.9.5", listOf("0.20.0"), binary("0.9.5", "0.20.0"))
+        server.publish("0.10.0", listOf("0.21.1"), binary("0.10.0", "0.21.1"))
+        server.serveIndex()
+        assertEquals("0.9.5", (find("0.20.0") as CuttleboneLookup.Found).build.cuttlebone)
+        assertEquals(
+            "the index, then the one manifest it names: not GitHub's API",
+            listOf("/releases/latest/download/manifest.json", "/releases/latest/download/index.json", "/releases/download/v0.9.5/manifest.json"),
+            server.requests,
+        )
+    }
+
+    fun testTheReleaseIndexSaysWhenNoReleaseHasThisInko() {
+        server.publish("0.10.0", listOf("0.21.1"), binary("0.10.0", "0.21.1"))
+        server.serveIndex()
+        assertTrue(find("0.19.0") is CuttleboneLookup.NoBuild)
+        assertFalse("/api/releases" in server.requests)
+    }
+
+    fun testAReleaseInTheIndexWithoutThisPlatformLeadsToTheNext() {
+        server.publish("0.9.0", listOf("0.20.0"), binary("0.9.0", "0.20.0"), listOf(mac))
+        server.publish("0.9.5", listOf("0.20.0"), binary("0.9.5", "0.20.0"), listOf(CuttleboneReleaseServer.LINUX_AMD))
+        server.publish("0.10.0", listOf("0.21.1"), binary("0.10.0", "0.21.1"))
+        server.serveIndex()
+        assertEquals("0.9.0", (find("0.20.0") as CuttleboneLookup.Found).build.cuttlebone)
+        assertEquals("0.9.5", (find("0.20.0", CuttleboneReleaseServer.LINUX_AMD) as CuttleboneLookup.Found).build.cuttlebone)
+    }
+
+    fun testAnIndexOfAnotherSchemaFallsBackToTheReleasesApi() {
+        server.publish("0.9.5", listOf("0.20.0"), binary("0.9.5", "0.20.0"))
+        server.publish("0.10.0", listOf("0.21.1"), binary("0.10.0", "0.21.1"))
+        server.serveIndex(schema = 2)
+        assertEquals("0.9.5", (find("0.20.0") as CuttleboneLookup.Found).build.cuttlebone)
+        assertTrue("/api/releases" in server.requests)
+    }
+
     fun testNoReleaseHasABuildForThisInko() {
         server.publish("0.10.0", listOf("0.21.1"), binary("0.10.0", "0.21.1"))
         val lookup = find("0.19.0")

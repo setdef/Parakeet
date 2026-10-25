@@ -29,8 +29,19 @@ class CuttleboneReleaseServer : AutoCloseable {
 
     val base: String get() = "http://127.0.0.1:${server.address.port}"
     val latestManifest: String get() = "$base/releases/latest/download/manifest.json"
+    val latestIndex: String get() = "$base/releases/latest/download/index.json"
     val releasesApi: String get() = "$base/api/releases"
-    val releasesSource: CuttleboneReleases get() = CuttleboneReleases(latestManifest, releasesApi)
+    val releasesSource: CuttleboneReleases get() = CuttleboneReleases(latestManifest, latestIndex, releasesApi)
+
+    /** Whether the latest release has an index.json (from Cuttlebone 0.11.0), with [indexSchema]. */
+    @Volatile private var indexed = false
+    @Volatile private var indexSchema = 1
+
+    fun serveIndex(schema: Int = 1) {
+        indexed = true
+        indexSchema = schema
+        respondReleases()
+    }
 
     class Release(val version: String, val builds: List<Pair<CuttleboneBuild, ByteArray>>)
 
@@ -110,6 +121,18 @@ class CuttleboneReleaseServer : AutoCloseable {
             )
         }
         respond("/api/releases", Response(200, GSON.toJson(list).toByteArray(), "application/json"))
+        if (!indexed) return
+        val index = mapOf(
+            "schema" to indexSchema,
+            "releases" to releases.sortedWith { a, b -> if (a.version == b.version) 0 else if (Ivm.isAtLeast(a.version, b.version)) -1 else 1 }.map { release ->
+                mapOf(
+                    "cuttlebone" to release.version,
+                    "inko" to Ivm.newestFirst(release.builds.map { it.first.inko }.distinct()),
+                    "manifest" to "$base/releases/download/v${release.version}/manifest.json",
+                )
+            },
+        )
+        respond("/releases/latest/download/index.json", Response(200, GSON.toJson(index).toByteArray(), "application/json"))
     }
 
     override fun close() = server.stop(0)
@@ -174,7 +197,7 @@ class TestCuttleboneLocations(
 
     companion object {
         /** Releases that are never there: nothing in the tests reaches the network. */
-        val OFFLINE = object : CuttleboneReleases("http://offline.invalid/manifest.json", "http://offline.invalid/releases") {
+        val OFFLINE = object : CuttleboneReleases("http://offline.invalid/manifest.json", "http://offline.invalid/index.json", "http://offline.invalid/releases") {
             override fun fetch(url: String, indicator: ProgressIndicator?, accept: String): String =
                 throw IOException("tests never reach the network")
         }

@@ -21,6 +21,8 @@ import com.intellij.refactoring.RefactoringActionHandler
 import com.intellij.refactoring.changeSignature.ChangeSignatureHandler
 import com.intellij.refactoring.rename.RenameInputValidator
 import com.intellij.refactoring.rename.RenamePsiElementProcessor
+import com.intellij.refactoring.rename.UnresolvableCollisionUsageInfo
+import com.intellij.usageView.UsageInfo
 import com.intellij.usages.impl.rules.UsageType
 import com.intellij.usages.impl.rules.UsageTypeProvider
 import com.intellij.util.ProcessingContext
@@ -145,6 +147,37 @@ class InkoInstanceMethodRenameProcessor : RenamePsiElementProcessor() {
         for (name in InkoSearch.unchecked(method)) {
             val line = name.containingFile.viewProvider.document?.getLineNumber(name.textRange.startOffset)?.plus(1)
             conflicts.putValue(name, "Cuttlebone can't check the code at ${name.containingFile.name}${line?.let { ":$it" }.orEmpty()} (it doesn't type check), so `${name.text}` there isn't renamed.")
+        }
+    }
+
+    /**
+     * A compound assignment (`c.value += 1`) calls the getter `value` and the setter `value=`, and renaming one
+     * renames it, so unless the other is renamed too, it would call one that doesn't exist.
+     */
+    override fun findCollisions(element: PsiElement, newName: String, allRenames: MutableMap<out PsiElement, String>, result: MutableList<UsageInfo>) {
+        val accessor = element as? InkoDeclaration ?: return
+        fun PsiElement.isAnyOf(elements: Collection<PsiElement>) = elements.any { manager.areElementsEquivalent(this, it) }
+        for (usage in result.toList()) {
+            val name = usage.element as? InkoName ?: continue
+            val setters = InkoResolver.resolve(name)
+            val getters = InkoResolver.getters(name, setters)
+            val others = when {
+                getters.isEmpty() -> continue
+                accessor.isAnyOf(setters) -> getters
+                accessor.isAnyOf(getters) -> setters
+                else -> continue
+            }
+            if (others.any { it.isAnyOf(allRenames.keys) }) continue
+            val other = others.first().text
+            val renamed = newName.removePrefix("@").removeSuffix("=").let { if (other.endsWith("=")) "$it=" else it }
+            val (verb, would) = if (other.startsWith("@")) "reads" to "read" else "calls" to "call"
+            val document = name.containingFile.viewProvider.document ?: continue
+            val line = document.getLineNumber(name.textRange.startOffset)
+            val site = document.getText(com.intellij.openapi.util.TextRange(document.getLineStartOffset(line), document.getLineEndOffset(line))).trim()
+            result += object : UnresolvableCollisionUsageInfo(name, accessor) {
+                override fun getDescription(): String =
+                    "`$site` at ${name.containingFile.name}:${line + 1} also $verb `$other`, which isn't renamed, so it would $would `${if (other.startsWith("@")) "@" else ""}$renamed` instead."
+            }
         }
     }
 }

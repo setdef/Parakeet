@@ -45,6 +45,13 @@ object InkoTokens {
         "mut", "next", "nil", "noinline", "or", "pub", "recover", "ref", "return", "self", "static",
         "throw", "trait", "true", "try", "type", "uni", "while",
     )
+
+    /**
+     * Inko's compound assignments (ast/src/lexer.rs), which this lexer splits into a token per character: `x += 1`
+     * assigns `x = x + 1` (`binary_assign_variable`), and `c.value += 1` calls the setter `value=` with the getter
+     * `value`'s result plus 1 (`binary_assign_setter`). Inko's lexer takes the longest operator, so `>>=` is one.
+     */
+    val COMPOUND_ASSIGNMENTS = setOf("+=", "-=", "*=", "/=", "%=", "**=", "<<=", ">>=", ">>>=", "|=", "&=", "^=")
 }
 
 /**

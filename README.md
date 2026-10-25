@@ -197,7 +197,10 @@ compiler, so it always agrees with your installed Inko version.
   dependency), a use of it in the project is found first, by resolving
   candidates a file at a time. A trait's method counts the calls to the
   methods implementing it, since the compiler gives each its own id, and
-  renaming any of them renames them all. Where references have no answer (a
+  renaming any of them renames them all. A compound assignment to a member
+  (`c.value += 1`) calls the getter `value` and then the setter `value=`, so
+  it's a use of both, and renaming only one of them lists it as a conflict.
+  Where references have no answer (a
   file in the project doesn't parse or imports a module that doesn't exist,
   or code a declaration's error may affect mentions the name), each candidate is
   resolved through `textDocument/definition` instead, a file's requests sent

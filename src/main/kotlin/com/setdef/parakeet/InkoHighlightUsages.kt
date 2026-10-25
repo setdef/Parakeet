@@ -68,7 +68,8 @@ object InkoUsages {
         val candidates = PsiTreeUtil.findChildrenOfType(file, InkoName::class.java).filter { it.text in texts }
         val symbol = symbolOf(name)
         return candidates.mapNotNull { candidate ->
-            val other = if (candidate == name) symbol else symbolOf(candidate)
+            // A compound assignment (`c.value += 1`) is the setter's, as Cuttlebone has it, and uses the getter too.
+            val other = if (candidate == name) symbol else symbolOf(candidate, withGetters = true)
             if (!symbol.matches(other)) return@mapNotNull null
             candidate to (candidate.textRange.startOffset in other.declarations || declaresItself(candidate))
         }
@@ -86,7 +87,7 @@ object InkoUsages {
         }
     }
 
-    private fun symbolOf(name: InkoName): Symbol {
+    private fun symbolOf(name: InkoName, withGetters: Boolean = false): Symbol {
         val file = name.containingFile
         val offset = name.textRange.startOffset
         val text = file.text
@@ -100,7 +101,7 @@ object InkoUsages {
             val owner = file.inkoOutline.enclosing(offset).lastOrNull { it.kind == InkoOutline.Kind.TYPE || it.kind == InkoOutline.Kind.IMPL }
             return Symbol(emptySet(), emptySet(), "field:${owner?.let { file.inkoOutline.implTarget(it) ?: it.label }}")
         }
-        val targets = InkoResolver.resolve(name).toSet()
+        val targets = InkoResolver.resolve(name).let { if (withGetters) it + InkoResolver.getters(name, it) else it }.toSet()
         val declarations = targets.filter { it.containingFile == file }.map { it.textRange.startOffset }.toSet() +
             setOfNotNull(offset.takeIf { declaresItself(name) })
         val kind = if (name.previousToken().isToken(InkoTokens.DOT)) "member" else "name"

@@ -317,6 +317,60 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertCompiles()
     }
 
+    private val counter = "type pub Counter {\n  let mut @value: Int\n\n  fn pub mut value=(v: Int) {\n    @value = v\n  }\n\n  fn pub value -> Int {\n    @value\n  }\n}\n"
+    private val bump = "import app.counter (Counter)\n\nfn pub bump(c: mut Counter) {\n  c.value += 1\n}\n\nfn pub set(c: mut Counter) {\n  c.value = 2\n}\n\nfn pub get(c: ref Counter) -> Int {\n  c.value\n}\n"
+
+    // The method, not the field `@value`, which is also named `value`.
+    private fun getter() = PsiTreeUtil.findChildrenOfType(PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/app/counter.inko"))!!, InkoDeclaration::class.java)
+        .single { it.text == "value" }
+
+    /** The names a search for [declaration] finds, as `line:text`, searched in the background as Find Usages does. */
+    private fun searched(declaration: InkoDeclaration): List<String> {
+        val future = com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread<List<String>> {
+            com.intellij.openapi.application.ReadAction.compute<List<String>, Throwable> {
+                com.intellij.psi.search.searches.ReferencesSearch.search(declaration).findAll().map { reference ->
+                    val element = reference.element
+                    "${element.containingFile.viewProvider.document!!.getLineNumber(element.textOffset) + 1}:${element.text}"
+                }.sorted()
+            }
+        }
+        com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("the search", { future.isDone }, 120)
+        return future.get()
+    }
+
+    // `c.value += 1` calls the getter `value` and then the setter `value=` (compiler/src/hir.rs, `binary_assign_setter`).
+    fun testACompoundAssignmentIsAUseOfTheGetterAndTheSetter() {
+        putTempDirInProjectContent()
+        if (!askingCuttlebone) return
+        myFixture.addFileToProject("src/app/counter.inko", counter)
+        myFixture.addFileToProject("src/app/bump.inko", bump)
+        assertCompiles()
+        askCuttleboneAbout("src/app/counter.inko", "src/app/bump.inko")
+        // By Cuttlebone's references.
+        assertEquals(listOf("4:value", "8:value"), searched(declaration("src/app/counter.inko", "value=")))
+        assertEquals(listOf("12:value", "4:value"), searched(getter()))
+        // A module that doesn't parse leaves references without an answer, so each candidate is resolved instead.
+        myFixture.addFileToProject("src/app/broken.inko", "fn pub broken( {\n")
+        askCuttleboneAbout("src/app/counter.inko", "src/app/bump.inko")
+        assertEquals(listOf("4:value", "8:value"), searched(declaration("src/app/counter.inko", "value=")))
+        assertEquals(listOf("12:value", "4:value"), searched(getter()))
+    }
+
+    fun testRenamingOneAccessorOfACompoundAssignmentIsAConflict() {
+        putTempDirInProjectContent()
+        if (!askingCuttlebone) return
+        myFixture.addFileToProject("src/app/counter.inko", counter)
+        myFixture.addFileToProject("src/app/bump.inko", bump)
+        askCuttleboneAbout("src/app/counter.inko", "src/app/bump.inko")
+        try {
+            myFixture.renameElement(getter(), "amount")
+            fail("expected a conflict")
+        } catch (e: com.intellij.refactoring.BaseRefactoringProcessor.ConflictsInTestsException) {
+            assertEquals(listOf("`c.value += 1` at bump.inko:4 also calls `value=`, which isn't renamed, so it would call `amount=` instead."), e.messages.toList())
+        }
+        assertCompiles()
+    }
+
     // AUDIT.md finding 1.6: `recv.value = x` calls the setter `value=`, so renaming the setter renames the call.
     fun testRenamedSettersStillCompile() {
         // What changes code takes only the compiler's fresh answers.

@@ -20,9 +20,10 @@ sealed class InkoNameContext {
     /**
      * `value.name`; [receiverType] is the receiver's type when it's known (a typed local, or `self`). With
      * [assigned], it's `value.name = x`, which Inko's parser reads as a call of the setter `name=`
-     * (ast/src/parser.rs, `call_with_receiver` and `assign_setter`).
+     * (ast/src/parser.rs, `call_with_receiver` and `assign_setter`). With [compound] too, it's `value.name += x`,
+     * which calls the getter `name` and then the setter `name=` (`binary_assign_setter`).
      */
-    data class InstanceMember(val name: String, val receiverType: String? = null, val assigned: Boolean = false) : InkoNameContext()
+    data class InstanceMember(val name: String, val receiverType: String? = null, val assigned: Boolean = false, val compound: Boolean = false) : InkoNameContext()
 
     /** A local variable or parameter in scope. */
     data class Local(val local: InkoLocal) : InkoNameContext()
@@ -64,7 +65,8 @@ sealed class InkoNameContext {
                     imports.moduleAliasedAs(receiver!!.text)?.let { return ModuleMember(it, text) }
                 }
                 if (receiver.isToken(InkoTokens.CONSTANT)) return StaticMember(receiver!!.text, text)
-                return InstanceMember(text, receiver?.let { receiverType(it) }, isAssigned(name))
+                val compound = isCompoundAssigned(name)
+                return InstanceMember(text, receiver?.let { receiverType(it) }, compound || isAssigned(name), compound)
             }
             if (name.tokenType == InkoTokens.CONSTANT) return Constant(text)
             if (previous.isKeyword(*DEFINING_KEYWORDS)) return Definition
@@ -80,6 +82,20 @@ sealed class InkoNameContext {
             val next = name.nextToken()?.takeIf { it.isToken(InkoTokens.OPERATOR) && it.text == "=" } ?: return false
             val after = next.nextToken()
             return !(after.isToken(InkoTokens.OPERATOR) && after!!.textRange.startOffset == next.textRange.endOffset && after.text in setOf("=", ">"))
+        }
+
+        /** Whether a compound assignment (`+=`, `>>>=`, …) follows [name]: `recv.name += x`. */
+        fun isCompoundAssigned(name: com.intellij.psi.PsiElement): Boolean {
+            var operator = ""
+            var token = name.nextToken()
+            var end = -1
+            while (token.isToken(InkoTokens.OPERATOR) && (end < 0 || token!!.textRange.startOffset == end) && operator.length < 4) {
+                operator += token!!.text
+                if (operator in InkoTokens.COMPOUND_ASSIGNMENTS) return true
+                end = token.textRange.endOffset
+                token = token.nextToken()
+            }
+            return false
         }
 
         /** The type of a receiver before `.`: a local with a known type, or `self`. */

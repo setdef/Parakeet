@@ -209,6 +209,33 @@ class InkoResolver private constructor(
             }
         }
 
+        /**
+         * The getter a compound assignment to a member (`c.value += 1`) also calls, besides [setters], what it
+         * resolves to (as Cuttlebone's definition there is the setter): the compiler calls the getter `value`, and
+         * then the setter `value=` with its result plus 1 (compiler/src/hir.rs, `binary_assign_setter`). It's the
+         * setter's type's method of that name, else its field. Empty for any other name.
+         */
+        fun getters(name: InkoName, setters: List<PsiElement>): List<PsiElement> {
+            if (setters.isEmpty()) return emptyList()
+            val file = name.containingFile ?: return emptyList()
+            val imports = InkoImports.parse(file.text)
+            val context = InkoNameContext.of(name, imports) as? InkoNameContext.InstanceMember ?: return emptyList()
+            if (!context.compound) return emptyList()
+            val path = Inko.pathOf(file.virtualFile) ?: return emptyList()
+            val symbols = InkoDocIndex.getInstance(name.project).symbols(Inko.projectRoot(path)) ?: return emptyList()
+            val resolver = InkoResolver(symbols, symbols.moduleOf(path) ?: Inko.moduleName(path), imports, file, name.textRange.startOffset)
+            return setters.flatMap { setter ->
+                // Without a setter, it assigns the field, which it also reads.
+                if (setter.text.startsWith("@")) return@flatMap listOf(setter)
+                val owner = definitionAt(setter, symbols)?.owner
+                val beside = owner?.let {
+                    symbols.named(context.name, Kind.INSTANCE_METHOD).filter { it.owner == owner }
+                        .ifEmpty { symbols.named(context.name, Kind.FIELD).filter { it.owner == owner } }
+                }.orEmpty()
+                beside.ifEmpty { resolver.instanceMember(context.name, context.receiverType) }.mapNotNull { toPsi(file, it) }
+            }.distinct()
+        }
+
         /** The kinds of names whose targets the heuristic guesses at, which Cuttlebone is asked about. */
         fun isGuessed(context: InkoNameContext): Boolean = when (context) {
             is InkoNameContext.InstanceMember, is InkoNameContext.StaticMember, is InkoNameContext.Identifier,

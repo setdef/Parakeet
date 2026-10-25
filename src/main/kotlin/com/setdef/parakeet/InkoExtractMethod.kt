@@ -282,22 +282,19 @@ object InkoExtractMethod {
             false
         }
 
-    // Inko's compound assignments (ast/src/lexer.rs), which assign like `x = x + …` (`binary_assign_variable`).
-    private val COMPOUND_ASSIGNMENTS = setOf("+=", "-=", "*=", "/=", "%=", "**=", "<<=", ">>=", ">>>=", "|=", "&=", "^=")
-
     // `x = …`, `x := …`, and `x += …` (or another compound assignment) assign to `x`.
     private fun isAssignedAt(stream: InkoTokenStream, at: Int): Boolean {
         val next = stream.tokens.getOrNull(at) ?: return false
         val following = stream.tokens.getOrNull(at + 1)
         if ((next.isOperator("=") && (following == null || !(following.isOperator("=") && following.start == next.end))) ||
             (next.isOperator(":") && following?.isOperator("=") == true && following.start == next.end)) return true
-        // The lexer makes each operator character a token; Inko's takes the longest operator, so `>>=` isn't `>` and `>=`.
+        // Each operator character is a token of its own.
         var operator = ""
         var i = at
         while (operator.length < 4) {
             val token = stream.tokens.getOrNull(i)?.takeIf { it.isOperator() && (i == at || it.start == stream.tokens[i - 1].end) } ?: break
             operator += token.text
-            if (operator in COMPOUND_ASSIGNMENTS) return true
+            if (operator in InkoTokens.COMPOUND_ASSIGNMENTS) return true
             i++
         }
         return false

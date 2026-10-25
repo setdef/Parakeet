@@ -55,7 +55,9 @@ object InkoSearch {
         askAboutTheFile(name)
         val resolution = InkoResolver.resolution(name, exact = target !in readOnly)
         val targets = alsoImplementations(target)
-        return resolution.targets.any { found -> targets.any { name.manager.areElementsEquivalent(found, it) } }
+        // A compound assignment (`c.value += 1`) resolves to the setter, and calls the getter too.
+        val uses = resolution.targets + InkoResolver.getters(name, resolution.targets)
+        return uses.any { found -> targets.any { name.manager.areElementsEquivalent(found, it) } }
     }
 
     private val implementations = ConcurrentHashMap<PsiElement, Pair<Long, List<PsiElement>>>()
@@ -90,7 +92,8 @@ object InkoSearch {
                 InkoResolver.isGuessed(InkoNameContext.of(name, InkoImports.parse(name.containingFile.text)))) {
                 val loose = InkoResolver.resolution(name, exact = false)
                 val targets = alsoImplementations(target)
-                if (!loose.exact && loose.targets.any { found -> targets.any { name.manager.areElementsEquivalent(found, it) } }) found += name
+                val uses = loose.targets + InkoResolver.getters(name, loose.targets)
+                if (!loose.exact && uses.any { found -> targets.any { name.manager.areElementsEquivalent(found, it) } }) found += name
             }
             true
         }, GlobalSearchScope.projectScope(target.project), word, UsageSearchContext.IN_CODE, true)

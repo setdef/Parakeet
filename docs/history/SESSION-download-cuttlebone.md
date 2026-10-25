@@ -14,7 +14,9 @@ This work is requested, not reviewed.
 | fdb5451 | Steps 1 and 2: the download, and its tests (one commit: the tests were written beside the code) |
 | dc1c048 | Step 3: Prepare 0.13.0 (version, changelog entry, README's setup) |
 | 6845af3 | Older releases found through Cuttlebone's release index, which landed during the session, and a fix to a test that raced IntelliJ |
-| (this report) | This report, and README's link to it |
+| c2b5552 | This report, and README's link to it |
+| b4a034f | Four integration tests reach their states another way, since Cuttlebone 0.11.0 answers around a missing module ([below](#after-cuttlebone-0110)) |
+| (this update) | This report's checklist, for 0.11.0 |
 
 ## The tools
 
@@ -24,9 +26,10 @@ This work is requested, not reviewed.
   rebuild or modify it, and wrote nothing to the Cuttlebone or Inko
   checkouts. I only read Cuttlebone's docs, its staged changes and, once it
   was committed, its release index commit (3e3256f).
-- Cuttlebone's published releases: only v0.10.0, with four builds for
-  Inko 0.21.1 and a `manifest.json`, and no `index.json` (the first release
-  to have one will be 0.11.0). I read the manifest and the releases API
+- Cuttlebone's published releases: at first only v0.10.0, with four
+  builds for Inko 0.21.1 and a `manifest.json`, and no `index.json`. By
+  the end, 0.11.0, the first with an `index.json`
+  ([below](#after-cuttlebone-0110)). I read the manifest and the releases API
   with `curl` to learn their shape. The test suite never touches the
   network.
 
@@ -63,9 +66,9 @@ nothing is on PATH and nothing is downloaded for the project's Inko, the
 existing notification, "Parakeet needs Cuttlebone", is shown once, but only
 after a lookup in the background, so it can say what it found:
 
-- **A build exists:** "Parakeet can download Cuttlebone 0.10.0 for Inko
-  0.21.1 (macOS on ARM64, 5.4 MB) from its GitHub releases.", with a
-  **Download Cuttlebone 0.10.0** action before the existing two.
+- **A build exists:** "Parakeet can download Cuttlebone 0.11.0 for Inko
+  0.21.1 (macOS on ARM64, 5.5 MB) from its GitHub releases.", with a
+  **Download Cuttlebone 0.11.0** action before the existing two.
 - **No release has one** for that Inko and platform: it says so, names the
   newest release, and suggests another Inko or building from source. No
   download action.
@@ -89,7 +92,7 @@ action is clicked.
    release index) and take, newest first, each release whose `inko` list
    has the user's version, fetching its manifest, until one has a build
    for this platform.
-3. Without an index (404, as for 0.10.0 today), or with one whose `schema`
+3. Without an index (404, as there was before 0.11.0), or with one whose `schema`
    isn't 1, ask GitHub's releases API
    (`api.github.com/repos/setdef/Cuttlebone/releases?per_page=100`). It
    skips drafts and prereleases, keeps releases with an asset named
@@ -247,6 +250,53 @@ experimental API usages) and 2026.2.3 (27 deprecated, 2 experimental).
 None of those usages is in this session's code. The only change since that
 run is filling in this paragraph.
 
+## After Cuttlebone 0.11.0
+
+Cuttlebone 0.11.0 was released after this report's first version, with
+`index.json`. Its session reported four of Parakeet's integration tests
+failing against it. Milestone 11 answers around an import of a module that
+doesn't exist, from a repaired copy with the import blank (`fresh`,
+`repaired`), so `import app.nope` no longer produced the states those tests
+need. Parakeet's behaviour wasn't wrong; the tests' trigger was.
+
+- **The three stale tests** (`testAfterAnEditNoCheckCanAnswer…`) now add a
+  module that doesn't parse (`src/app/broken.inko`, saved, not open)
+  after the last good check, and import it a line above everything in
+  main.inko. Neither the code as it is nor a repaired copy can be checked:
+  repairs blank the lines of open documents that changed, and of missing
+  imports, and this import is neither. `run` is unchanged and doesn't
+  mention `broken`, so its answers are stale, a line down, in 0.9.0 and
+  0.11.0 alike. Every assertion is as it was. Two triggers I tried first
+  got fresh answers from both versions: a new `fn size -> Missing` in
+  main (a repaired copy blanks it), and a method with an error added to
+  `B` in util.inko.
+- **`testOpenedWithAnImportOfAMissingModuleThereAreNoHints`** adds a
+  method using the missing module (`nope.value`), which 0.11.0 still
+  can't answer. Before 0.11.0 nothing in the file has an answer, and
+  there are no hints. From 0.11.0, the repaired copy's hints are
+  Parakeet's everywhere but that method, unmarked, and none are guessed
+  there. The test branches on the server's version, as others branch on
+  its capabilities.
+- **New, `testAfterAnEditImportingAMissingModuleTheRepairedAnswersAreUsedLikeFreshOnes`:**
+  with 0.11.0, after adding `import app.nope`, Parakeet uses the repaired
+  answers like fresh ones: navigation and Rename's exact resolution both
+  resolve `x.size`, and hints and documentation aren't marked outdated.
+  Before 0.11.0 it says so and returns.
+
+`CuttleboneIntegrationTest` passed, all 20, against 0.9.0 (on PATH) and
+against the released 0.11.0 binary (the Cuttlebone session's copy, named
+by `CUTTLEBONE`). The end-to-end download test packed each in turn.
+`scripts/check.sh --full` ran against 0.11.0 at the end:
+
+it passed on the first run, in 400 s at a load of about 9 to 21: every
+test, the typing replay (against 0.11.0), the build, and the Plugin
+Verifier, "Compatible" against both IDEs with the same API usages as
+before. The only change since that run is filling in this paragraph. The
+pre-commit hook ran `scripts/check.sh` against 0.9.0 for each commit.
+
+README's section on code being edited now says which Cuttlebone has no
+answer around an import of a missing module.
+
 ## Decisions you may want to revisit
 
 - **Where the builds go**: JetBrains' shared data directory, not one IDE's
@@ -283,9 +333,10 @@ run is filling in this paragraph.
   storage. `HttpRequests` follows redirects by default.
 - **Proxy settings.** That `HttpRequests` honours the IDE's proxy is
   IntelliJ's documented behaviour; no test goes through a proxy.
-- **The real release index.** It's read as Cuttlebone's docs/releases.md
-  and `scripts/dist-index.py` (3e3256f) describe it. No release has
-  published one yet.
+- **The real release index.** 0.11.0 published one. Fetched with `curl`,
+  it has the documented shape and the fields Parakeet reads (`schema` 1,
+  `releases[].cuttlebone`, `inko`, `manifest`). Parakeet itself hasn't
+  fetched it.
 - **Gatekeeper.** A file written by the IDE's own HTTP code shouldn't be
   quarantined (Cuttlebone's MILESTONE-10.md says so for its own client
   code). The end-to-end test's binary was served over HTTP and ran, but a
@@ -324,20 +375,21 @@ the offer, move it aside and clear the setting:
 
 1. **The offer.** Open an Inko project with Inko 0.21.1 and open a file.
    One notification, "Parakeet needs Cuttlebone", should offer
-   **Download Cuttlebone 0.10.0** for Inko 0.21.1 (macOS on ARM64,
-   5.4 MB). Nothing should be in
+   **Download Cuttlebone 0.11.0** for Inko 0.21.1 (macOS on ARM64,
+   5.5 MB). Nothing should be in
    `$HOME/Library/Application Support/JetBrains/parakeet/cuttlebone` yet.
 2. **The download.** Click it. A progress bar should appear in the status
-   bar, with a cancel button. Then "Cuttlebone 0.10.0 is installed", and
+   bar, with a cancel button. Then "Cuttlebone 0.11.0 is installed", and
    go to definition on a method call should work. The directory should
-   hold `cuttlebone-0.10.0-inko-0.21.1/` with `cuttlebone`, `README.md`
-   and the licenses, and nothing else (no `.download-…`).
+   hold `cuttlebone-0.11.0-inko-0.21.1/` with `cuttlebone`, `README.md`,
+   `LICENSE`, `LICENSE-MPL-2.0` and `THIRD-PARTY.md`, and nothing else (no
+   `.download-…`).
 3. **It runs.** `xattr -l` on that `cuttlebone` should show no
    `com.apple.quarantine`, and it should have started without a
    Gatekeeper prompt.
 4. **The settings.** *Settings → Languages & Frameworks → Inko* should
-   say, under Cuttlebone, "In use: cuttlebone 0.10.0 (Inko 0.21.1),
-   downloaded by Parakeet:" and the path, then "Using cuttlebone 0.10.0
+   say, under Cuttlebone, "In use: cuttlebone 0.11.0 (Inko 0.21.1),
+   downloaded by Parakeet:" and the path, then "Using cuttlebone 0.11.0
    for types and definitions."
 5. **Cancelling.** Delete the directory, restart, click Download, and
    cancel at once. Nothing should be installed, and nothing left behind.
@@ -348,22 +400,30 @@ the offer, move it aside and clear the setting:
 7. **Another Inko.** With ivm, install and switch to an Inko no release
    has a build for (`ivm install 0.20.0; ivm default 0.20.0`), and come
    back to the IDE: a new notification should say no release has a build
-   for Inko 0.20.0, with no download action. Switch back to 0.21.1 and
+   for Inko 0.20.0, with no download action. That answer comes from
+   0.11.0's `index.json`: idea.log shouldn't mention `api.github.com`. Switch back to 0.21.1 and
    return: the download should be used again, without a notification.
 8. **Overrides.** Move `cuttlebone.aside` back: after a restart, the
    settings should say "in Cargo's bin directory", even with the download
    there. Setting *Executable* to it should say "set in these settings".
 9. **A proxy**, if you have one handy: set it in *Settings → Appearance &
    Behavior → System Settings → HTTP Proxy*, and download again.
-10. **An update** (once Cuttlebone 0.11.0 is released): with 0.10.0
-    downloaded, open a project: "Cuttlebone 0.11.0 is available" should
-    appear once, and nothing should change until you click it. Restart:
-    it shouldn't appear again. If 0.11.0 is out, also check that the
-    lookup reads its `index.json`.
+10. **An update.** Parakeet only downloads the newest build, so put an
+    older one in place by hand: quit the IDE, delete
+    `cuttlebone-0.11.0-inko-0.21.1/`, and unpack the v0.10.0 release's
+    `cuttlebone-0.10.0-inko-0.21.1-aarch64-apple-darwin.tar.gz` (from
+    [its release](https://github.com/setdef/Cuttlebone/releases/tag/v0.10.0))
+    as `cuttlebone-0.10.0-inko-0.21.1/` in the same directory, with its
+    `cuttlebone` inside. Downloading it with `curl` avoids the quarantine.
+    Open the project: the settings should say 0.10.0 is in use, and
+    "Cuttlebone 0.11.0 is available" should appear, with nothing changing
+    until you click it. Click it: 0.11.0 should download, start, and be
+    "In use". Then do the same again (0.10.0 alone), but restart without
+    clicking: it's told once per version, so it shouldn't appear again.
 
 ### Typing (from [Replaying typing against Cuttlebone](SESSION-typing-replay.md))
 
-With a Cuttlebone of milestone 7 or later (0.9.0 or the 0.10.0 download):
+With a Cuttlebone of milestone 7 or later (0.9.0, or the 0.11.0 download):
 
 1. **Type for a while** in a std-sized module and a small project, both a
    new method and inside an existing one. Hints, errors, usage

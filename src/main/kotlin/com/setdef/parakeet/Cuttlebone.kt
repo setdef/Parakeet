@@ -97,16 +97,47 @@ import java.util.concurrent.TimeUnit
 object Cuttlebone {
     private val LOG = logger<Cuttlebone>()
 
-    /** The executable from the settings, or `cuttlebone` on PATH or where `cargo install` puts it. */
-    fun executable(project: Project): Path? {
-        val setting = InkoProjectSettings.getInstance(project).cuttlebone
-        if (setting.isNotEmpty()) {
-            if (!setting.contains('/') && !setting.contains('\\')) return PathEnvironmentVariableUtil.findInPath(setting)?.toPath()
-            return Path.of(setting).takeIf(Files::isExecutable)
-        }
-        return PathEnvironmentVariableUtil.findInPath("cuttlebone")?.toPath()
-            ?: System.getProperty("user.home")?.let { Path.of(it, ".cargo", "bin", "cuttlebone") }?.takeIf(Files::isExecutable)
+    /** Where a Cuttlebone came from, most preferred first: each one stands in for those after it. */
+    enum class Source(val description: String) {
+        SETTING("set in these settings"),
+        PATH("on PATH"),
+        CARGO("in Cargo's bin directory"),
+        DOWNLOADED("downloaded by Parakeet"),
     }
+
+    data class Located(val path: Path, val source: Source)
+
+    /**
+     * Which Cuttlebone to use: the [setting] (a path, or a name on PATH) if there is one, even when it's
+     * missing; else [installed] (`cuttlebone` on PATH, or in Cargo's bin directory); else the newest one
+     * Parakeet [downloaded] for the project's [inko]. The setting and PATH are overrides: a download never
+     * takes their place.
+     */
+    fun locate(
+        setting: String,
+        inko: String?,
+        installed: () -> Located?,
+        downloaded: (String) -> Path?,
+        onPath: (String) -> Path? = { PathEnvironmentVariableUtil.findInPath(it)?.toPath() },
+    ): Located? {
+        if (setting.isNotEmpty()) {
+            val path = if (!setting.contains('/') && !setting.contains('\\')) onPath(setting) else Path.of(setting).takeIf(Files::isExecutable)
+            return path?.let { Located(it, Source.SETTING) }
+        }
+        installed()?.let { return it }
+        return inko?.let(downloaded)?.let { Located(it, Source.DOWNLOADED) }
+    }
+
+    /** [locate] for [project], with its Inko version when known (it's needed only for a download). */
+    fun locate(project: Project, inko: String?): Located? = locate(
+        InkoProjectSettings.getInstance(project).cuttlebone,
+        inko,
+        { CuttleboneLocations.getInstance().installed() },
+        { CuttleboneDownloads.installed(it)?.executable },
+    )
+
+    /** The Cuttlebone the precheck chose, else the one the settings or PATH give. */
+    fun executable(project: Project): Path? = CuttleboneService.getInstance(project).located?.path ?: locate(project, null)?.path
 
     /**
      * Whether a feature that finds a declaration's uses (Find Usages, Rename, Safe Delete, Change Signature, …)
@@ -137,8 +168,9 @@ object Cuttlebone {
      * shown once as a notification ([CuttleboneService]), since Parakeet needs Cuttlebone.
      */
     sealed class Status(val message: String, val setup: Boolean = false) {
-        class NotFound(setting: String) : Status(
-            (if (setting.isEmpty()) "Cuttlebone isn't installed (no cuttlebone on PATH)" else "Cuttlebone wasn't found at $setting") +
+        /** [inko] is the project's Inko version, which a download would be for. */
+        class NotFound(val setting: String, val inko: String? = null) : Status(
+            (if (setting.isEmpty()) "Cuttlebone isn't installed (it isn't set, on PATH, or downloaded)" else "Cuttlebone wasn't found at $setting") +
                 ", so $NEEDED_FOR are unavailable.",
             setup = true,
         )
@@ -155,8 +187,17 @@ object Cuttlebone {
      * as a process (or IntelliJ's own error reporting). Runs processes: not on the EDT.
      */
     fun precheck(project: Project): Status? {
-        val executable = executable(project) ?: return Status.NotFound(InkoProjectSettings.getInstance(project).cuttlebone)
+        val service = CuttleboneService.getInstance(project)
         val cli = InkoCli.getInstance(project)
+        val setting = InkoProjectSettings.getInstance(project).cuttlebone
+        // The Inko version, asked only when it's needed: for a download, or to compare with the one Cuttlebone links.
+        val inko by lazy {
+            (if (cli.isAvailable) cli.version() else null).also { service.checkedInko = it; service.inkoChecked = true }
+        }
+        val located = locate(project, null) ?: if (setting.isEmpty()) locate(project, inko) else null
+        service.located = located
+        if (located == null) return Status.NotFound(setting, if (setting.isEmpty()) inko else null)
+        val executable = located.path
         if (!cli.isAvailable) return Status.NoInko
         val output = try {
             CapturingProcessHandler(GeneralCommandLine(executable.toString(), "--version")).runProcess(10_000)
@@ -165,8 +206,9 @@ object Cuttlebone {
             return Status.Refused("$executable --version failed (${e.message}).")
         }
         if (output.exitCode != 0 || output.isTimeout) return Status.Refused("$executable --version failed.")
+        service.versionOutput = output.stdout.trim()
         val linked = linkedInko(output.stdout) ?: return null
-        val installed = cli.version() ?: return null
+        val installed = inko ?: return null
         return if (linked != installed) Status.Refused("${output.stdout.trim()} works with Inko $linked only, but the project uses Inko $installed.") else null
     }
 }
@@ -189,7 +231,7 @@ class CuttleboneDescriptor(project: Project) : ProjectWideLspServerDescriptor(pr
     override fun isSupportedFile(file: VirtualFile): Boolean = file.extension == Inko.EXTENSION
 
     override fun createCommandLine(): GeneralCommandLine {
-        val executable = Cuttlebone.executable(project) ?: throw com.intellij.execution.ExecutionException("cuttlebone wasn't found")
+        val executable = CuttleboneService.getInstance(project).located?.path ?: throw com.intellij.execution.ExecutionException("cuttlebone wasn't found")
         return GeneralCommandLine(executable.toString()).withCharset(Charsets.UTF_8)
     }
 
@@ -445,6 +487,22 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
     @Volatile var status: Cuttlebone.Status? = null
         private set
 
+    /** The Cuttlebone the precheck chose, and where it came from (shown in the settings). */
+    @Volatile var located: Cuttlebone.Located? = null
+        internal set
+
+    /** What the chosen Cuttlebone's `--version` printed. */
+    @Volatile var versionOutput: String? = null
+        internal set
+
+    /** The project's Inko version when the precheck ran, to notice when it changes ([inkoMayHaveChanged]). */
+    @Volatile var checkedInko: String? = null
+        internal set
+
+    /** Whether the precheck asked for [checkedInko]: it doesn't when nothing depends on it (a setting that's missing). */
+    @Volatile var inkoChecked = false
+        internal set
+
     /** The precheck's result, once it ran; null means it may start. */
     @Volatile private var checked: Result<Cuttlebone.Status?>? = null
     @Volatile private var checking = false
@@ -492,6 +550,10 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         }
         checked = null
         status = null
+        located = null
+        versionOutput = null
+        checkedInko = null
+        inkoChecked = false
         // New settings: if Cuttlebone still can't run, say so again.
         notified = false
         everInitialized = false
@@ -506,6 +568,30 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         restarts = 0
         val info = result.serverInfo
         report(Cuttlebone.Status.Running(listOfNotNull(info?.name ?: "cuttlebone", info?.version).joinToString(" ")))
+        // A download is Parakeet's to keep up to date (by asking): an override is the user's.
+        val located = located
+        if (located?.source == Cuttlebone.Source.DOWNLOADED && !project.isDisposed) {
+            CuttleboneDownloads.all().firstOrNull { it.executable == located.path }?.let { CuttleboneDownloads.offerUpdate(project, it) }
+        }
+    }
+
+    /**
+     * The project's Inko may have changed (ivm switched versions, say): if it did since the precheck, check
+     * again, which finds the Cuttlebone for the new one, or offers to download it. Runs `inko --version`
+     * (cached until the executable changes) in the background.
+     */
+    fun inkoMayHaveChanged() {
+        if (project.isDefault || checked == null || !inkoChecked) return
+        val before = checkedInko
+        AppExecutorUtil.getAppExecutorService().execute {
+            if (project.isDisposed || checked == null) return@execute
+            val cli = InkoCli.getInstance(project)
+            val now = if (cli.isAvailable) cli.version() else null
+            if (now != before && checkedInko == before) {
+                LOG.info("the project's Inko changed from $before to $now: checking Cuttlebone again")
+                settingsChanged()
+            }
+        }
     }
 
     fun stopped(normally: Boolean) {
@@ -542,7 +628,7 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
             if (project.isDefault) return true
             if (CuttleboneQueries.getInstance(project).stubbed) return false
             return when (val status = status) {
-                null -> Cuttlebone.executable(project) == null
+                null -> Cuttlebone.executable(project) == null && CuttleboneDownloads.all().isEmpty()
                 is Cuttlebone.Status.NotFound, is Cuttlebone.Status.Refused, Cuttlebone.Status.NoInko -> true
                 // Stopped for good, rather than restarting.
                 is Cuttlebone.Status.Stopped -> checked?.getOrNull() != null
@@ -562,9 +648,25 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         }
     }
 
+    /**
+     * Says once that Parakeet needs Cuttlebone. With none at all (nothing set, on PATH, or downloaded), it first
+     * looks for the build for the project's Inko, and offers to download it: one click, and nothing without it.
+     */
     private fun notifySetup(status: Cuttlebone.Status) {
+        val inko = (status as? Cuttlebone.Status.NotFound)?.takeIf { it.setting.isEmpty() }?.inko
+        if (inko == null) return notifySetup(status.message, null)
+        val generation = generation
+        CuttleboneDownloads.lookUp(inko) { lookup ->
+            // The settings changed meanwhile: the new check says what it finds.
+            if (generation != this.generation || project.isDisposed) return@lookUp
+            notifySetup("${status.message} ${lookup.message}", (lookup as? CuttleboneLookup.Found)?.build)
+        }
+    }
+
+    private fun notifySetup(message: String, download: CuttleboneBuild?) {
         val notification = com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup("Parakeet for Inko")
-            .createNotification("Parakeet needs Cuttlebone", status.message, com.intellij.notification.NotificationType.WARNING)
+            .createNotification("Parakeet needs Cuttlebone", message, com.intellij.notification.NotificationType.WARNING)
+        if (download != null) notification.addAction(CuttleboneDownloads.downloadAction(project, download))
         notification.addAction(com.intellij.notification.NotificationAction.createSimple("How to set up Cuttlebone") {
             com.intellij.ide.BrowserUtil.browse(Cuttlebone.SETUP_DOCS)
         })

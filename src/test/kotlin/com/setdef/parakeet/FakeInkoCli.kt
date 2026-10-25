@@ -42,6 +42,12 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
     override fun setUp() {
         super.setUp()
         if (!realInko) useFakeInko(FakeInkoCli(available = false))
+        // Nothing reaches the network, and nothing is downloaded where the IDE keeps its downloads.
+        val downloads = java.nio.file.Files.createTempDirectory("parakeet-downloads")
+        com.intellij.openapi.util.Disposer.register(testRootDisposable) { com.intellij.openapi.util.io.NioFiles.deleteRecursively(downloads) }
+        cuttleboneLocations = TestCuttleboneLocations(downloads)
+        ApplicationManager.getApplication().replaceService(CuttleboneLocations::class.java, cuttleboneLocations, testRootDisposable)
+        CuttleboneDownloads.forgetUpdates()
         // No Cuttlebone unless a test sets one up (a fake, or stubCuttlebone), so what needs it is unavailable.
         useCuttlebone(NO_CUTTLEBONE)
     }
@@ -55,6 +61,9 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
             super.tearDown()
         }
     }
+
+    /** Where this test finds Cuttlebone: never the network, and downloads in a temporary directory. */
+    protected lateinit var cuttleboneLocations: TestCuttleboneLocations
 
     /** Uses the `cuttlebone` at [executable] (as the setting would), stopping any server already running. */
     protected fun useCuttlebone(executable: String) {

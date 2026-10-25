@@ -114,6 +114,8 @@ object InkoIvm {
                 InkoDocIndex.getInstance(project).invalidateAll()
                 InkoLibraries.getInstance(project).refresh()
                 EditorNotifications.getInstance(project).updateAllNotifications()
+                // ivm may have changed the default Inko, which needs its own Cuttlebone.
+                CuttleboneService.getInstance(project).inkoMayHaveChanged()
             }
         }
     }

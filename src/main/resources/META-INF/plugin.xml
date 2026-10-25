@@ -76,6 +76,7 @@
 
         <projectService serviceInterface="com.setdef.parakeet.InkoCli" serviceImplementation="com.setdef.parakeet.InkoProjectCli"/>
         <applicationService serviceInterface="com.setdef.parakeet.IvmCli" serviceImplementation="com.setdef.parakeet.IvmProcessCli"/>
+        <applicationService serviceImplementation="com.setdef.parakeet.CuttleboneLocations"/>
         <editorNotificationProvider implementation="com.setdef.parakeet.InkoMissingBanner"/>
         <editorNotificationProvider implementation="com.setdef.parakeet.InkoRequiredVersionBanner"/>
 
@@ -247,6 +248,10 @@
             <reference ref="Parakeet.SyncDependencies"/>
         </group>
     </actions>
+
+    <applicationListeners>
+        <listener class="com.setdef.parakeet.CuttleboneInkoWatcher" topic="com.intellij.openapi.application.ApplicationActivationListener"/>
+    </applicationListeners>
 
     <projectListeners>
         <listener class="com.setdef.parakeet.InkoDocIndexFileListener" topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>

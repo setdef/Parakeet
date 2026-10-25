@@ -341,4 +341,41 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         measure("hover") { queries.hover(myFixture.file, it, 5000) }
         measure("typeDefinition") { queries.typeDefinition(myFixture.file, it, 5000) }
     }
+
+    /**
+     * The real cuttlebone, packed as a release's archive is and served locally, downloaded when the offer is
+     * clicked, installed, and started: it answers as the one installed did.
+     */
+    fun testDownloadsABuildAndStartsIt() {
+        val installed = Cuttlebone.executable(project)!!
+        val versionOutput = com.intellij.execution.process.CapturingProcessHandler(
+            com.intellij.execution.configurations.GeneralCommandLine(installed.toString(), "--version"),
+        ).runProcess(10_000).stdout.trim()
+        val version = Regex("""^cuttlebone (\S+)""").find(versionOutput)!!.groupValues[1]
+        val inko = Cuttlebone.linkedInko(versionOutput)!!
+        val platform = CuttlebonePlatform.current!!
+        CuttleboneReleaseServer().use { server ->
+            server.publish(version, listOf(inko), java.nio.file.Files.readAllBytes(installed), listOf(platform))
+            cuttleboneLocations.releasesSource = server.releasesSource
+            cuttleboneLocations.platformOverride = platform
+            cuttleboneLocations.onPath = { null }
+            useCuttlebone("")
+            fun offers() = com.intellij.notification.NotificationsManager.getNotificationsManager()
+                .getNotificationsOfType(com.intellij.notification.Notification::class.java, project)
+                .filter { it.title == "Parakeet needs Cuttlebone" && !it.isExpired }
+            offers().forEach { it.expire() }
+            myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/main.inko", main).virtualFile)
+            PlatformTestUtil.waitWithEventsDispatching("no download offered", { offers().any { n -> n.actions.any { it.templateText == "Download Cuttlebone $version" } } }, 60)
+            val offer = offers().single()
+            com.intellij.notification.Notification.fire(offer, offer.actions.first { it.templateText == "Download Cuttlebone $version" }, null)
+            val service = CuttleboneService.getInstance(project)
+            PlatformTestUtil.waitWithEventsDispatching({ "the download didn't start: ${service.status?.message}" }, {
+                service.status is Cuttlebone.Status.Running && service.server() != null
+            }, 120)
+            assertEquals(Cuttlebone.Source.DOWNLOADED, service.located?.source)
+            assertTrue(service.located!!.path.startsWith(cuttleboneLocations.downloads))
+            assertEquals(versionOutput, service.versionOutput)
+            assertEquals(listOf("util.inko:8:size"), targets(main, "size(2.0)"))
+        }
+    }
 }

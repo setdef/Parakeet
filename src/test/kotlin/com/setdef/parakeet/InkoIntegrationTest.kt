@@ -291,6 +291,33 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertTrue(myFixture.file.text, myFixture.file.text.contains("fn extracted(sum: Int, items: mut Array[Int], scale: Float) -> Int {"))
     }
 
+    // Introduce Variable with every occurrence: not `sum += 1`'s, which assigns, nor the one after it, which reads the new sum.
+    fun testIntroducedVariablesBesideCompoundAssignmentsStillCompile() {
+        val text = "fn pub total(items: Array[Int]) -> Int {\n  let mut sum = 0\n  let first = sum + items.size\n  sum += 1\n  let again = sum + items.size\n  sum += first + (sum + items.size)\n  sum + again\n}\n"
+        open("src/app/introduce.inko", text)
+        val stream = InkoTokenStream(text)
+        val expression = com.intellij.openapi.util.TextRange(text.indexOf("sum + items.size"), text.indexOf("sum + items.size") + "sum + items.size".length)
+        val plan = InkoIntroduceVariable.plan(stream, expression, InkoIntroduceVariable.occurrences(stream, expression)).getOrThrow()
+        InkoIntroduceVariable.apply(project, myFixture.editor, plan)
+        assertEquals(text.replaceFirst("  let first = sum + items.size", "  let size = sum + items.size\n  let first = size"), myFixture.editor.document.text)
+        assertCompiles()
+    }
+
+    // Inline Variable into a compound assignment's value, and its refusal for a compound-assigned variable.
+    fun testInlinedVariablesBesideCompoundAssignmentsStillCompile() {
+        val text = "fn pub total -> Int {\n  let step = 2\n  let mut sum = 1\n  sum += step\n  sum *= step\n  sum\n}\n"
+        open("src/app/inline.inko", text)
+        fun inline(marker: String): Result<InkoInlineVariable.Plan> {
+            val declaration = PsiTreeUtil.getParentOfType(myFixture.file.findElementAt(myFixture.editor.document.text.indexOf(marker)), InkoDeclaration::class.java, false)!!
+            val uses = InkoUsages.inFile(declaration).filter { !it.second && it.first != declaration }.map { it.first.textRange }
+            return InkoInlineVariable.plan(InkoTokenStream(myFixture.editor.document.text), declaration.textRange.startOffset, uses)
+        }
+        assertEquals("`sum` is assigned a new value, so it can't be inlined.", inline("sum = 1").exceptionOrNull()?.message)
+        InkoInlineVariable.apply(project, myFixture.editor, inline("step = 2").getOrThrow())
+        assertEquals("fn pub total -> Int {\n  let mut sum = 1\n  sum += 2\n  sum *= 2\n  sum\n}\n", myFixture.editor.document.text)
+        assertCompiles()
+    }
+
     // AUDIT.md finding 1.1: names in `${…}` are inputs like any other.
     fun testExtractingInterpolatedCodeStillCompiles() = extractAndCompile(
         "src/app/greet.inko",

@@ -127,13 +127,27 @@ object InkoIntroduceVariable {
     /**
      * Other places in the same method (or the file, outside methods, or with
      * [fileWide]) where the same expression appears, by tokens, and not as
-     * part of a longer chain.
+     * part of a longer chain. Not where it has another value: past an
+     * assignment (`x = …`, `x := …`, `x += …`) to a variable or field the
+     * expression reads, or in a loop that assigns one and holds only one of
+     * the two (its next pass reads what the last assigned).
      */
     fun occurrences(stream: InkoTokenStream, expression: TextRange, fileWide: Boolean = false): List<TextRange> {
         val tokens = stream.tokens
         val pattern = tokens.filter { expression.contains(it.range) }.map { it.text }
         val method = if (fileWide) null else InkoOutline.of(stream.text).enclosing(expression.startOffset).lastOrNull { it.kind == InkoOutline.Kind.METHOD }
         val scope = method?.range ?: TextRange(0, stream.text.length)
+        val selected = tokens.indexOfFirst { expression.contains(it.range) }
+        fun isVariable(i: Int) = tokens[i].type == InkoTokens.FIELD || (tokens[i].type == InkoTokens.IDENTIFIER && tokens.getOrNull(i - 1)?.type != InkoTokens.DOT)
+        val reads = (selected until selected + pattern.size).filter(::isVariable).map { tokens[it].text }.toSet()
+        val assignments = tokens.indices.filter { i ->
+            tokens[i].start >= scope.startOffset && tokens[i].end <= scope.endOffset && tokens[i].text in reads && isVariable(i) && stream.assignmentAt(i + 1)
+        }
+        val loops = loops(stream).filter { loop -> assignments.any { it in loop } }
+        fun sameValue(i: Int): Boolean {
+            val between = minOf(i, selected)..maxOf(i, selected) + pattern.size - 1
+            return assignments.none { it in between } && loops.none { (i in it) != (selected in it) }
+        }
         return tokens.indices.filter { i ->
             tokens[i].start >= scope.startOffset && tokens[i].end <= scope.endOffset &&
                 i + pattern.size <= tokens.size &&
@@ -144,16 +158,23 @@ object InkoIntroduceVariable {
                 tokens.getOrNull(i + pattern.size)?.let { next ->
                     !((next.type == InkoTokens.LPAREN || next.type == InkoTokens.LBRACKET) && next.start == tokens[i + pattern.size - 1].end)
                 } != false &&
-                !isAssignedTo(stream, i + pattern.size)
+                // `x = …`, `x := …` and `x += …` assign to `x`, they don't (only) read it.
+                !stream.assignmentAt(i + pattern.size) &&
+                (i == selected || sameValue(i))
         }.map { TextRange(tokens[it].start, tokens[it + pattern.size - 1].end) }
     }
 
-    // `x = …` and `x := …` assign to `x`, they don't read it.
-    private fun isAssignedTo(stream: InkoTokenStream, after: Int): Boolean {
-        val next = stream.tokens.getOrNull(after) ?: return false
-        val following = stream.tokens.getOrNull(after + 1)
-        return (next.isOperator("=") && following?.isOperator("=") != true && following?.start != next.end) ||
-            (next.isOperator(":") && following?.isOperator("=") == true)
+    /** Each `loop`, `while` and `for`, from its keyword to its body's `}`, as token indices. */
+    private fun loops(stream: InkoTokenStream): List<IntRange> {
+        val tokens = stream.tokens
+        return tokens.indices.filter { tokens[it].isKeyword("loop", "while", "for") }.mapNotNull { keyword ->
+            var i = keyword + 1
+            while (i < tokens.size && tokens[i].type != InkoTokens.LBRACE) {
+                if (tokens[i].closes) return@mapNotNull null
+                i = if (tokens[i].opens) stream.match(i).takeIf { it > i }?.plus(1) ?: return@mapNotNull null else i + 1
+            }
+            stream.match(i).takeIf { it > i }?.let { keyword..it }
+        }
     }
 
     /** What to do: insert [declaration] at [insertAt], and replace [replace] with [name]. */

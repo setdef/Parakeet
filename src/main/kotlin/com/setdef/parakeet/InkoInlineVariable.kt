@@ -15,7 +15,8 @@ import com.intellij.refactoring.util.CommonRefactoringUtil
 /**
  * Inline Variable, worked out from tokens and Inko's rules (references/syntax.md):
  * only a plain `let name = …` (not a pattern, `let … else`, or `let _`, which
- * drops its value right away), never reassigned (with `=` or `:=`).
+ * drops its value right away), never reassigned (with `=`, `:=`, or a
+ * compound assignment like `+=`).
  */
 object InkoInlineVariable {
     /** Replace each of [uses] with [expression] (in parentheses where marked), and delete [declaration]. */
@@ -55,11 +56,7 @@ object InkoInlineVariable {
 
         for (use in uses) {
             val i = tokens.indexOfFirst { it.start == use.startOffset }
-            val next = tokens.getOrNull(i + 1)
-            if (next != null && ((next.isOperator("=") && tokens.getOrNull(i + 2)?.let { it.isOperator("=") && it.start == next.end } != true) ||
-                    (next.isOperator(":") && tokens.getOrNull(i + 2)?.isOperator("=") == true))) {
-                return fail("`$name` is assigned a new value, so it can't be inlined.")
-            }
+            if (stream.assignmentAt(i + 1)) return fail("`$name` is assigned a new value, so it can't be inlined.")
         }
 
         val expression = stream.text.substring(tokens[start].start, tokens[end].end)

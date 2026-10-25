@@ -225,7 +225,10 @@ compiler, so it always agrees with your installed Inko version.
   operators would otherwise bind differently (Inko's binary operators share one
   precedence and group left to right, and `and`/`or` bind more loosely). For
   the same reason, part of an operator chain (`60 - 60` in `total - 60 - 60`)
-  isn't offered as an expression.
+  isn't offered as an expression. Inline Variable refuses a variable that's
+  assigned again (`=`, `:=`, or a compound assignment like `+=`), and
+  Introduce Variable doesn't replace an occurrence that's assigned, past an
+  assignment to what the expression reads, or in a loop that assigns it.
 - **Change Signature, Introduce Parameter, Extract Method, and Inline
   Method** rewrite calls from their tokens, following Inko's rules: no default
   arguments (so new parameters need a value for calls to pass), named

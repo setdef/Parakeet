@@ -132,7 +132,7 @@ object InkoExtractMethod {
             val local = localAt(i) ?: continue
             if (local.offset >= range.startOffset) continue
             inputs.putIfAbsent(local.offset, local)
-            if (isAssignedAt(stream, i + 1)) assigned += local.offset
+            if (stream.assignmentAt(i + 1)) assigned += local.offset
         }
         fun usedAfter(offset: Int) = (last + 1 until methodEnd).any { isUse(it) && localAt(it)?.offset == offset }
         val outputs = InkoLocals.declarations(text).filter { range.contains(it.offset) && usedAfter(it.offset) }
@@ -260,7 +260,7 @@ object InkoExtractMethod {
         for (i in statement) {
             val token = stream.tokens[i]
             if (token.opens) depth++ else if (token.closes) depth--
-            else if (depth == 0 && isAssignedAt(stream, i)) {
+            else if (depth == 0 && stream.assignmentAt(i)) {
                 // `==`, `!=`, `<=`, and `>=` compare; a lone `=` (or `:=`) assigns.
                 val previous = stream.tokens.getOrNull(i - 1)
                 if (!(token.isOperator("=") && previous != null && previous.end == token.start && previous.isOperator("=", "!", "<", ">"))) return false
@@ -289,24 +289,6 @@ object InkoExtractMethod {
             }
             false
         }
-
-    // `x = …`, `x := …`, and `x += …` (or another compound assignment) assign to `x`.
-    private fun isAssignedAt(stream: InkoTokenStream, at: Int): Boolean {
-        val next = stream.tokens.getOrNull(at) ?: return false
-        val following = stream.tokens.getOrNull(at + 1)
-        if ((next.isOperator("=") && (following == null || !(following.isOperator("=") && following.start == next.end))) ||
-            (next.isOperator(":") && following?.isOperator("=") == true && following.start == next.end)) return true
-        // Each operator character is a token of its own.
-        var operator = ""
-        var i = at
-        while (operator.length < 4) {
-            val token = stream.tokens.getOrNull(i)?.takeIf { it.isOperator() && (i == at || it.start == stream.tokens[i - 1].end) } ?: break
-            operator += token.text
-            if (operator in InkoTokens.COMPOUND_ASSIGNMENTS) return true
-            i++
-        }
-        return false
-    }
 
     private fun isMutable(stream: InkoTokenStream, local: InkoLocal): Boolean =
         stream.tokens.indexOfFirst { it.start == local.offset }.let { it > 0 && stream.tokens[it - 1].isKeyword("mut") }

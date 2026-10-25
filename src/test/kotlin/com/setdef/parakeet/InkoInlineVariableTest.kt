@@ -52,9 +52,21 @@ class InkoInlineVariableTest : InkoTestCase() {
         assertEquals("refused: `n` is assigned a new value, so it can't be inlined.", inline("fn a {\n  let mut <caret>n = 1\n  n := 2\n}\n"))
     }
 
+    // `n += 2` assigns `n` like `n = n + 2` (Inko's `binary_assign_variable`): inlined, it would be `1 += 2`.
+    fun testRefusesCompoundAssignedVariables() {
+        for (operator in listOf("+=", "-=", "*=", "/=", "%=", "**=", "<<=", ">>=", ">>>=", "|=", "&=", "^=")) {
+            assertEquals(operator, "refused: `n` is assigned a new value, so it can't be inlined.", inline("fn a -> Int {\n  let mut <caret>n = 1\n  n $operator 2\n  n\n}\n"))
+        }
+    }
+
     fun testComparisonsAreNotAssignments() = assertEquals(
         "fn a {\n  1 == 2\n}\n",
         inline("fn a {\n  let <caret>n = 1\n  n == 2\n}\n"),
+    )
+
+    fun testComparisonsLikeCompoundAssignmentsAreNotAssignments() = assertEquals(
+        "fn a {\n  1 <= 2\n  1 >= 2\n  1 != 2\n}\n",
+        inline("fn a {\n  let <caret>n = 1\n  n <= 2\n  n >= 2\n  n != 2\n}\n"),
     )
 
     fun testRefusesLetElseAndParameters() {

@@ -195,4 +195,25 @@ class InkoTokenStream(val text: CharSequence) {
             previous.isKeyword("and", "or", "as", "let", "throw", "try", "recover", "ref", "mut", "move") ||
             previous.type == InkoTokens.LPAREN || previous.type == InkoTokens.LBRACKET
     }
+
+    /**
+     * Whether an assignment starts at token [at], so that it assigns what's just before it: `=` (not `==`),
+     * `:=`, or a compound assignment (`+=`, `>>>=`, …; Inko's `binary_assign_variable` and the rest). Each
+     * operator character is a token of its own, so `<=` is `<` then `=`, and compares.
+     */
+    fun assignmentAt(at: Int): Boolean {
+        val next = tokens.getOrNull(at) ?: return false
+        val following = tokens.getOrNull(at + 1)
+        if ((next.isOperator("=") && (following == null || !(following.isOperator("=") && following.start == next.end))) ||
+            (next.isOperator(":") && following?.isOperator("=") == true && following.start == next.end)) return true
+        var operator = ""
+        var i = at
+        while (operator.length < 4) {
+            val token = tokens.getOrNull(i)?.takeIf { it.isOperator() && (i == at || it.start == tokens[i - 1].end) } ?: break
+            operator += token.text
+            if (operator in InkoTokens.COMPOUND_ASSIGNMENTS) return true
+            i++
+        }
+        return false
+    }
 }

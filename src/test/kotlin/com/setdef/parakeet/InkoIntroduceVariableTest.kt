@@ -57,6 +57,43 @@ class InkoIntroduceVariableTest : InkoTestCase() {
         assertEquals(listOf(first.startOffset, text.indexOf("  foo.bar\n}") + 2), InkoIntroduceVariable.occurrences(s, first).map { it.startOffset })
     }
 
+    /** The occurrences of the [nth] [part] in [text], as offsets. */
+    private fun occurrencesOf(text: String, part: String, nth: Int = 0): List<Int> {
+        var at = -1
+        repeat(nth + 1) { at = text.indexOf(part, at + 1) }
+        return InkoIntroduceVariable.occurrences(stream(text), TextRange(at, at + part.length)).map { it.startOffset }
+    }
+
+    private fun offsetsOf(text: String, part: String, vararg nths: Int): List<Int> =
+        nths.map { nth -> var at = -1; repeat(nth + 1) { at = text.indexOf(part, at + 1) }; at }
+
+    // `sum += 1` assigns `sum` (Inko's `binary_assign_variable`): replacing it would assign the new, immutable variable.
+    fun testACompoundAssignedOccurrenceIsNotOne() {
+        for (operator in listOf("+=", "-=", "*=", "/=", "%=", "**=", "<<=", ">>=", ">>>=", "|=", "&=", "^=")) {
+            val text = "fn a -> Int {\n  let mut sum = 0\n  foo(sum)\n  sum $operator 1\n}\n"
+            assertEquals(operator, offsetsOf(text, "sum", 1), occurrencesOf(text, "sum", nth = 1))
+        }
+    }
+
+    // After an assignment to a variable the expression reads, the same expression has another value.
+    fun testOccurrencesAfterAnAssignmentAreNotOnes() {
+        val compound = "fn a(items: Array[Int]) -> Int {\n  let mut sum = 0\n  let first = sum + items.size\n  sum += 1\n  first + (sum + items.size)\n}\n"
+        assertEquals(offsetsOf(compound, "sum + items.size", 0), occurrencesOf(compound, "sum + items.size"))
+        assertEquals(offsetsOf(compound, "sum + items.size", 1), occurrencesOf(compound, "sum + items.size", nth = 1))
+        val plain = "fn a -> Int {\n  let mut x = 1\n  foo(x * 2)\n  x = 2\n  bar(x * 2)\n}\n"
+        assertEquals(offsetsOf(plain, "x * 2", 0), occurrencesOf(plain, "x * 2"))
+        // Before the assignment, both are the same value.
+        val before = "fn a -> Int {\n  let mut x = 1\n  foo(x * 2)\n  bar(x * 2)\n  x -= 2\n  x\n}\n"
+        assertEquals(offsetsOf(before, "x * 2", 0, 1), occurrencesOf(before, "x * 2"))
+    }
+
+    // A loop's next pass reads what its body assigned, so a `let` before the loop would be out of date.
+    fun testOccurrencesInALoopThatAssignsAreNotOnes() {
+        val text = "fn a -> Int {\n  let mut n = 1\n  foo(n * 2)\n  while n < 10 {\n    bar(n * 2)\n    n *= 2\n  }\n  0\n}\n"
+        assertEquals(offsetsOf(text, "n * 2", 0), occurrencesOf(text, "n * 2"))
+        assertEquals(offsetsOf(text, "n * 2", 1), occurrencesOf(text, "n * 2", nth = 1))
+    }
+
     fun testSuggestsNamesInInkosStyle() {
         fun name(text: String, part: String) = InkoIntroduceVariable.suggestName(stream(text), TextRange(text.indexOf(part), text.indexOf(part) + part.length))
         assertEquals("string", name("x.to_string", "x.to_string"))

@@ -18,7 +18,7 @@ for you to review and submit.
 
 I use three words for how code comes to exist. Code I wrote, I typed by hand, with nothing generated. Code I wrought, an AI agent generated while I iterated with it, and I reviewed every change before committing it, so I own every diff. Code I requested, an agent built with little or no review from me, the way a dark factory runs without lights.
 
-**Versions 0.1.0 through 0.12.0 are requested.**
+**Versions 0.1.0 through 0.13.0 are requested.**
 
 ## Features
 
@@ -296,7 +296,8 @@ compiler, so it always agrees with your installed Inko version.
   ivm-installed version or another executable for a project, use
   *Settings → Languages & Frameworks → Inko*.
 
-- [Cuttlebone](#cuttlebone), for the compiler's types and definitions
+- [Cuttlebone](#cuttlebone), for the compiler's types and definitions:
+  Parakeet offers to download it
 
 ## Installing
 
@@ -326,22 +327,52 @@ types; without it, those features are unavailable rather than guessed.
 
 ### Setting it up
 
-1. Build and install Cuttlebone following its README (it needs Rust and
-   LLVM 18), so that `cuttlebone` is on your `PATH` (Parakeet also checks Cargo's `bin`
-   directory, where `cargo install` puts it).
-2. Use the Inko version Cuttlebone links: `cuttlebone --version` prints it
-   (e.g. `cuttlebone 0.1.0 (Inko 0.21.1)`), and it refuses other versions.
-   The project's toolchain is in *Settings → Languages & Frameworks → Inko*.
-3. Open an Inko file. Parakeet starts one `cuttlebone` per project, through
-   IntelliJ's own LSP support, and stops it when the project closes.
+Open an Inko file. With no Cuttlebone (none set, none on `PATH`, none
+downloaded), Parakeet offers to download one, in one notification: the
+build of the newest Cuttlebone release for your Inko (`inko --version`,
+from the project's toolchain), OS and CPU. Click **Download Cuttlebone**
+and it's downloaded, checked and started; nothing is downloaded without
+that click. Parakeet then starts one `cuttlebone` per project, through
+IntelliJ's own LSP support, and stops it when the project closes.
 
-To use another executable, set *Settings → Languages & Frameworks → Inko →
-Cuttlebone → Executable*. The same page says whether Cuttlebone is running,
-and if not, why: not found, a different Inko version, or stopped after
-crashing. Parakeet says so there (and in `idea.log`) and nowhere else: no
-popups. It restarts a crashed Cuttlebone up to 5 times in a row, waiting
-1, 2, 4, 8 and 16 s, and IntelliJ's language services widget in the status
-bar can restart it by hand.
+Cuttlebone has builds for macOS 15 or newer and Linux, on ARM64 and
+x86-64. Each build works with one Inko version, the compiler it links. When
+the newest release has none for your Inko, Parakeet looks for an older
+release that has one, and if none does, says so instead of offering a build
+that wouldn't run.
+
+- **Downloads** come from [Cuttlebone's GitHub
+  releases](https://github.com/setdef/Cuttlebone/releases), through the
+  IDE's own HTTP support (so its proxy settings apply), with progress and a
+  cancel button. Each is checked against its release's `manifest.json`
+  (size and SHA-256), unpacked, and run once (`cuttlebone --version` must
+  name the Inko it's for) before it's moved into place, in one step, in
+  JetBrains' shared data directory (`parakeet/cuttlebone/`, one directory
+  per Cuttlebone and Inko version, used by each of your JetBrains IDEs).
+  A failed, cancelled or partial download is never used.
+- **When your Inko changes** (ivm switched versions, say, noticed when you
+  come back to the IDE), Parakeet uses the download for the new version, or
+  offers to download it the same way.
+- **Updates** are offered, never installed for you: when a newer Cuttlebone
+  has a build for your Inko, Parakeet says so once.
+
+To use a Cuttlebone of your own, put `cuttlebone` on your `PATH` (Parakeet
+also checks Cargo's `bin` directory, where `cargo install` puts it), or set
+*Settings → Languages & Frameworks → Inko → Cuttlebone → Executable*. The
+setting comes first, then `PATH`, and either takes precedence over a
+download. Building Cuttlebone yourself needs Rust and LLVM 18 (its README
+says how), and it refuses any Inko but the one it links:
+`cuttlebone --version` prints it (e.g. `cuttlebone 0.10.0 (Inko 0.21.1)`).
+
+The settings page says which Cuttlebone is in use and where it came from
+(the setting, `PATH`, Cargo's `bin` directory, or a download), whether it's
+running, and if not, why: not found, a different Inko version, or stopped
+after crashing. Beyond the one notification when there's no Cuttlebone at
+all, or none that will run (with the download offer, when there's one),
+Parakeet says so there (and in `idea.log`) and nowhere else. It restarts a crashed
+Cuttlebone up to 5 times in a row, waiting 1, 2, 4, 8 and 16 s, and
+IntelliJ's language services widget in the status bar can restart it by
+hand.
 
 ### What asks Cuttlebone
 

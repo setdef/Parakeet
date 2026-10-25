@@ -483,6 +483,7 @@ Audits and session reports, oldest first:
 - [Requiring Cuttlebone](docs/history/SESSION-require-cuttlebone.md)
 - [Replaying typing against Cuttlebone](docs/history/SESSION-typing-replay.md)
 - [Declaration errors, and 0.12](docs/history/SESSION-declaration-errors-and-0.12.md)
+- [Compound assignments](docs/history/SESSION-compound-assignments.md)
 
 ## Icon
 

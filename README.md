@@ -525,6 +525,7 @@ Audits and session reports, oldest first:
 - [Declaration errors, and 0.12](docs/history/SESSION-declaration-errors-and-0.12.md)
 - [Compound assignments](docs/history/SESSION-compound-assignments.md)
 - [Refactoring follow-ups](docs/history/SESSION-refactoring-follow-ups.md)
+- [Downloading Cuttlebone, and 0.13.0](docs/history/SESSION-download-cuttlebone.md)
 
 ## Icon
 

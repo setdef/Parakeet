@@ -79,6 +79,40 @@ class InkoExtractMethodTest : InkoTestCase() {
         )
     }
 
+    // `sum += x` assigns `sum` like `sum = sum + x` (Inko's `binary_assign_variable`), and a parameter can't be assigned.
+    fun testACompoundAssignedVariableIsPassedAndReturned() {
+        val result = extract("fn f(items: Array[Int]) -> Int {\n  let mut sum: Int = 0\n  <selection>sum += items.size</selection>\n  sum\n}\n")
+        assertEquals(
+            "fn f(items: Array[Int]) -> Int {\n  let mut sum: Int = 0\n  sum = extracted(sum, items)\n  sum\n}\n\n" +
+                "fn extracted(sum: Int, items: mut Array[Int]) -> Int {\n  let mut sum = sum\n  sum += items.size\n  sum\n}\n",
+            result,
+        )
+    }
+
+    // Every compound operator Inko's lexer has assigns, and the comparisons that look like them don't.
+    fun testEveryCompoundOperatorAssigns() {
+        for (operator in listOf("+=", "-=", "*=", "/=", "%=", "**=", "<<=", ">>=", ">>>=", "|=", "&=", "^=")) {
+            val result = extract("fn f -> Int {\n  let mut x: Int = 1\n  <selection>x $operator 2</selection>\n  x\n}\n")
+            assertTrue("$operator: $result", result.contains("  x = extracted(x)\n") && result.contains("let mut x = x\n  x $operator 2\n  x\n"))
+        }
+        val result = extract("fn f -> Bool {\n  let x: Int = 1\n  <selection>x <= 2</selection>\n}\n")
+        assertEquals("fn f -> Bool {\n  let x: Int = 1\n  extracted(x)\n}\n\nfn extracted(x: Int) -> Bool {\n  x <= 2\n}\n", result)
+    }
+
+    // A loop reads the variable again on its next pass, so an update inside it is needed back even with nothing after it.
+    fun testAVariableAssignedInALoopIsReturned() {
+        val result = extract("fn f -> Int {\n  let mut sum: Int = 0\n  while sum < 10 {\n    <selection>sum += 3</selection>\n  }\n  0\n}\n")
+        assertEquals(
+            "fn f -> Int {\n  let mut sum: Int = 0\n  while sum < 10 {\n    sum = extracted(sum)\n  }\n  0\n}\n\n" +
+                "fn extracted(sum: Int) -> Int {\n  let mut sum = sum\n  sum += 3\n  sum\n}\n",
+            result,
+        )
+    }
+
+    fun testRefusesTwoCompoundAssignedVariablesNeededBack() {
+        assertTrue(refusal("fn f -> Int {\n  let mut a = 1\n  let mut b = 2\n  <selection>a += 1\n  b -= 1</selection>\n  a + b\n}\n")!!.contains("`a`, `b`"))
+    }
+
     fun testSeveralResultsComeBackAsATuple() {
         val result = extract("fn f -> Int {\n  <selection>let a: Int = 1\n  let mut b = 2</selection>\n  b = b + 1\n  a + b\n}\n")
         assertEquals(

@@ -262,6 +262,18 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         )
     }
 
+    // Inko rejects assigning a parameter, `sum += …` included (`invalid-assign`), and the caller needs the new sum.
+    fun testExtractedCompoundAssignmentsStillCompile() {
+        extractAndCompile(
+            "src/app/sums.inko",
+            "fn pub total(items: Array[Int]) -> Int {\n  let mut sum: Int = 0\n  <selection>sum += items.size</selection>\n  sum\n}\n",
+        )
+        extractAndCompile(
+            "src/app/loops.inko",
+            "fn pub count -> Int {\n  let mut n: Int = 1\n  while n < 100 {\n    <selection>n *= 2</selection>\n  }\n  0\n}\n",
+        )
+    }
+
     // AUDIT.md finding 1.1: names in `${…}` are inputs like any other.
     fun testExtractingInterpolatedCodeStillCompiles() = extractAndCompile(
         "src/app/greet.inko",

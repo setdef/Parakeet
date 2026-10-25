@@ -128,7 +128,9 @@ object InkoExtractMethod {
         }
         fun usedAfter(offset: Int) = (last + 1 until methodEnd).any { isUse(it) && localAt(it)?.offset == offset }
         val outputs = InkoLocals.declarations(text).filter { range.contains(it.offset) && usedAfter(it.offset) }
-        val reassigned = inputs.values.filter { it.offset in assigned && usedAfter(it.offset) }
+        // In a loop the variable is declared outside of, the next pass reads what the selection assigns.
+        fun loopedOver(local: InkoLocal) = ownedBy(stream, first, stream.indexAt(local.offset), setOf("loop", "while", "for"))
+        val reassigned = inputs.values.filter { it.offset in assigned && (usedAfter(it.offset) || loopedOver(it)) }
         if (reassigned.size > 1 || (reassigned.isNotEmpty() && outputs.isNotEmpty())) {
             val names = (reassigned + outputs).joinToString(", ") { "`${it.name}`" }
             return fail("The code after the selection needs $names back, including reassigned variables, and Inko can't assign several variables at once.")
@@ -280,12 +282,25 @@ object InkoExtractMethod {
             false
         }
 
-    // `x = …` and `x := …` assign to `x`.
+    // Inko's compound assignments (ast/src/lexer.rs), which assign like `x = x + …` (`binary_assign_variable`).
+    private val COMPOUND_ASSIGNMENTS = setOf("+=", "-=", "*=", "/=", "%=", "**=", "<<=", ">>=", ">>>=", "|=", "&=", "^=")
+
+    // `x = …`, `x := …`, and `x += …` (or another compound assignment) assign to `x`.
     private fun isAssignedAt(stream: InkoTokenStream, at: Int): Boolean {
         val next = stream.tokens.getOrNull(at) ?: return false
         val following = stream.tokens.getOrNull(at + 1)
-        return (next.isOperator("=") && (following == null || !(following.isOperator("=") && following.start == next.end))) ||
-            (next.isOperator(":") && following?.isOperator("=") == true && following.start == next.end)
+        if ((next.isOperator("=") && (following == null || !(following.isOperator("=") && following.start == next.end))) ||
+            (next.isOperator(":") && following?.isOperator("=") == true && following.start == next.end)) return true
+        // The lexer makes each operator character a token; Inko's takes the longest operator, so `>>=` isn't `>` and `>=`.
+        var operator = ""
+        var i = at
+        while (operator.length < 4) {
+            val token = stream.tokens.getOrNull(i)?.takeIf { it.isOperator() && (i == at || it.start == stream.tokens[i - 1].end) } ?: break
+            operator += token.text
+            if (operator in COMPOUND_ASSIGNMENTS) return true
+            i++
+        }
+        return false
     }
 
     private fun isMutable(stream: InkoTokenStream, local: InkoLocal): Boolean =

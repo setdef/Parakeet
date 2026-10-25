@@ -231,8 +231,10 @@ compiler, so it always agrees with your installed Inko version.
   arguments (so new parameters need a value for calls to pass), named
   arguments after positional ones, no empty parentheses, parameters that can't
   be reassigned, and owned values that move unless borrowed. They update the
-  calls the search finds (above). Without types, Extract Method leaves placeholders for
-  types it can't work out, and `inko check` points out any left behind.
+  calls the search finds (above). Extract Method writes a local's type as
+  written, else as the compiler has it (Cuttlebone's fresh hover at the
+  local's name, as for "Specify type explicitly"), and leaves placeholders
+  for types it can't work out, which `inko check` points out if left behind.
 - **Quick fixes** act on the diagnostic IDs `inko check` reports
   (`invalid-symbol`, `unused-symbol`, `unused-result`, `missing-field`,
   `invalid-implementation`, `missing-trait`, `unreachable`); auto-import finds

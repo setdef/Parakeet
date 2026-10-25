@@ -4,8 +4,10 @@ import com.intellij.codeInsight.template.TemplateBuilderImpl
 import com.intellij.codeInsight.template.TemplateManager
 import com.intellij.codeInsight.template.impl.ConstantNode
 import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiDocumentManager
@@ -23,8 +25,10 @@ import com.intellij.refactoring.util.CommonRefactoringUtil
  * it goes (right after that method).
  *
  * Types come from what's written (parameter and `let` annotations, the
- * method's return type) or obvious (literals, `Type(…)`, `Type.new`); any
- * other type is left as a placeholder to fill in. Owned values are passed as
+ * method's return type), else the compiler's type for a local ([plan]'s
+ * `bindingType`), else what's obvious (a local made by `Type(…)` or
+ * `Type.new`, a value that's a literal, `Type(…)` or `Type.new`); any other
+ * type is left as a placeholder to fill in. Owned values are passed as
  * `mut` borrows so the caller can keep using them; value types (`Int`,
  * `Float`, `Bool`, `String`, `Nil`) and existing borrows are passed as they are.
  */
@@ -48,7 +52,11 @@ object InkoExtractMethod {
         val name: String,
     )
 
-    fun plan(text: CharSequence, selection: TextRange): Result<Plan> {
+    /**
+     * [bindingType] gives the compiler's type for the local whose name is at an offset, if known: a fresh
+     * answer only, since the type is written into code.
+     */
+    fun plan(text: CharSequence, selection: TextRange, bindingType: (Int) -> String? = { null }): Result<Plan> {
         fun fail(message: String) = Result.failure<Plan>(IllegalStateException(message))
         val stream = InkoTokenStream(text)
         val tokens = stream.tokens
@@ -159,7 +167,7 @@ object InkoExtractMethod {
                     ?: return null
                 return text.substring(tokens[index + 2].start, tokens[equals - 1].end)
             }
-            return local.type
+            return bindingType(local.offset) ?: local.type
         }
         fun parameterType(local: InkoLocal): String {
             val type = declaredType(local) ?: return PLACEHOLDER
@@ -342,7 +350,16 @@ class InkoExtractMethodHandler : RefactoringActionHandler {
     }
 
     private fun extract(project: Project, editor: Editor, file: PsiFile, range: TextRange) {
-        val plan = InkoExtractMethod.plan(editor.document.immutableCharSequence, range).getOrElse {
+        val text = editor.document.immutableCharSequence
+        val inko = file as? InkoFile
+        // Off the EDT, where asking Cuttlebone for a local's type may wait for its answer.
+        val planned = ProgressManager.getInstance().runProcessWithProgressSynchronously<Result<InkoExtractMethod.Plan>, RuntimeException>(
+            { ReadAction.compute<Result<InkoExtractMethod.Plan>, RuntimeException> {
+                InkoExtractMethod.plan(text, range) { offset -> inko?.let { InkoCompilerTypes.ofBinding(it, offset) } }
+            } },
+            TITLE, true, project,
+        )
+        val plan = planned.getOrElse {
             return CommonRefactoringUtil.showErrorHint(project, editor, it.message.orEmpty(), TITLE, null)
         }
         val (callName, methodStart) = InkoExtractMethod.apply(project, editor, plan)

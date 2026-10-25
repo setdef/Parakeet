@@ -239,12 +239,17 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertCompiles()
     }
 
-    private fun extractAndCompile(path: String, text: String) {
+    /** Extracts the selection in [text], with [cuttlebone]'s types for locals if asked, and checks the project compiles. */
+    private fun extractAndCompile(path: String, text: String, cuttlebone: Boolean = false) {
         val start = text.indexOf("<selection>")
         val end = text.indexOf("</selection>") - "<selection>".length
         val clean = text.replace("<selection>", "").replace("</selection>", "")
         open(path, clean)
-        val plan = InkoExtractMethod.plan(clean, com.intellij.openapi.util.TextRange(start, end)).getOrThrow()
+        if (cuttlebone) askCuttleboneAbout(path)
+        val file = myFixture.file as InkoFile
+        val plan = InkoExtractMethod.plan(clean, com.intellij.openapi.util.TextRange(start, end)) { offset ->
+            if (cuttlebone) InkoCompilerTypes.ofBinding(file, offset) else null
+        }.getOrThrow()
         assertTrue("Placeholder types won't compile: ${plan.method}", plan.placeholders.isEmpty())
         InkoExtractMethod.apply(project, myFixture.editor, plan)
         assertCompiles()
@@ -272,6 +277,18 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
             "src/app/loops.inko",
             "fn pub count -> Int {\n  let mut n: Int = 1\n  while n < 100 {\n    <selection>n *= 2</selection>\n  }\n  0\n}\n",
         )
+    }
+
+    // A local with no written type (`let mut sum = 0`) takes the compiler's type, so no placeholder is left.
+    fun testExtractedUntypedLocalsTakeTheCompilersTypes() {
+        putTempDirInProjectContent()
+        if (!askingCuttlebone) return
+        extractAndCompile(
+            "src/app/untyped.inko",
+            "fn pub total(items: Array[Int]) -> Int {\n  let mut sum = 0\n  let scale = 2.5\n  <selection>sum += items.size\n  sum += (scale * 2.0).to_int</selection>\n  sum\n}\n",
+            cuttlebone = true,
+        )
+        assertTrue(myFixture.file.text, myFixture.file.text.contains("fn extracted(sum: Int, items: mut Array[Int], scale: Float) -> Int {"))
     }
 
     // AUDIT.md finding 1.1: names in `${…}` are inputs like any other.

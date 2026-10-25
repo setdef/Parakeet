@@ -24,6 +24,31 @@
 - Renaming a field renames it where a constructor sets it by name (`Point(x: 1)`), and Change Signature no longer renames a named argument of a call to another method in the same file.
 - Every LSP feature IntelliJ would run for Cuttlebone, other than Go to Type Declaration, is off, so none appears twice (inlay hints and parameter info did), and Cuttlebone's own diagnostics are turned off, as Parakeet's come from `inko check`.
 
+## [0.12.0] - 2026-10-24
+
+### Fixed
+
+- Names inside string interpolations (`"${name}"`) are code again: Rename, Find Usages, Safe Delete, Inline Variable and Extract Method no longer miss them, and Inline Variable no longer leaves an interpolated use dangling.
+- `for` loop variables and destructuring patterns (`let Some(x) = … else`, `let (a, (b, c))`, `let [a, b]`, `let { @a = b }`, `mod.CONSTANT`) are local variables, so their uses no longer resolve to same-named methods. Patterns are read the way Inko's parser reads them, in `let`, `for` and `match` arms alike.
+- After an enum's constructors, the next method is no longer taken for a local variable, so Rename and Find Usages work on it across the project.
+- Methods named with keywords (`next`, `or`, `else`, `copy`, `true`, `false`) have names: they appear in the Structure view, can be renamed and found, calls like `iter.next` resolve, Implement Methods no longer offers `Iter.next` again for an `impl` that has it, and Extract Method accepts selections calling them. Keyword labels in named arguments are labels.
+- Adding an import no longer breaks a file whose last import has build tags (`import a (b) if unix`) or is an `import extern`, and names are only added to imports without build tags.
+- Setters (`fn value=`) are connected to the assignments that call them (`c.value = 2`): they have usages, can be renamed (from either side) and aren't deleted by Safe Delete while still used.
+- `type ref` types, and types with any other modifiers Inko allows, appear in the Structure view, with their methods under them instead of as module functions.
+- `import std.fmt (self, Format)` imports the module as `fmt`, so `fmt.` works for navigation, imports on paste and Move.
+- Type Hierarchy shows the traits a trait requires.
+- Unwrap/Remove no longer treats a match arm's guard, an `impl`'s bounds or an import's build tags as an `if`, and Complete Current Statement no longer adds bodies after them or to `fn extern` signatures.
+- Statements end where Inko's parser ends them: a line starting with `-1` or `!x`, and the line after a bare `return`, are statements of their own (for Move Statement, Extract Method, Introduce Variable, Inline Method and Complete Current Statement).
+- Number literals lex as Inko's lexer reads them, so `pair.0.1` and `10e+2` work with Expression Type, Introduce Variable, Extend Selection and the operator intentions.
+- Expression Type knows the types of constants from dependencies and the standard library.
+- Fields named with digits, like a tuple's `@0`, are fields in the outline and completion.
+- Parameter info and parameter-name hints for constructors of types with `mut` fields show the right names, and an enum's compiler-internal fields no longer appear in completion or parameter info.
+- The Bool-method inspection no longer flags methods the standard library deliberately names without `?`, such as `AtomicBool.compare_and_swap`.
+- Errors are underlined in the right place on lines with emoji, accented letters or other characters made of several code points (Inko counts columns in grapheme clusters).
+- One diagnostic with a control character in its message no longer drops every other diagnostic from the same check.
+- Checking and indexing never sync dependencies or touch the network, so diagnostics no longer disappear offline, and the banner says whether a project's dependencies were never synced or have changed since.
+- The Code Style preview is valid Inko.
+
 ## [0.11.0] - 2026-10-23
 
 ### Added

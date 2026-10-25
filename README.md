@@ -58,7 +58,7 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   project, by the compiler's answers, including renaming a module's file, and
   a trait's method with the methods implementing it
 - **Highlight usages** of the name at the caret within the file
-  (⌘⇧F7 / Ctrl+Shift+F7), with assignments as writes when Cuttlebone answers
+  (⌘⇧F7 / Ctrl+Shift+F7), with assignments (`=`, `:=`, `+=` and the rest) as writes
 - **Parameter info** (⌘P / Ctrl+P) in calls, and parameter-name hints before
   positional arguments
 - **Type hints** for `let` bindings and closure arguments that don't write a

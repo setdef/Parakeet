@@ -42,9 +42,10 @@ class InkoHighlightUsagesHandler(editor: Editor, file: PsiFile, private val name
             for ((range, kind) in compiled(answer.value.orEmpty())) (if (kind == DocumentHighlightKind.Read) myReadUsages else myWriteUsages) += range
             return
         }
-        // Only where Cuttlebone can't check the code being edited: Parakeet's own reading of it.
+        // Only where Cuttlebone can't check the code being edited: Parakeet's own reading of it. As Cuttlebone has
+        // them, declarations and assignments (`x = 1`, `x := 1`, `x += 1`, `c.value = 1`) are writes.
         for ((occurrence, isDeclaration) in InkoUsages.inFile(name)) {
-            (if (isDeclaration) myWriteUsages else myReadUsages) += occurrence.textRange
+            (if (isDeclaration || InkoNameContext.isAnyAssignment(occurrence)) myWriteUsages else myReadUsages) += occurrence.textRange
         }
     }
 

@@ -212,7 +212,7 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         useFake(FakeCuttlebone.Script(log = "", answers = listOf(highlightsOfTotal(status = "unavailable").copy(reason = "declarationErrors"))))
         open("src/main.inko", reassigned)
         runningServer()
-        assertEquals("fn pub run {\n  let mut «=total» = 0\n  «total» = 1\n  «total» + 2\n}\n", highlighted("total + 2"))
+        assertEquals("fn pub run {\n  let mut «=total» = 0\n  «=total» = 1\n  «total» + 2\n}\n", highlighted("total + 2"))
     }
 
     /** Find Usages of the `size` declared at [marker] in util.inko, as offsets in main.inko. */

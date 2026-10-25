@@ -132,4 +132,19 @@ class InkoCompoundSetterTest : InkoTestCase(onDisk = true) {
         assertEquals(listOf(main.indexOf("value += 1"), main.indexOf("value = 2")), highlighted("value += 1"))
         assertEquals(listOf(main.indexOf("value += 1"), main.indexOf("value\n}")), highlighted("value\n}"))
     }
+
+    // Cuttlebone marks a setter's calls, `c.value = 2` and `c.value += 1`, as writes, in the getter's highlights too.
+    fun testInCodeBeingEditedHighlightingMarksSetterCallsAsWrites() {
+        project()
+        cuttleboneCantCheckTheCode()
+        myFixture.configureFromTempProjectFile("src/main.inko")
+        fun writes(marker: String): List<Int> {
+            val handler = InkoHighlightUsagesHandlerFactory().createHighlightUsagesHandler(myFixture.editor, myFixture.file, nameAt(main, marker)) as InkoHighlightUsagesHandler
+            handler.computeUsages(handler.targets)
+            assertEquals(listOfNotNull(main.indexOf("value\n}").takeIf { marker == "value\n}" }), handler.readUsages.map { it.startOffset })
+            return handler.writeUsages.map { it.startOffset }.sorted()
+        }
+        assertEquals(listOf(main.indexOf("value += 1"), main.indexOf("value = 2")), writes("value = 2"))
+        assertEquals(listOf(main.indexOf("value += 1")), writes("value\n}"))
+    }
 }

@@ -98,6 +98,16 @@ sealed class InkoNameContext {
             return false
         }
 
+        /** Whether `:=` follows [name]: `x := y` assigns `x` and gives its old value. */
+        fun isReplaced(name: com.intellij.psi.PsiElement): Boolean {
+            val colon = name.nextToken()?.takeIf { it.isToken(InkoTokens.OPERATOR) && it.text == ":" } ?: return false
+            val next = colon.nextToken()
+            return next.isToken(InkoTokens.OPERATOR) && next!!.text == "=" && next.textRange.startOffset == colon.textRange.endOffset
+        }
+
+        /** Whether [name] is assigned here, as the compiler counts it: `=`, `:=`, or a compound assignment. */
+        fun isAnyAssignment(name: com.intellij.psi.PsiElement): Boolean = isAssigned(name) || isReplaced(name) || isCompoundAssigned(name)
+
         /** The type of a receiver before `.`: a local with a known type, or `self`. */
         private fun receiverType(receiver: com.intellij.psi.PsiElement): String? {
             val file = receiver.containingFile.text

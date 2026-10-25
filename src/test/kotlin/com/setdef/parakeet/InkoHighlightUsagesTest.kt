@@ -52,4 +52,25 @@ class InkoHighlightUsagesTest : InkoTestCase(onDisk = true) {
         "type A {\n  let «=@count»: Int\n\n  fn b -> Int {\n    «@count»\n  }\n}\n\ntype B {\n  let @count: Int\n}\n",
         highlighted("type A {\n  let @count: Int\n\n  fn b -> Int {\n    <caret>@count\n  }\n}\n\ntype B {\n  let @count: Int\n}\n"),
     )
+
+    // As Cuttlebone marks them (its Write): a local's assignments, plain, replacing (`:=`) or compound, are writes.
+    fun testALocalsAssignmentsAreWrites() = assertEquals(
+        "fn a -> Int {\n  let mut «=x» = 1\n  «=x» = 2\n  «=x» += 3\n  «=x» := 4\n  «x» == 5\n  «x» <= 6\n  «x»\n}\n",
+        highlighted("fn a -> Int {\n  let mut x = 1\n  x = 2\n  x += 3\n  x := 4\n  x == 5\n  x <= 6\n  <caret>x\n}\n"),
+    )
+
+    fun testEveryCompoundAssignmentIsAWrite() {
+        for (operator in listOf("+=", "-=", "*=", "/=", "%=", "**=", "<<=", ">>=", ">>>=", "|=", "&=", "^=")) {
+            assertEquals(
+                operator,
+                "fn a -> Int {\n  let mut «=x» = 1\n  «=x» $operator 2\n  «x»\n}\n",
+                highlighted("fn a -> Int {\n  let mut x = 1\n  x $operator 2\n  <caret>x\n}\n"),
+            )
+        }
+    }
+
+    fun testAFieldsAssignmentsAreWrites() = assertEquals(
+        "type A {\n  let mut «=@n»: Int\n\n  fn mut b -> Int {\n    «=@n» = 1\n    «=@n» -= 2\n    «@n»\n  }\n}\n",
+        highlighted("type A {\n  let mut @n: Int\n\n  fn mut b -> Int {\n    @n = 1\n    @n -= 2\n    <caret>@n\n  }\n}\n"),
+    )
 }

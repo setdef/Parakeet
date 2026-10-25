@@ -81,6 +81,8 @@ class InkoCompoundSetterTest : InkoTestCase(onDisk = true) {
     fun testRenamingTheSetterSaysACompoundAssignmentAlsoCallsTheGetter() {
         project()
         withoutReferences()
+        // Renaming one accessor: the offer to rename the other too is declined.
+        com.intellij.openapi.ui.TestDialogManager.setTestDialog(com.intellij.openapi.ui.TestDialog.NO, testRootDisposable)
         try {
             myFixture.renameElement(setter(), "amount=")
             fail("expected a conflict")
@@ -92,6 +94,8 @@ class InkoCompoundSetterTest : InkoTestCase(onDisk = true) {
     fun testRenamingTheGetterSaysACompoundAssignmentAlsoCallsTheSetter() {
         project()
         withoutReferences()
+        // Renaming one accessor: the offer to rename the other too is declined.
+        com.intellij.openapi.ui.TestDialogManager.setTestDialog(com.intellij.openapi.ui.TestDialog.NO, testRootDisposable)
         try {
             myFixture.renameElement(getter(), "amount")
             fail("expected a conflict")
@@ -103,6 +107,8 @@ class InkoCompoundSetterTest : InkoTestCase(onDisk = true) {
     fun testRenamingAnAccessorAnywayRenamesTheCompoundAssignment() {
         project()
         withoutReferences()
+        // Renaming one accessor: the offer to rename the other too is declined.
+        com.intellij.openapi.ui.TestDialogManager.setTestDialog(com.intellij.openapi.ui.TestDialog.NO, testRootDisposable)
         BaseRefactoringProcessor.ConflictsInTestsException.withIgnoredConflicts<Throwable> { myFixture.renameElement(setter(), "amount=") }
         val text = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/main.inko"))!!.text
         assertEquals(main.replace("c.value += 1", "c.amount += 1").replace("c.value = 2", "c.amount = 2"), text)
@@ -146,5 +152,52 @@ class InkoCompoundSetterTest : InkoTestCase(onDisk = true) {
         }
         assertEquals(listOf(main.indexOf("value += 1"), main.indexOf("value = 2")), writes("value = 2"))
         assertEquals(listOf(main.indexOf("value += 1")), writes("value\n}"))
+    }
+
+    // Renaming one accessor offers to rename the other, as IntelliJ does for Java's getters and setters: one rename,
+    // whose usages are all found before anything changes, so none is in code that no longer type checks.
+    private fun renamedBoth(): String {
+        val renamed = main.replace("c.value", "c.amount")
+        val counterText = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/app/counter.inko"))!!.text
+        assertEquals(counter.replace("fn pub mut value=", "fn pub mut amount=").replace("fn pub value", "fn pub amount"), counterText)
+        return renamed
+    }
+
+    private fun mainText() = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/main.inko"))!!.text
+
+    fun testRenamingTheSetterOffersToRenameTheGetter() {
+        project()
+        withoutReferences()
+        com.intellij.openapi.ui.TestDialogManager.setTestDialog(com.intellij.openapi.ui.TestDialog.YES, testRootDisposable)
+        myFixture.renameElement(setter(), "amount=")
+        assertEquals(renamedBoth(), mainText())
+    }
+
+    fun testRenamingTheGetterOffersToRenameTheSetter() {
+        project()
+        withoutReferences()
+        com.intellij.openapi.ui.TestDialogManager.setTestDialog(com.intellij.openapi.ui.TestDialog.YES, testRootDisposable)
+        myFixture.renameElement(getter(), "amount")
+        assertEquals(renamedBoth(), mainText())
+    }
+
+    // Without a pair, there's nothing to offer: the dialog would fail the test if it were shown.
+    fun testAGetterWithoutASetterIsRenamedAlone() {
+        val counterOnly = "type pub Counter {\n  let @value: Int\n\n  fn pub value -> Int {\n    @value\n  }\n}\n"
+        val text = "import app.counter (Counter)\n\nfn get(c: ref Counter) -> Int {\n  c.value\n}\n"
+        putTempDirInProjectContent()
+        myFixture.addFileToProject("inko.pkg", "")
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
+        myFixture.addFileToProject("src/app/counter.inko", counterOnly)
+        myFixture.addFileToProject("src/main.inko", text)
+        Compiler()
+            .resolves(At("src/app/counter.inko", counterOnly, "@value\n"), At("src/app/counter.inko", counterOnly, "@value:"))
+            .resolves(inMain(text, "Counter)"), At("src/app/counter.inko", counterOnly, "Counter {"))
+            .resolves(At("src/main.inko", text, "value\n}"), At("src/app/counter.inko", counterOnly, "value ->"))
+            .answersReferences(At("src/app/counter.inko", counterOnly, "value ->"))
+            .install()
+        val getter = declaration("src/app/counter.inko", "value")
+        myFixture.renameElement(getter, "amount")
+        assertEquals(text.replace("c.value", "c.amount"), mainText())
     }
 }

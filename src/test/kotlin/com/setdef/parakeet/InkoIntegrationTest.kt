@@ -406,12 +406,27 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         myFixture.addFileToProject("src/app/counter.inko", counter)
         myFixture.addFileToProject("src/app/bump.inko", bump)
         askCuttleboneAbout("src/app/counter.inko", "src/app/bump.inko")
+        // Only the getter: the offer to rename the setter too is declined.
+        com.intellij.openapi.ui.TestDialogManager.setTestDialog(com.intellij.openapi.ui.TestDialog.NO, testRootDisposable)
         try {
             myFixture.renameElement(getter(), "amount")
             fail("expected a conflict")
         } catch (e: com.intellij.refactoring.BaseRefactoringProcessor.ConflictsInTestsException) {
             assertEquals(listOf("`c.value += 1` at bump.inko:4 also calls `value=`, which isn't renamed, so it would call `amount=` instead."), e.messages.toList())
         }
+        assertCompiles()
+    }
+
+    // Renaming the getter with the setter, as offered: one rename, from Cuttlebone's fresh answers before anything changed.
+    fun testRenamedAccessorPairsStillCompile() {
+        putTempDirInProjectContent()
+        if (!askingCuttlebone) return
+        myFixture.addFileToProject("src/app/counter.inko", counter)
+        myFixture.addFileToProject("src/app/bump.inko", bump)
+        askCuttleboneAbout("src/app/counter.inko", "src/app/bump.inko")
+        com.intellij.openapi.ui.TestDialogManager.setTestDialog(com.intellij.openapi.ui.TestDialog.YES, testRootDisposable)
+        myFixture.renameElement(getter(), "amount")
+        assertEquals(bump.replace("c.value", "c.amount"), PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/app/bump.inko"))!!.text)
         assertCompiles()
     }
 

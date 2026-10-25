@@ -120,12 +120,46 @@ class InkoRenameInputValidator : RenameInputValidator {
  * Renaming a trait's method renames the methods implementing it, and renaming one of those renames the
  * trait's method and the others: otherwise they'd no longer implement it. Calls are found by the compiler's
  * answers; one it can't check (in code that doesn't type check) isn't renamed, and the conflicts say where.
+ *
+ * Renaming a getter (`fn value`) or setter (`fn mut value=`) offers to rename the other beside it too, as
+ * IntelliJ does for Java's: `c.value += 1` calls both. In one rename, every usage is found before anything
+ * changes, from Cuttlebone's fresh answers; renaming them one after the other, the second would search code
+ * the first left not type checking.
  */
 class InkoInstanceMethodRenameProcessor : RenamePsiElementProcessor() {
     override fun canProcessElement(element: PsiElement): Boolean = element is InkoDeclaration && InkoDeclarations.isInstanceMethod(element)
 
     override fun prepareRenaming(element: PsiElement, newName: String, allRenames: MutableMap<PsiElement, String>) {
         val method = element as? InkoDeclaration ?: return
+        renameWithTraitMethods(method, newName, allRenames)
+        val other = otherAccessor(method) ?: return
+        if (allRenames.keys.any { method.manager.areElementsEquivalent(it, other) } || InkoRenameVeto().value(other)) return
+        val otherName = newName.removeSuffix("=").let { if (other.name.endsWith("=")) "$it=" else it }
+        // Only where a dialog can be shown: a rename run from elsewhere renames what it was asked to.
+        if (!com.intellij.openapi.application.ApplicationManager.getApplication().isDispatchThread) return
+        val kind = if (other.name.endsWith("=")) "setter" else "getter"
+        val answer = com.intellij.openapi.ui.Messages.showYesNoDialog(
+            method.project,
+            "Rename the $kind `${other.name}` to `$otherName` too? A compound assignment like `x.${method.name.removeSuffix("=")} += 1` calls both.",
+            "Rename Accessors",
+            com.intellij.openapi.ui.Messages.getQuestionIcon(),
+        )
+        if (answer == com.intellij.openapi.ui.Messages.YES) renameWithTraitMethods(other, otherName, allRenames)
+    }
+
+    /** The setter beside a getter (`value=` for `value`), or the getter beside a setter, in the same type or `impl`. */
+    private fun otherAccessor(method: InkoDeclaration): InkoDeclaration? {
+        val file = method.containingFile as? InkoFile ?: return null
+        val offset = method.textRange.startOffset
+        val path = InkoOutline.of(file.text).enclosing(offset)
+        val index = path.indexOfLast { it.nameOffset == offset }.takeIf { it > 0 } ?: return null
+        val wanted = if (method.name.endsWith("=")) method.name.removeSuffix("=") else "${method.name}="
+        val sibling = path[index - 1].children.firstOrNull { it.kind == InkoOutline.Kind.METHOD && it.label == wanted } ?: return null
+        val other = PsiTreeUtil.getParentOfType(file.findElementAt(sibling.nameOffset), InkoDeclaration::class.java, false) ?: return null
+        return other.takeIf { it.name == wanted && InkoDeclarations.isInstanceMethod(it) }
+    }
+
+    private fun renameWithTraitMethods(method: InkoDeclaration, newName: String, allRenames: MutableMap<PsiElement, String>) {
         val traitMethods = InkoTraitNavigation.supers(method.containingFile, method.textRange.startOffset).filterIsInstance<InkoDeclaration>()
         for (traitMethod in traitMethods.ifEmpty { listOf(method) }) {
             if (traitMethod != method && InkoRenameVeto().value(traitMethod)) continue

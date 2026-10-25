@@ -61,6 +61,8 @@ class InkoSetterTest : InkoTestCase(onDisk = true) {
     }
 
     fun testRenamingASetterRenamesItsAssignments() {
+        // Only the setter: the offer to rename the getter too is declined.
+        com.intellij.openapi.ui.TestDialogManager.setTestDialog(com.intellij.openapi.ui.TestDialog.NO, testRootDisposable)
         myFixture.renameElement(setter(), "amount=")
         assertEquals(main.replace("c.value = 2", "c.amount = 2").replace("c.value=3", "c.amount=3"), mainText())
     }

@@ -199,7 +199,10 @@ compiler, so it always agrees with your installed Inko version.
   methods implementing it, since the compiler gives each its own id, and
   renaming any of them renames them all. A compound assignment to a member
   (`c.value += 1`) calls the getter `value` and then the setter `value=`, so
-  it's a use of both, and renaming only one of them lists it as a conflict.
+  it's a use of both. Renaming a getter or setter offers to rename the
+  other beside it too (as IntelliJ does for Java's), in the same rename, so
+  every usage is found while the code still type checks; renaming only one
+  lists such a site as a conflict.
   Where references have no answer (a
   file in the project doesn't parse or imports a module that doesn't exist,
   or code a declaration's error may affect mentions the name), each candidate is

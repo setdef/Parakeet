@@ -432,7 +432,8 @@ each answer's status:
 
 Where Cuttlebone has no answer in code being edited (the method being edited
 after the edit; a file importing a module that doesn't exist, before any good
-check; and, since its eighth milestone, only the method or item with a
+check, and since its eleventh milestone only what uses that import; a file
+importing a module that doesn't parse; and, since its eighth milestone, only the method or item with a
 declaration's error and those naming what it's in), the features in the
 table above read the code themselves. Elsewhere in a project with a
 declaration error, Cuttlebone's answers are fresh. A Cuttlebone before

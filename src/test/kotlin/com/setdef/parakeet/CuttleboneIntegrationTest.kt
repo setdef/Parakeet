@@ -183,15 +183,36 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf(text.indexOf("x = make") + 1 to ": B", text.indexOf("y = [") + 1 to ": Array[Int]"), inBackground { InkoParameterHints.types(myFixture.file) })
     }
 
+    /** The running cuttlebone's version is [version] or newer. */
+    private fun cuttleboneIsAtLeast(version: String): Boolean =
+        CuttleboneService.getInstance(project).server()?.initializeResult?.serverInfo?.version?.let { Ivm.isAtLeast(it, version) } == true
+
     fun testOpenedWithAnImportOfAMissingModuleThereAreNoHints() {
-        // A file importing a module that doesn't exist isn't type checked (noHir), and no check of it has been
-        // good yet, so nothing stale answers either: Cuttlebone has no answer anywhere in it. Hints only inform,
-        // so none are guessed.
-        val text = "import app.nope\n" + main + twiceAndUses
+        // A file importing a module that doesn't exist, and no check of it good yet, so nothing stale answers.
+        // Before milestone 11 nothing in it is type checked (noHir): Cuttlebone has no answer anywhere in it.
+        // Since then, the import is blank in a repaired copy, which answers wherever the import can't matter:
+        // not in `uses_nope`, which uses it. Hints only inform, so none are guessed where there's no answer.
+        val usesNope = "\nfn uses_nope -> Int {\n  let v = nope.value\n  twice(4)\n}\n"
+        val text = "import app.nope\n" + main + twiceAndUses + usesNope
         open(text)
-        assertTrue("code being edited", inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }!!.editing)
-        assertEquals(emptyList<Any>(), inBackground { InkoParameterHints.inFile(myFixture.file) })
-        assertEquals("only Cuttlebone knows types", emptyList<Any>(), inBackground { InkoParameterHints.types(myFixture.file) })
+        val answer = inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }!!
+        val parameters = inBackground { InkoParameterHints.inFile(myFixture.file) }
+        val types = inBackground { InkoParameterHints.types(myFixture.file) }
+        if (!cuttleboneIsAtLeast("0.11.0")) {
+            assertTrue("code being edited", answer.editing)
+            assertEquals(emptyList<Any>(), parameters)
+            assertEquals("only Cuttlebone knows types", emptyList<Any>(), types)
+            return
+        }
+        assertTrue("fresh, from a repaired copy: ${answer.status}", answer.status!!.fresh && answer.repaired)
+        assertNull("a repaired answer is fresh, so not marked", inBackground { InkoParameterHints.tooltip(myFixture.file) })
+        val shift = "import app.nope\n".length
+        assertEquals(
+            "Cuttlebone's, and none in uses_nope",
+            listOf(index + shift to "index", default + shift to "default", text.indexOf("2.0") to "scale", text.indexOf("21") to "value"),
+            parameters,
+        )
+        assertEquals(listOf(text.indexOf("x = make") + 1 to ": B", text.indexOf("y = [") + 1 to ": Array[Int]"), types)
     }
 
     fun testCompletionListsTheCompilersMembers() {
@@ -231,15 +252,20 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     /**
-     * Opens [main], has Cuttlebone check it (its last good check), then adds an import of a module that
-     * doesn't exist: no copy of that type checks, so the answers that hold come from the last good check.
+     * Opens [main], has Cuttlebone check it (its last good check), then adds a module that doesn't parse
+     * (saved, not open: Cuttlebone has no edits of it to blank) and imports it a line above everything in
+     * main.inko. No check of the code as it is, or of a repaired copy, answers; `run` is unchanged, and the
+     * import is about `broken`, which it doesn't mention, so the answers that hold there come from the last
+     * good check, mapped to where their text is now. (An import of a module that doesn't exist did this
+     * before Cuttlebone 0.11.0, which answers around one from a repaired copy.)
      */
-    private fun openThenBreakTheImports(): String {
+    private fun openThenBreakRun(): String {
         open()
         assertFalse(inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }!!.stale)
+        myFixture.addFileToProject("src/app/broken.inko", "fn pub broken( {\n")
         val document = myFixture.editor.document
         com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) {
-            document.insertString(main.indexOf("\n") + 1, "import app.nope\n")
+            document.insertString(main.indexOf("\n") + 1, "import app.broken\n")
         }
         com.intellij.psi.PsiDocumentManager.getInstance(project).commitAllDocuments()
         PlatformTestUtil.waitWithEventsDispatching("the edit to be sent", {
@@ -250,7 +276,7 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     fun testAfterAnEditNoCheckCanAnswerHintsAreStaleAndMarked() {
-        val text = openThenBreakTheImports()
+        val text = openThenBreakRun()
         val answer = inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }
         assertTrue("from the last good check: ${answer?.status}", answer!!.stale)
         // Mapped to where their text is now, a line further down.
@@ -259,7 +285,7 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     fun testAfterAnEditNoCheckCanAnswerOnlyNavigationUsesAStaleDefinition() {
-        val text = openThenBreakTheImports()
+        val text = openThenBreakRun()
         // Cuttlebone has a stale definition here: navigation takes it, Rename and the refactorings don't.
         assertEquals(listOf("util.inko:8:size"), targets(text, "size(2.0)"))
         assertEquals(emptyList<Any>(), inBackground { InkoResolver.resolveExactly(nameAt(text, "size(2.0)")) })
@@ -270,13 +296,47 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     fun testAfterAnEditNoCheckCanAnswerDocumentationMarksTheTypeOutdated() {
-        val text = openThenBreakTheImports()
+        val text = openThenBreakRun()
         val name = nameAt(text, "get(0)")
         val html = inBackground {
             val target = (name.reference as InkoReference).multiResolve(false).first().element!!
             (InkoDocumentationTargetProvider().documentationTarget(target, name.firstChild) as InkoDocumentationTarget).html()
         }
         assertTrue(html, html.contains("<code>Result[Int, OutOfBounds]</code> (${CuttleboneQueries.OUTDATED})"))
+    }
+
+    fun testAfterAnEditImportingAMissingModuleTheRepairedAnswersAreUsedLikeFreshOnes() {
+        // Since Cuttlebone 0.11.0, an import of a module that doesn't exist is blank in a repaired copy, which
+        // answers (fresh) wherever the import can't matter: Parakeet uses those answers as it would any fresh
+        // one, for what changes code too. Before 0.11.0 this edit left only stale answers (as above).
+        open()
+        if (!cuttleboneIsAtLeast("0.11.0")) {
+            println("This cuttlebone doesn't answer around an import of a missing module")
+            return
+        }
+        val document = myFixture.editor.document
+        com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) {
+            document.insertString(main.indexOf("\n") + 1, "import app.nope\n")
+        }
+        com.intellij.psi.PsiDocumentManager.getInstance(project).commitAllDocuments()
+        PlatformTestUtil.waitWithEventsDispatching("the edit to be sent", {
+            val server = CuttleboneService.getInstance(project).server()
+            server != null && CuttleboneService.getInstance(project).isSynced(server, myFixture.file.virtualFile, document)
+        }, 30)
+        val text = document.text
+        val hints = inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }!!
+        assertTrue("fresh, from a repaired copy: ${hints.status}", hints.status!!.fresh && hints.repaired)
+        assertEquals(listOf(text.indexOf("x = make") + 1 to ": B", text.indexOf("y = [") + 1 to ": Array[Int]"), inBackground { InkoParameterHints.types(myFixture.file) })
+        assertNull("not marked", inBackground { InkoParameterHints.tooltip(myFixture.file) })
+        // A fresh definition: navigation and what changes code (Rename, the refactorings) both take it.
+        assertEquals(listOf("util.inko:8:size"), targets(text, "size(2.0)"))
+        assertEquals(listOf("util.inko:8:size"), inBackground { InkoResolver.resolveExactly(nameAt(text, "size(2.0)")).map { it.location() } })
+        val name = nameAt(text, "get(0)")
+        val html = inBackground {
+            val target = (name.reference as InkoReference).multiResolve(false).first().element!!
+            (InkoDocumentationTargetProvider().documentationTarget(target, name.firstChild) as InkoDocumentationTarget).html()
+        }
+        assertTrue(html, html.contains("<code>Result[Int, OutOfBounds]</code>") && !html.contains(CuttleboneQueries.OUTDATED))
     }
 
     fun testDocumentationShowsTheTypeOfThisUse() {

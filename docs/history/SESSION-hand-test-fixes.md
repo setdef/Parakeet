@@ -25,7 +25,9 @@ On `main`:
 | 30a959e | The real-world projects' tests, in `check.sh --full` |
 | 388aa67 | 0.12.1's changelog entry, below Unreleased |
 | 5fa548c | The real-world tests' skip messages without color codes |
-| (this commit) | This report, and README's link to it |
+| db49a7d | This report, and README's link to it |
+| 5a33409 | A flaky test's race, fixed ([below](#a-flaky-test-fixed)) |
+| (this commit) | This report, updated for 5a33409 |
 
 On `release/0.12` (in the `Parakeet-release-0.12` worktree, from v0.12.0, 94ffec0):
 
@@ -263,6 +265,28 @@ build, and the Plugin Verifier against 2025.2.6.3 and 2026.2.3. Its
 branch has no cuttlebone, so bug 2 doesn't apply. Not tagged, not pushed.
 
 `main`'s CHANGELOG has the same 0.12.1 entry, below Unreleased.
+
+## A flaky test, fixed
+
+The first `check.sh --full` on db49a7d failed in
+`CuttleboneFeaturesTest.testUsageHighlightingWaitsForAFilesFirstCheck`.
+Three earlier sessions had seen it fail the same way and rerun it. The race
+was in the test. After the highlights, usage highlighting prefetches the
+caret's definition from a pooled thread, and on purpose doesn't wait for
+it. But the test read the fake's log as soon as the highlights were in, so
+on a busy machine the definition request hadn't reached the fake yet. I put
+a 500 ms delay before that request was sent (only for one run), and the
+test then failed every time, with the same message. It now waits until the
+fake has received the definition request, then checks the same order. It
+passes with the delay, and still fails if the definition is asked first.
+
+The one other intermittent failure in earlier reports is the typing
+replay's latency limits. One failed at a load average of about 90
+(SESSION-download-cuttlebone.md). That one isn't a race: it measures
+typing responsiveness against fixed limits, so heavy load can push it over.
+I left it alone. Making it independent of load (relative limits, say, or
+retrying only past a load threshold) is a decision for you, and loosening
+a check is something AGENTS.md says not to do.
 
 ## What's left for you
 

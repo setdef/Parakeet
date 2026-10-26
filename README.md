@@ -532,6 +532,7 @@ Audits and session reports, oldest first:
 - [Compound assignments](docs/history/SESSION-compound-assignments.md)
 - [Refactoring follow-ups](docs/history/SESSION-refactoring-follow-ups.md)
 - [Downloading Cuttlebone, and 0.13.0](docs/history/SESSION-download-cuttlebone.md)
+- [Hand-test fixes, and 0.12.1](docs/history/SESSION-hand-test-fixes.md)
 
 ## Icon
 

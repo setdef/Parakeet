@@ -278,11 +278,11 @@ open class CuttleboneReleases(private val latestManifest: String, private val la
  * (or where `cargo install` puts it), the releases to download from, and the directory downloads go in.
  */
 open class CuttleboneLocations {
-    /** `cuttlebone` on PATH, else in Cargo's bin directory. */
-    open fun installed(): Cuttlebone.Located? {
-        PathEnvironmentVariableUtil.findInPath("cuttlebone")?.toPath()?.let { return Cuttlebone.Located(it, Cuttlebone.Source.PATH) }
+    /** Each `cuttlebone` on PATH, in PATH's order, then the one in Cargo's bin directory: the first is used. */
+    open fun installed(): List<Cuttlebone.Located> {
+        val onPath = PathEnvironmentVariableUtil.findAllExeFilesInPath("cuttlebone").map { Cuttlebone.Located(it.toPath(), Cuttlebone.Source.PATH) }
         val cargo = System.getProperty("user.home")?.let { Path.of(it, ".cargo", "bin", "cuttlebone") }?.takeIf(Files::isExecutable)
-        return cargo?.let { Cuttlebone.Located(it, Cuttlebone.Source.CARGO) }
+        return (onPath + listOfNotNull(cargo?.let { Cuttlebone.Located(it, Cuttlebone.Source.CARGO) })).distinctBy { it.path }
     }
 
     /** Shared by the user's JetBrains IDEs, and kept across their updates, unlike each IDE's own directories. */

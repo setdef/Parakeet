@@ -188,10 +188,12 @@ class TestCuttleboneLocations(
     override val downloads: Path,
     @Volatile var releasesSource: CuttleboneReleases = OFFLINE,
     @Volatile var platformOverride: CuttlebonePlatform? = CuttleboneReleaseServer.MAC_ARM,
-    /** What PATH has; by default the real PATH, which Cuttlebone's integration tests use. */
+    /** What PATH has; by default the real PATH (and Cargo's bin directory), which Cuttlebone's integration tests use. */
     @Volatile var onPath: (() -> Cuttlebone.Located?)? = null,
+    /** What Cargo's bin directory has, when [onPath] is set. */
+    @Volatile var inCargo: Cuttlebone.Located? = null,
 ) : CuttleboneLocations() {
-    override fun installed(): Cuttlebone.Located? = onPath.let { if (it == null) super.installed() else it() }
+    override fun installed(): List<Cuttlebone.Located> = onPath.let { if (it == null) super.installed() else listOfNotNull(it(), inCargo) }
     override val releases: CuttleboneReleases get() = releasesSource
     override val platform: CuttlebonePlatform? get() = platformOverride
 

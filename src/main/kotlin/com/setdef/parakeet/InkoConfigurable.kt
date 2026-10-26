@@ -6,7 +6,6 @@ import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.Messages
-import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindText
@@ -83,7 +82,7 @@ class InkoConfigurable(private val project: Project) : BoundConfigurable("Inko")
                                 "<a href=\"${Cuttlebone.SETUP_DOCS}\">How to set it up</a>",
                         )
                 }
-                inUse()?.let { row("In use:") { comment(it) } }
+                CuttleboneService.getInstance(project).inUse()?.let { row("In use:") { comment(it) } }
                 row { comment(CuttleboneService.getInstance(project).status?.message ?: "Cuttlebone starts when an Inko file opens.") }
             }
             onApply {
@@ -97,14 +96,6 @@ class InkoConfigurable(private val project: Project) : BoundConfigurable("Inko")
                 if (cuttleboneChanged || toolchainChanged(current)) CuttleboneService.getInstance(project).settingsChanged()
             }
         }
-    }
-
-    /** Which Cuttlebone the project uses, and where it came from, once it's been checked. */
-    private fun inUse(): String? {
-        val service = CuttleboneService.getInstance(project)
-        val located = service.located ?: return null
-        val version = service.versionOutput?.let { "${StringUtil.escapeXmlEntities(it)}, " }.orEmpty()
-        return "$version${located.source.description}: <code>${StringUtil.escapeXmlEntities(located.path.toString())}</code>"
     }
 
     private fun toolchainChanged(before: InkoToolchain): Boolean = settings.toolchain != before

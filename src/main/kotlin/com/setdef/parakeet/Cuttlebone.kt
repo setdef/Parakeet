@@ -10,6 +10,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiElement
 import com.intellij.platform.lsp.api.Lsp4jClient
@@ -132,7 +133,7 @@ object Cuttlebone {
     fun locate(project: Project, inko: String?): Located? = locate(
         InkoProjectSettings.getInstance(project).cuttlebone,
         inko,
-        { CuttleboneLocations.getInstance().installed() },
+        { CuttleboneLocations.getInstance().installed().firstOrNull() },
         { CuttleboneDownloads.installed(it)?.executable },
     )
 
@@ -169,9 +170,12 @@ object Cuttlebone {
      */
     sealed class Status(val message: String, val setup: Boolean = false) {
         /** [inko] is the project's Inko version, which a download would be for. */
-        class NotFound(val setting: String, val inko: String? = null) : Status(
-            (if (setting.isEmpty()) "Cuttlebone isn't installed (it isn't set, on PATH, or downloaded)" else "Cuttlebone wasn't found at $setting") +
-                ", so $NEEDED_FOR are unavailable.",
+        class NotFound(val setting: String, val inko: String? = null, skipped: List<Skipped> = emptyList()) : Status(
+            when {
+                setting.isNotEmpty() -> "Cuttlebone wasn't found at $setting"
+                skipped.isEmpty() -> "Cuttlebone isn't installed (it isn't set, on PATH, or downloaded)"
+                else -> "Cuttlebone isn't installed (it isn't set or downloaded, and ${skipped.joinToString(" or ") { "${it.located.path} ${it.located.source.description}" }} isn't a working Cuttlebone)"
+            } + ", so $NEEDED_FOR are unavailable.",
             setup = true,
         )
         data object NoInko : Status("Cuttlebone needs the inko executable, which isn't set up.")
@@ -179,6 +183,30 @@ object Cuttlebone {
         class Stopped(reason: String) : Status("Cuttlebone stopped: $reason Until it runs, $NEEDED_FOR are unavailable.")
         data object Starting : Status("Cuttlebone is starting.")
         class Running(version: String) : Status("Using $version for types and definitions.")
+    }
+
+    /** A `cuttlebone` that isn't a working Cuttlebone, and why. */
+    data class Skipped(val located: Located, val reason: String)
+
+    /** What `--version` printed, or why it doesn't count as a Cuttlebone's answer. */
+    private class Version(val output: com.intellij.execution.process.ProcessOutput?, val problem: String?)
+
+    private val VERSION = Regex("""^cuttlebone \d+\.\d+""")
+
+    private fun version(executable: Path): Version {
+        val output = try {
+            CapturingProcessHandler(GeneralCommandLine(executable.toString(), "--version")).runProcess(10_000)
+        } catch (e: Exception) {
+            LOG.info("couldn't run $executable --version", e)
+            return Version(null, "--version failed (${e.message})")
+        }
+        val said = (output.stderr.trim().lineSequence().firstOrNull { it.isNotBlank() } ?: output.stdout.trim().lineSequence().firstOrNull())?.take(200)
+        return when {
+            output.isTimeout -> Version(output, "--version didn't answer in 10 s")
+            output.exitCode != 0 -> Version(output, "--version failed" + (said?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: " (exit code ${output.exitCode})"))
+            !VERSION.containsMatchIn(output.stdout.trim()) -> Version(output, "--version printed \"${output.stdout.trim().lineSequence().firstOrNull().orEmpty().take(200)}\", not a Cuttlebone version")
+            else -> Version(output, null)
+        }
     }
 
     /**
@@ -194,18 +222,27 @@ object Cuttlebone {
         val inko by lazy {
             (if (cli.isAvailable) cli.version() else null).also { service.checkedInko = it; service.inkoChecked = true }
         }
-        val located = locate(project, null) ?: if (setting.isEmpty()) locate(project, inko) else null
+        // A `cuttlebone` on PATH or in Cargo's bin directory that doesn't run, or doesn't say it's Cuttlebone (a
+        // mise shim for a tool that isn't installed, say), isn't one: it's skipped, as if it weren't there.
+        val versions = mutableMapOf<Path, Version>()
+        val skipped = mutableListOf<Skipped>()
+        val working = if (setting.isNotEmpty()) null else CuttleboneLocations.getInstance().installed().firstOrNull { candidate ->
+            val version = version(candidate.path).also { versions[candidate.path] = it }
+            (version.problem == null).also { works ->
+                if (!works) skipped += Skipped(candidate, version.problem!!).also { LOG.info("skipped ${it.located.path}: ${it.reason}") }
+            }
+        }
+        service.skipped = skipped
+        val find = { forInko: String? -> locate(setting, forInko, { working }, { CuttleboneDownloads.installed(it)?.executable }) }
+        val located = find(null) ?: if (setting.isEmpty()) find(inko) else null
         service.located = located
-        if (located == null) return Status.NotFound(setting, if (setting.isEmpty()) inko else null)
+        if (located == null) return Status.NotFound(setting, if (setting.isEmpty()) inko else null, skipped)
         val executable = located.path
         if (!cli.isAvailable) return Status.NoInko
-        val output = try {
-            CapturingProcessHandler(GeneralCommandLine(executable.toString(), "--version")).runProcess(10_000)
-        } catch (e: Exception) {
-            LOG.info("couldn't run $executable --version", e)
-            return Status.Refused("$executable --version failed (${e.message}).")
-        }
-        if (output.exitCode != 0 || output.isTimeout) return Status.Refused("$executable --version failed.")
+        val version = versions[executable] ?: version(executable)
+        // The setting, or a download: what it names is the user's to fix, or Parakeet's to report.
+        version.problem?.let { return Status.Refused("$executable $it.") }
+        val output = version.output!!
         service.versionOutput = output.stdout.trim()
         val linked = linkedInko(output.stdout) ?: return null
         val installed = inko ?: return null
@@ -491,6 +528,10 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
     @Volatile var located: Cuttlebone.Located? = null
         internal set
 
+    /** What the precheck skipped on PATH or in Cargo's bin directory, as no working Cuttlebone. */
+    @Volatile var skipped: List<Cuttlebone.Skipped> = emptyList()
+        internal set
+
     /** What the chosen Cuttlebone's `--version` printed. */
     @Volatile var versionOutput: String? = null
         internal set
@@ -551,6 +592,7 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         checked = null
         status = null
         located = null
+        skipped = emptyList()
         versionOutput = null
         checkedInko = null
         inkoChecked = false
@@ -674,6 +716,18 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
             com.intellij.openapi.options.ShowSettingsUtil.getInstance().showSettingsDialog(project, InkoConfigurable::class.java)
         })
         notification.notify(project)
+    }
+
+    /** Which Cuttlebone the project uses, and where it came from, once it's been checked: the settings' "In use" line. */
+    fun inUse(): String? {
+        fun code(path: Path) = "<code>${StringUtil.escapeXmlEntities(path.toString())}</code>"
+        val located = located
+        val skipped = skipped.joinToString(" ") {
+            "Skipped ${code(it.located.path)} ${it.located.source.description}, which isn't a working Cuttlebone: ${StringUtil.escapeXmlEntities(it.reason)}."
+        }
+        if (located == null) return skipped.ifEmpty { null }?.let { "None. $it" }
+        val version = versionOutput?.let { "${StringUtil.escapeXmlEntities(it)}, " }.orEmpty()
+        return "$version${located.source.description}: ${code(located.path)}" + skipped.ifEmpty { null }?.let { ". $it" }.orEmpty()
     }
 
     /** The running server, if any (started lazily, when an Inko file opens). */

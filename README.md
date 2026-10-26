@@ -361,7 +361,11 @@ To use a Cuttlebone of your own, put `cuttlebone` on your `PATH` (Parakeet
 also checks Cargo's `bin` directory, where `cargo install` puts it), or set
 *Settings → Languages & Frameworks → Inko → Cuttlebone → Executable*. The
 setting comes first, then `PATH`, and either takes precedence over a
-download. Building Cuttlebone yourself needs Rust and LLVM 18 (its README
+download. A `cuttlebone` on `PATH` or in Cargo's `bin` directory that
+doesn't run, or whose `--version` doesn't print a Cuttlebone version (a
+mise shim for a tool that isn't installed, say), isn't counted: Parakeet
+skips it, goes on to the next one or a download, and says so on the
+settings page. Building Cuttlebone yourself needs Rust and LLVM 18 (its README
 says how), and it refuses any Inko but the one it links:
 `cuttlebone --version` prints it (e.g. `cuttlebone 0.10.0 (Inko 0.21.1)`).
 

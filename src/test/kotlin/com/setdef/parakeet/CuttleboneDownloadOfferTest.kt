@@ -173,6 +173,73 @@ class CuttleboneDownloadOfferTest : CuttleboneTestCase() {
         assertEquals("cuttlebone 0.9.0 (Inko 0.21.1)", service.versionOutput)
     }
 
+    /** An executable `cuttlebone` that isn't one: [script] is its body. */
+    private fun notCuttlebone(name: String, script: String): java.nio.file.Path {
+        val executable = Files.createDirectories(fakeDirectory.resolve(name)).resolve("cuttlebone")
+        Files.writeString(executable, "#!/bin/sh\n$script\n")
+        executable.toFile().setExecutable(true)
+        return executable
+    }
+
+    // A mise shim whose tool isn't installed, as in a hand test of 0.13.0.
+    fun testACuttleboneOnPathThatDoesntRunIsSkippedForTheDownload() {
+        server.publish("0.10.0", listOf("0.21.1"), fake("0.10.0", "0.21.1"))
+        val shim = notCuttlebone("shims", "echo 'mise ERROR cuttlebone is not a valid shim' >&2\nexit 1")
+        cuttleboneLocations.onPath = { Cuttlebone.Located(shim, Cuttlebone.Source.PATH) }
+        useCuttlebone("")
+        open("src/main.inko", text)
+        val notification = needed()
+        assertFalse(notification.content, notification.content.contains("refused"))
+        assertTrue(notification.content, notification.content.contains("Parakeet can download Cuttlebone 0.10.0 for Inko 0.21.1"))
+        assertTrue(service.status is Cuttlebone.Status.NotFound)
+        val skipped = service.inUse()
+        assertTrue(skipped, skipped!!.contains("Skipped <code>$shim</code> on PATH") && skipped.contains("cuttlebone is not a valid shim"))
+
+        click(notification, "Download Cuttlebone 0.10.0")
+        waitFor("the download to start") { service.status is Cuttlebone.Status.Running }
+        assertEquals(Cuttlebone.Source.DOWNLOADED, service.located?.source)
+        val inUse = service.inUse()!!
+        assertTrue(inUse, inUse.startsWith("cuttlebone 0.10.0 (Inko 0.21.1), downloaded by Parakeet") && inUse.contains("Skipped <code>$shim</code> on PATH"))
+    }
+
+    fun testACuttleboneOnPathThatDoesntSayItsVersionIsSkipped() {
+        server.publish("0.10.0", listOf("0.21.1"), fake("0.10.0", "0.21.1"))
+        CuttleboneDownloads.install((server.releasesSource.find("0.21.1", CuttleboneReleaseServer.MAC_ARM, null) as CuttleboneLookup.Found).build, EmptyProgressIndicator(), cuttleboneLocations.downloads)
+        val other = notCuttlebone("other", "echo 'cuttlefish 2.0'")
+        cuttleboneLocations.onPath = { Cuttlebone.Located(other, Cuttlebone.Source.PATH) }
+        useCuttlebone("")
+        open("src/main.inko", text)
+        waitFor("the download in use") { service.status is Cuttlebone.Status.Running }
+        assertEquals(Cuttlebone.Source.DOWNLOADED, service.located?.source)
+        assertTrue(service.inUse()!!, service.inUse()!!.contains("Skipped <code>$other</code> on PATH"))
+    }
+
+    fun testABrokenCuttleboneOnPathLeavesTheOneInCargosBinDirectory() {
+        val shim = notCuttlebone("shims", "exit 127")
+        val cargo = FakeCuttleboneScript.write(fakeDirectory.resolve("cargo"), FakeCuttlebone.Script(log = log.toString()), "cuttlebone 0.9.0 (Inko 0.21.1)")
+        cuttleboneLocations.onPath = { Cuttlebone.Located(shim, Cuttlebone.Source.PATH) }
+        cuttleboneLocations.inCargo = Cuttlebone.Located(cargo, Cuttlebone.Source.CARGO)
+        useCuttlebone("")
+        open("src/main.inko", text)
+        waitFor("Cuttlebone in Cargo's bin directory in use") { service.status is Cuttlebone.Status.Running }
+        assertEquals(Cuttlebone.Located(cargo, Cuttlebone.Source.CARGO), service.located)
+    }
+
+    // A real Cuttlebone that won't serve the project is the user's to fix: Parakeet doesn't download around it.
+    fun testACuttleboneOnPathForAnotherInkoIsStillRefused() {
+        server.publish("0.10.0", listOf("0.21.1"), fake("0.10.0", "0.21.1"))
+        val onPath = FakeCuttleboneScript.write(fakeDirectory.resolve("on-path"), FakeCuttlebone.Script(log = log.toString()), "cuttlebone 0.9.0 (Inko 0.20.0)")
+        cuttleboneLocations.onPath = { Cuttlebone.Located(onPath, Cuttlebone.Source.PATH) }
+        useCuttlebone("")
+        open("src/main.inko", text)
+        val notification = needed()
+        assertTrue(notification.content, notification.content.contains("Cuttlebone refused this project: cuttlebone 0.9.0 (Inko 0.20.0) works with Inko 0.20.0 only"))
+        assertEquals(listOf("How to set up Cuttlebone", "Settings…"), notification.actions.map { it.templateText })
+        assertEquals(Cuttlebone.Located(onPath, Cuttlebone.Source.PATH), service.located)
+        assertFalse(service.inUse()!!, service.inUse()!!.contains("Skipped"))
+        assertEquals(0, launches())
+    }
+
     fun testTheSettingComesBeforeADownload() {
         server.publish("0.10.0", listOf("0.21.1"), fake("0.10.0", "0.21.1"))
         CuttleboneDownloads.install((server.releasesSource.find("0.21.1", CuttleboneReleaseServer.MAC_ARM, null) as CuttleboneLookup.Found).build, EmptyProgressIndicator(), cuttleboneLocations.downloads)

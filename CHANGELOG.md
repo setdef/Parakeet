@@ -5,6 +5,7 @@
 ### Fixed
 
 - Opening a project no longer reports "IDE error occurred" (Access from Event Dispatch Thread is not allowed) in IntelliJ 2026.2: the check of the whole project marked files with errors from the EDT, which the IDE's problem-file service no longer allows.
+- A `cuttlebone` on PATH that doesn't run, or doesn't answer `--version` with a Cuttlebone version (like a mise shim for a tool that isn't installed), no longer stops Parakeet from offering to download Cuttlebone: it said "Cuttlebone refused this project" instead. Such a `cuttlebone`, on PATH or in Cargo's bin directory, is skipped for the next one or a download, and the settings' "In use" line says it was. A real Cuttlebone that refuses the project (for another Inko) is reported as before.
 - Files with errors are marked in the Project view and the Problems tool window when the check of the whole project finds them, as 0.11.0 said they were: the IDE's problem-file service ignored Inko files, since Parakeet didn't tell it to track them.
 
 ## [0.13.0] - 2026-10-25

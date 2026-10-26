@@ -251,6 +251,18 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
         assertEquals("import builder.xml (escape)\n\nfn node(v: String, escaped: Bool) -> String {\n  if escaped { escape(v) } else { v }\n}\n", myFixture.file.text)
     }
 
+    // inko-syntax's `impl Hash for Token { fn pub hash[H: mut + Hasher](hasher: mut H) }`, and yorickpeterse.com's
+    // `handle(request: …)`: Inko requires a trait's parameter names, so one implementation's can't change alone.
+    fun testRenameRefusesAParameterOfATraitsMethod() {
+        myFixture.configureByText("num.inko", "impl Hash for Num {\n  fn pub hash[H: mut + Hasher](<caret>hasher: mut H) {\n    hasher.write_int(1)\n  }\n}\n")
+        try {
+            myFixture.renameElementAtCaret("h")
+            fail("Expected a conflict")
+        } catch (e: com.intellij.refactoring.BaseRefactoringProcessor.ConflictsInTestsException) {
+            assertEquals(listOf("`hasher` is a parameter of `hash`, which implements Hash's method: Inko requires its parameter names, so it can't be renamed here alone."), e.messages.toList())
+        }
+    }
+
     fun testRenameATypeAcrossFiles() {
         myFixture.renameElement(declaration("src/app/util.inko", "Helper {"), "Assistant")
         assertEquals(util.replace("Helper", "Assistant"), myFixture.findFileInTempDir("src/app/util.inko").let { PsiManager.getInstance(project).findFile(it)!!.text })

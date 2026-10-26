@@ -206,6 +206,7 @@
         <lang.namesValidator language="Inko" implementationClass="com.setdef.parakeet.InkoNamesValidator"/>
         <renameInputValidator implementation="com.setdef.parakeet.InkoRenameInputValidator"/>
         <renamePsiElementProcessor implementation="com.setdef.parakeet.InkoInstanceMethodRenameProcessor" order="first"/>
+        <renamePsiElementProcessor implementation="com.setdef.parakeet.InkoTraitParameterRenameProcessor" order="first"/>
         <vetoRenameCondition implementation="com.setdef.parakeet.InkoRenameVeto"/>
         <lang.refactoringSupport language="Inko" implementationClass="com.setdef.parakeet.InkoRefactoringSupportProvider"/>
         <highlightUsagesHandlerFactory implementation="com.setdef.parakeet.InkoHighlightUsagesHandlerFactory"/>

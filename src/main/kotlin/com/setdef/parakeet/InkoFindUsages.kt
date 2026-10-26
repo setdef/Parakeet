@@ -115,6 +115,39 @@ class InkoUsageTypeProvider : UsageTypeProvider {
     }
 }
 
+/**
+ * A parameter of a trait's method, or of a method implementing one: Inko requires an implementation's parameter
+ * names to be the trait's (calls can name them), so renaming one alone is a conflict.
+ */
+class InkoTraitParameterRenameProcessor : RenamePsiElementProcessor() {
+    override fun canProcessElement(element: PsiElement): Boolean = element is InkoDeclaration && traitMethod(element) != null
+
+    override fun findExistingNameConflicts(element: PsiElement, newName: String, conflicts: com.intellij.util.containers.MultiMap<PsiElement, String>) {
+        val parameter = element as? InkoDeclaration ?: return
+        val (method, trait) = traitMethod(parameter) ?: return
+        val what = if (trait == null) "a trait's method" else "which implements $trait's method"
+        conflicts.putValue(parameter, "`${parameter.name}` is a parameter of `$method`, $what: Inko requires its parameter names, so it can't be renamed here alone.")
+    }
+
+    /** The method [parameter] is a parameter of, and the trait it implements (null in the trait itself), if it's a trait's method. */
+    private fun traitMethod(parameter: InkoDeclaration): Pair<String, String?>? {
+        if (!parameter.isLocal) return null
+        val file = parameter.containingFile
+        val offset = parameter.textRange.startOffset
+        val outline = file.inkoOutline
+        val path = outline.enclosing(offset)
+        val method = path.lastOrNull { it.kind == InkoOutline.Kind.METHOD } ?: return null
+        val signature = InkoSignatures.at(file.text, method.nameOffset) ?: return null
+        if (!signature.headerRange.contains(offset) || signature.parameters.none { it.name == parameter.name }) return null
+        val owner = path.getOrNull(path.indexOf(method) - 1) ?: return null
+        return when {
+            owner.kind == InkoOutline.Kind.TRAIT -> method.label to null
+            owner.kind == InkoOutline.Kind.IMPL && outline.implTrait(owner) != null -> method.label to outline.implTrait(owner)
+            else -> null
+        }
+    }
+}
+
 /** Which names Inko accepts: not keywords, and a single name token. */
 class InkoNamesValidator : NamesValidator {
     override fun isKeyword(name: String, project: Project?): Boolean = name in InkoTokens.KEYWORDS

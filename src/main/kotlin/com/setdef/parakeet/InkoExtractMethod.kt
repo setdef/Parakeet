@@ -53,10 +53,15 @@ object InkoExtractMethod {
     )
 
     /**
-     * [bindingType] gives the compiler's type for the local whose name is at an offset, if known: a fresh
-     * answer only, since the type is written into code.
+     * [bindingType] gives the compiler's type for the local whose name is at an offset, and [expressionType]
+     * for the expression in a range, if known: fresh answers only, since the type is written into code.
      */
-    fun plan(text: CharSequence, selection: TextRange, bindingType: (Int) -> String? = { null }): Result<Plan> {
+    fun plan(
+        text: CharSequence,
+        selection: TextRange,
+        expressionType: (TextRange) -> String? = { null },
+        bindingType: (Int) -> String? = { null },
+    ): Result<Plan> {
         fun fail(message: String) = Result.failure<Plan>(IllegalStateException(message))
         val stream = InkoTokenStream(text)
         val tokens = stream.tokens
@@ -193,7 +198,8 @@ object InkoExtractMethod {
         when {
             !statementMode -> {
                 val methodReturnsIt = tail && block == bodyOpen && signature?.returnType != null
-                returnType = if (methodReturnsIt) signature!!.returnType else InkoIntroduceParameter.inferType(tokens.subList(first, last + 1)) ?: PLACEHOLDER
+                returnType = if (methodReturnsIt) signature!!.returnType
+                    else InkoIntroduceParameter.inferType(tokens.subList(first, last + 1)) ?: expressionType(TextRange(tokens[first].start, tokens[last].end)) ?: PLACEHOLDER
                 call = name + arguments
                 callName = 0
             }
@@ -223,7 +229,8 @@ object InkoExtractMethod {
                 val methodReturnsIt = block == bodyOpen && signature?.returnType != null
                 val lastStatement = statements[endStatement]
                 returnType = if (methodReturnsIt) signature!!.returnType
-                    else InkoIntroduceParameter.inferType(tokens.subList(lastStatement.first, lastStatement.last + 1)) ?: PLACEHOLDER
+                    else InkoIntroduceParameter.inferType(tokens.subList(lastStatement.first, lastStatement.last + 1))
+                        ?: expressionType(TextRange(tokens[lastStatement.first].start, tokens[lastStatement.last].end)) ?: PLACEHOLDER
                 call = name + arguments
                 callName = 0
             }
@@ -337,7 +344,11 @@ class InkoExtractMethodHandler : RefactoringActionHandler {
         // Off the EDT, where asking Cuttlebone for a local's type may wait for its answer.
         val planned = ProgressManager.getInstance().runProcessWithProgressSynchronously<Result<InkoExtractMethod.Plan>, RuntimeException>(
             { ReadAction.compute<Result<InkoExtractMethod.Plan>, RuntimeException> {
-                InkoExtractMethod.plan(text, range) { offset -> inko?.let { InkoCompilerTypes.ofBinding(it, offset) } }
+                InkoExtractMethod.plan(
+                    text, range,
+                    bindingType = { offset -> inko?.let { InkoCompilerTypes.ofBinding(it, offset) } },
+                    expressionType = { expression -> inko?.let { InkoCompilerTypes.of(it, expression, stale = false)?.type } },
+                )
             } },
             TITLE, true, project,
         )

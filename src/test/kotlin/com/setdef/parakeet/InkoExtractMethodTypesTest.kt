@@ -12,7 +12,8 @@ class InkoExtractMethodTypesTest : InkoTestCase(onDisk = true) {
     private val clean = code.replace("<selection>", "").replace("</selection>", "")
 
     /** Runs Extract Method on the selection in [code], accepting the suggested name, and returns the result. */
-    private fun extract(): String {
+    private fun extract(code: String = this.code): String {
+        val clean = code.replace("<selection>", "").replace("</selection>", "")
         TemplateManagerImpl.setTemplateTesting(testRootDisposable)
         val file = myFixture.addFileToProject("src/main.inko", clean)
         myFixture.configureFromExistingVirtualFile(file.virtualFile)
@@ -28,6 +29,18 @@ class InkoExtractMethodTypesTest : InkoTestCase(onDisk = true) {
             "fn total(items: Array[Int]) -> Int {\n  let mut sum = 0\n  sum = extracted(sum, items)\n  sum\n}\n\n" +
                 "fn extracted(sum: Int, items: mut Array[Int]) -> Int {\n  let mut sum = sum\n  sum += items.size\n  sum\n}\n",
             extract(),
+        )
+    }
+
+    // kvi's `t.equal(map.get(key_with_hash('a', 1)), …)`: an extracted expression's value has the compiler's type
+    // too, from hover's answer for exactly that expression.
+    fun testAnExpressionsValueTakesTheCompilersType() {
+        val code = "fn first(items: Array[Int]) -> Bool {\n  <selection>items.get(0)</selection> == 1\n}\n"
+        val clean = code.replace("<selection>", "").replace("</selection>", "")
+        Compiler().hover(At("src/main.inko", clean, "items.get(0)"), "Int", length = 12).install()
+        assertEquals(
+            "fn first(items: Array[Int]) -> Bool {\n  extracted(items) == 1\n}\n\nfn extracted(items: mut Array[Int]) -> Int {\n  items.get(0)\n}\n",
+            extract(code),
         )
     }
 

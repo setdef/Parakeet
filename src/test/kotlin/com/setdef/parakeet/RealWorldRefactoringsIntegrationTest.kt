@@ -195,11 +195,16 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
 
     // Refactorings
 
-    /** The project's sources, by path from the root. */
+    /**
+     * The project's Inko sources, by path from the root. Not the IDE's temporary files (`x.inko~`), which
+     * saving writes and removes, so a file can also be gone by the time it's read.
+     */
     private fun snapshot(): Map<String, String> = listOf("src", "test").flatMap { directory ->
         val dir = root.resolve(directory).takeIf(Files::isDirectory) ?: return@flatMap emptyList()
-        Files.walk(dir).use { paths -> paths.filter(Files::isRegularFile).toList() }
-    }.associate { root.relativize(it).invariantSeparatorsPathString to Files.readString(it) }
+        Files.walk(dir).use { paths -> paths.filter { it.toString().endsWith(".${Inko.EXTENSION}") }.toList() }
+    }.mapNotNull { path ->
+        runCatching { Files.readString(path) }.getOrNull()?.let { root.relativize(path).invariantSeparatorsPathString to it }
+    }.toMap()
 
     private lateinit var original: Map<String, String>
 
@@ -224,7 +229,8 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
             }
         }
         saveAll()
-        check(snapshot() == original) { "the copy wasn't put back" }
+        val left = snapshot().let { now -> (now.keys + original.keys).filter { now[it] != original[it] } }
+        check(left.isEmpty()) { "the copy wasn't put back: $left" }
     }
 
     /** The lines [now] has that the original doesn't, and the other way round, per file. */

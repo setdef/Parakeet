@@ -454,25 +454,28 @@ class InkoInlineMethodProcessor(
             .map { SmartPointerManager.createPointer(it) }
         var failed = 0
         val callFiles = mutableSetOf<PsiFile>()
+        val throughTheModule = mutableSetOf<PsiFile>()
         for (pointer in calls) {
             val element = pointer.element
             val method = methodPointer.element
             if (element == null || method == null) { failed++; continue }
             // The call itself is replaced, so note its file first.
             val callFile = element.containingFile
-            val needsImports = !isThroughTheModule(element)
+            // Through the method's module, its own names are named through it: only what it imports is imported.
+            if (isThroughTheModule(element)) throughTheModule += callFile
             val document = manager.getDocument(callFile) ?: continue
             manager.doPostponedOperationsAndUnblockDocument(document)
             val edits = InkoInlineMethod.inline(method.containingFile.text, method.textRange.startOffset, document.charsSequence, element.textRange.startOffset, usesSelf)
                 .getOrElse { failed++; continue }
             for (edit in edits.sortedByDescending { it.range.startOffset }) document.replaceString(edit.range.startOffset, edit.range.endOffset, edit.text)
             manager.commitDocument(document)
-            if (needsImports) callFiles += callFile
+            callFiles += callFile
         }
         for (file in callFiles) {
             if (Inko.pathOf(file.virtualFile)?.let(Inko::moduleName) == methodModule) continue
             val document = manager.getDocument(file) ?: continue
             for ((from, symbol) in imports) {
+                if (file in throughTheModule && from == methodModule) continue
                 if (InkoImports.parse(document.charsSequence).symbol(symbol) != null) continue
                 InkoImportEdits.add(document, from, symbol)
             }

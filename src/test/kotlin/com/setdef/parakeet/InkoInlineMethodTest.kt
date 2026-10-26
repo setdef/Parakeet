@@ -207,6 +207,13 @@ class InkoInlineMethodTest : InkoTestCase(onDisk = true) {
         assertEquals(user.replace("Thing.new", "Thing()"), file("src/user.inko").text)
     }
 
+    // inko-website's `build.run`, whose body uses `Site`, which its module imports: called through the module,
+    // `Site` is imported still.
+    fun testThroughTheModuleWhatTheBodyImportsIsImported() {
+        inlineFromThings("run", "run\n")
+        assertEquals("import app.things (Thing)\nimport app.things\nimport std.stdio (Stdout)\n\nfn go {\n  Thing.new\n  Stdout.new\n}\n", file("src/user.inko").text)
+    }
+
     // Through the processor: the call's module needs no import, since it names them through the module.
     fun testACallThroughTheModuleImportsNothing() {
         val other = "import app.util\n\nfn go -> Int {\n  util.area(1, 2)\n}\n"

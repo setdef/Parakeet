@@ -25,6 +25,11 @@ class InkoInlineVariableTest : InkoTestCase() {
             "refused: `items` is used 2 times, and each use would compute `[]` anew, not share one value.",
             inline("fn a -> Int {\n  let <caret>items = []\n  items.push(1)\n  items.size\n}\n"),
         )
+        // inko-builder's `let doc = new`: a name that isn't a variable calls a method, parentheses or not.
+        assertEquals(
+            "refused: `doc` is used 2 times, and each use would compute `new` anew, not share one value.",
+            inline("type Document {\n  fn static new -> Document {\n    Document()\n  }\n\n  fn static html -> Document {\n    let <caret>doc = new\n    doc.element('html')\n    doc\n  }\n}\n"),
+        )
     }
 
     // inko-syntax's `let token = helpers.text_or_keyword(@buffer, …)`, then `@buffer.offset += 1` before `token.value`:

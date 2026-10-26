@@ -61,9 +61,18 @@ object InkoInlineVariable {
 
         // A value that calls a method, reads a field or makes an array is computed where the `let` is: past other
         // code, that code may change it.
+        // A plain name calls a method too (`new`), where it's not a variable and the file has or imports that method.
+        val locals = InkoLocals.visibleAt(stream.text, tokens[start].start).map { it.name }.toSet()
+        val imports = InkoImports.parse(stream.text)
+        // Not the method the `let` is in: its own name there would recurse, which a value seldom does.
+        val outline = InkoOutline.of(stream.text)
+        val enclosing = outline.enclosing(tokens[n].start).lastOrNull { it.kind == InkoOutline.Kind.METHOD }
+        val methods = outline.all.filter { it.kind == InkoOutline.Kind.METHOD && it != enclosing }.map { it.label }.toSet()
+        fun callsByName(token: InkoToken) = token.text !in locals && (token.text in methods || imports.symbol(token.text) != null)
         val computes = tokens[start].type == InkoTokens.LBRACKET || (start..end).any { i ->
             val token = tokens[i]
-            token.type == InkoTokens.FIELD || (token.type == InkoTokens.IDENTIFIER && tokens.getOrNull(i - 1)?.type == InkoTokens.DOT) ||
+            val afterDot = tokens.getOrNull(i - 1)?.type == InkoTokens.DOT
+            token.type == InkoTokens.FIELD || (token.type == InkoTokens.IDENTIFIER && (afterDot || callsByName(token))) ||
                 (token.type in InkoTokens.NAMES && tokens.getOrNull(i + 1)?.let { it.type == InkoTokens.LPAREN && it.start == token.end } == true)
         }
         // Each use would make a value of its own (a new `ByteArray`, another read), where the variable shares one.

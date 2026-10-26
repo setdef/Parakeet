@@ -140,6 +140,24 @@ class InkoIntroduceVariableTest : InkoTestCase() {
         assertEquals("size2", InkoIntroduceVariable.plan(s, range, listOf(range)).getOrThrow().name)
     }
 
+    // openflow's `Snapshot.of(state).rooms.get('bathroom')` is an `Option[ref RoomSnapshot]`, borrowed from the
+    // snapshot the expression makes, which is dropped at the end of its statement: a variable can't keep it.
+    fun testRefusesABorrowFromAValueTheExpressionMakes() {
+        val text = "fn a(rooms: Map[String, Room]) -> Int {\n  show(Snapshot.of(s).rooms.get('b'))\n  show(rooms.get('b'))\n}\n"
+        myFixture.configureByText("main.inko", text)
+        Compiler()
+            .hover(At("main.inko", text, "Snapshot.of"), "Option[ref Room]", length = "Snapshot.of(s).rooms.get('b')".length)
+            .hover(At("main.inko", text, "rooms.get('b'))\n}"), "Option[ref Room]", length = "rooms.get('b')".length)
+            .install()
+        fun range(part: String) = text.lastIndexOf(part).let { TextRange(it, it + part.length) }
+        assertEquals(
+            "`Snapshot.of(s).rooms.get('b')` borrows from a value it makes itself, which is dropped at the end of the statement, so a variable can't keep it.",
+            InkoIntroduceVariable.borrowsFromATemporary(myFixture.file as InkoFile, range("Snapshot.of(s).rooms.get('b')")),
+        )
+        // From a variable, the borrow lives as long as it does.
+        assertNull(InkoIntroduceVariable.borrowsFromATemporary(myFixture.file as InkoFile, range("rooms.get('b')")))
+    }
+
     fun testIntroducesAndRenamesInPlace() {
         TemplateManagerImpl.setTemplateTesting(testRootDisposable)
         myFixture.configureByText("main.inko", "fn a -> Int {\n  <selection>items.size</selection> + 1\n}\n")

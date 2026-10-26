@@ -236,7 +236,10 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
                 val target = root.resolve(path)
                 val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(target)
                     ?: VfsUtil.createDirectoryIfMissing(target.parent.toString())!!.createChildData(this, target.fileName.toString())
+                // Through the file, so the disk has it even where its document already did (and the document follows).
                 FileDocumentManager.getInstance().getDocument(file)!!.setText(text)
+                FileDocumentManager.getInstance().saveDocument(FileDocumentManager.getInstance().getDocument(file)!!)
+                if (Files.readString(target) != text) VfsUtil.saveText(file, text)
             }
         }
         saveAll()
@@ -455,6 +458,8 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
                 openAt(site.file, site.offset)
                 val stream = InkoTokenStream(myFixture.editor.document.immutableCharSequence)
                 val range = site.range
+                // As the handler has it: the compiler's type, asked off the EDT.
+                inBackground { InkoIntroduceVariable.borrowsFromATemporary(psi(site.file) as InkoFile, range) }?.let(::refuse)
                 val plan = InkoIntroduceVariable.plan(stream, range, InkoIntroduceVariable.occurrences(stream, range).ifEmpty { listOf(range) })
                     .getOrElse { refuse(it.message) }
                 InkoIntroduceVariable.apply(project, myFixture.editor, plan)

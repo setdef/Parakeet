@@ -1,8 +1,10 @@
 package com.setdef.parakeet
 
 import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Pass
 import com.intellij.openapi.util.TextRange
@@ -180,6 +182,28 @@ object InkoIntroduceVariable {
     /** What to do: insert [declaration] at [insertAt], and replace [replace] with [name]. */
     class Plan(val name: String, val insertAt: Int, val declaration: String, val replace: List<TextRange>)
 
+    /**
+     * Why [expression] can't be kept in a variable, or null: the compiler's type for it is a borrow (`ref`, `mut`,
+     * or one inside, like `Option[ref Room]`), and it starts by making the value it borrows from
+     * (`Snapshot.of(state).rooms.get(…)`), which is dropped at the end of its statement. A variable keeping the
+     * borrow makes that drop panic. Starting at a variable, `self`, a field or a constant, it outlives the statement.
+     */
+    fun borrowsFromATemporary(file: InkoFile, expression: TextRange): String? {
+        val type = InkoCompilerTypes.of(file, expression, stale = false)?.type ?: return null
+        if (!Regex("""(^|[\[(, ])(ref|mut) """).containsMatchIn(type)) return null
+        val first = InkoTokenStream(file.text).tokens.firstOrNull { it.start >= expression.startOffset } ?: return null
+        val makes = when (first.type) {
+            // A type (`Snapshot.of`, `Point(…)`), not a constant (`LIMIT`).
+            InkoTokens.CONSTANT -> first.text.any(Char::isLowerCase)
+            // A method's call, not a variable.
+            InkoTokens.IDENTIFIER -> InkoLocals.visibleAt(file.text, first.start).none { it.name == first.text }
+            else -> false
+        }
+        if (!makes) return null
+        val text = file.text.substring(expression.startOffset, expression.endOffset)
+        return "`$text` borrows from a value it makes itself, which is dropped at the end of the statement, so a variable can't keep it."
+    }
+
     /** The plan, or why there isn't one. */
     fun plan(stream: InkoTokenStream, expression: TextRange, replace: List<TextRange>): Result<Plan> {
         val text = stream.text
@@ -292,6 +316,12 @@ class InkoIntroduceVariableHandler : RefactoringActionHandler {
     }
 
     private fun introduce(project: Project, editor: Editor, file: PsiFile, stream: InkoTokenStream, expression: TextRange, replace: List<TextRange>) {
+        // Off the EDT, where asking Cuttlebone for the expression's type may wait for its answer.
+        val borrow = ProgressManager.getInstance().runProcessWithProgressSynchronously<String?, RuntimeException>(
+            { ReadAction.compute<String?, RuntimeException> { (file as? InkoFile)?.let { InkoIntroduceVariable.borrowsFromATemporary(it, expression) } } },
+            "Introduce Variable", true, project,
+        )
+        if (borrow != null) return CommonRefactoringUtil.showErrorHint(project, editor, borrow, "Introduce Variable", null)
         val plan = InkoIntroduceVariable.plan(stream, expression, replace).getOrElse {
             return CommonRefactoringUtil.showErrorHint(project, editor, it.message.orEmpty(), "Introduce Variable", null)
         }

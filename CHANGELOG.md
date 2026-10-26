@@ -12,6 +12,7 @@
 - Inline Method of a method whose body says `Self` (`fn static new -> Self { Self(…) }`) writes the type's name where it's inlined outside the type, where it left `Self`, which named another type or none. For a generic type, or in a module that doesn't import the type, it refuses, saying why.
 - Inline Method keeps a method that implements a trait's method (in `impl Trait for Type`), saying so, where inlining every call removed it, so the type no longer implemented the trait.
 - Extract Method writes the compiler's type for the value an extracted expression (or a block ending in one) returns, from Cuttlebone's fresh answer for exactly that expression, where it wrote the placeholder `Type`, which doesn't compile if left as it is.
+- Change Signature and Introduce Parameter refuse `fn async main` in `type async Main` and a test module's `fn pub tests`, saying why: the runtime and `inko test` call them, so a new parameter broke the program or its tests.
 - A `let`'s variable is in scope after its statement, not in its own value, as the compiler has it: in `let arguments = arguments` (calling `std.env`'s `arguments`), renaming the variable renamed the call too, making `let args = args`, and Find Usages and usage highlighting counted the call as a use of the variable. Likewise, in `let x = x + 1` the value's `x` is the earlier one.
 
 ## [0.13.0] - 2026-10-26

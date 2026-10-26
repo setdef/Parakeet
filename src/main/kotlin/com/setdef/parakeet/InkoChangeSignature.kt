@@ -42,6 +42,12 @@ object InkoChangeSignature {
         if (owner?.kind == InkoOutline.Kind.IMPL && outline.implTrait(owner) != null) {
             return "`${declaration.name}` implements ${outline.implTrait(owner)}'s method, so its signature has to match the trait's."
         }
+        // What the runtime and `inko test` call, which need these signatures.
+        if (declaration.name == "main" && owner?.kind == InkoOutline.Kind.TYPE && owner.label == "Main") {
+            return "`main` is where the program starts: the runtime calls it with no arguments."
+        }
+        val inTests = file.virtualFile?.let { Inko.pathOf(it) }?.let { it.startsWith(Inko.projectRoot(it).resolve("test")) } == true
+        if (declaration.name == "tests" && owner == null && inTests) return "`tests` is what `inko test` calls, with only `Tests`."
         val file0 = file.virtualFile ?: return "Only methods in saved files can be changed."
         if (!ProjectFileIndex.getInstance(declaration.project).isInContent(file0)) return "Only methods in this project can be changed."
         return if (InkoSignatures.at(text, offset) == null) "`${declaration.name}`'s signature couldn't be read." else null

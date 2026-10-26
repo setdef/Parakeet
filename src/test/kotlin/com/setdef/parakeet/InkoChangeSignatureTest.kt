@@ -251,6 +251,24 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
         assertNull(InkoChangeSignature.unsupported(method("add")))
     }
 
+    // idoc's `fn async main` and its tests' `fn pub tests(t: mut Tests)`: the runtime and `inko test` call them,
+    // with exactly these signatures, so Introduce Parameter (built on this) mustn't change them either.
+    fun testRefusesTheEntryPoints() {
+        fun unsupported(path: String, text: String, marker: String): String? {
+            val file = myFixture.addFileToProject(path, text)
+            val declaration = PsiTreeUtil.getParentOfType(file.findElementAt(text.indexOf(marker)), InkoDeclaration::class.java, false)!!
+            return InkoChangeSignature.unsupported(declaration)
+        }
+        assertEquals(
+            "`main` is where the program starts: the runtime calls it with no arguments.",
+            unsupported("src/app.inko", "type async Main {\n  fn async main {\n    nil\n  }\n}\n", "main {"),
+        )
+        assertEquals(
+            "`tests` is what `inko test` calls, with only `Tests`.",
+            unsupported("test/app/test_thing.inko", "import std.test (Tests)\n\nfn pub tests(t: mut Tests) {\n  nil\n}\n", "tests("),
+        )
+    }
+
     fun testValidatesTheChange() {
         assertNotNull(InkoChangeSignature.invalid(InkoSignatureChange("add", listOf(InkoParameterChange(-1, "c", "Int")), null)))
         assertNotNull(InkoChangeSignature.invalid(InkoSignatureChange("Add", emptyList(), null)))

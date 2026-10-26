@@ -5,7 +5,6 @@ import com.intellij.codeInspection.LocalInspectionTool
 import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -21,8 +20,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 
@@ -46,12 +45,18 @@ class InkoProjectCheck(private val project: Project, private val scope: Coroutin
     fun schedule(root: Path, immediately: Boolean = false) {
         // Tests check directly, rather than leaving background work to outlive them.
         if (ApplicationManager.getApplication().isUnitTestMode) return
+        launch(root, immediately)
+    }
+
+    /** [schedule]'s background check, which tests call themselves and wait for. */
+    internal fun launch(root: Path, immediately: Boolean): Job {
         pending.remove(root)?.cancel()
-        pending[root] = scope.launch(Dispatchers.IO) {
+        return scope.launch(Dispatchers.IO) {
             if (!immediately) delay(DELAY_MS)
             val result = check(root) ?: return@launch
-            withContext(Dispatchers.EDT) { report(root, result) }
-        }
+            ensureActive()
+            report(root, result)
+        }.also { pending[root] = it }
     }
 
     /** The latest check's diagnostics for [file], checking [root] now if nothing has changed on disk since isn't known. */
@@ -86,15 +91,21 @@ class InkoProjectCheck(private val project: Project, private val scope: Coroutin
     /** The files the last [report] for [root] marked as having errors. */
     fun problemFiles(root: Path): Set<VirtualFile> = marked[root].orEmpty()
 
-    /** Marks files with errors as problem files, and unmarks ones that no longer have any. */
+    /**
+     * Marks files with errors as problem files, and unmarks ones that no longer have any. Off the EDT: the
+     * IDE's problem-file service asserts it (from 2025.3), and takes its own read lock.
+     */
     fun report(root: Path, result: Result) {
         val wolf = WolfTheProblemSolver.getInstance(project)
         val files = LocalFileSystem.getInstance()
         val withErrors = result.diagnostics.filterValues { diagnostics -> diagnostics.any { !it.isWarning } }.keys
             .mapNotNull { files.refreshAndFindFileByNioFile(it) }.toSet()
-        for (file in marked[root].orEmpty() - withErrors) wolf.clearProblemsFromExternalSource(file, this)
-        for (file in withErrors) wolf.reportProblemsFromExternalSource(file, this)
-        marked[root] = withErrors
+        // One report at a time, as on the EDT before, so marks aren't left from an overlapping one.
+        synchronized(marked) {
+            for (file in marked[root].orEmpty() - withErrors) wolf.clearProblemsFromExternalSource(file, this)
+            for (file in withErrors) wolf.reportProblemsFromExternalSource(file, this)
+            marked[root] = withErrors
+        }
     }
 
     companion object {

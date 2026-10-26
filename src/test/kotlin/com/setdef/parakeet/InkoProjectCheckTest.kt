@@ -1,8 +1,14 @@
 package com.setdef.parakeet
 
+import com.intellij.codeInsight.daemon.impl.MockWolfTheProblemSolver
+import com.intellij.codeInsight.daemon.impl.WolfTheProblemSolverImpl
 import com.intellij.codeInspection.ex.LocalInspectionToolWrapper
+import com.intellij.problems.WolfTheProblemSolver
 import com.intellij.testFramework.InspectionTestUtil
+import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.createGlobalContextForTool
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
 
 /** Project-wide errors, with `inko check`'s output supplied by a fake. */
@@ -45,6 +51,32 @@ class InkoProjectCheckTest : InkoTestCase(onDisk = true) {
         // Once it's fixed, the mark goes.
         check.report(root, InkoProjectCheck.Result(emptyMap(), 0))
         assertEmpty(check.problemFiles(root))
+    }
+
+    // The background check a save or a project opening schedules, against the IDE's real problem-file service,
+    // which (from 2025.3) asserts it's called off the EDT.
+    fun testScheduledChecksReportToTheRealProblemSolverOffTheEdt() {
+        val mock = WolfTheProblemSolver.getInstance(project) as MockWolfTheProblemSolver
+        mock.setDelegate(WolfTheProblemSolverImpl.createTestInstance(project))
+        try {
+            val check = InkoProjectCheck.getInstance(project)
+            val broken = myFixture.findFileInTempDir("src/app/broken.inko")
+            check.launch(root, immediately = true).awaitDispatchingEvents()
+            assertEquals(setOf(broken), check.problemFiles(root))
+
+            // Fixed: the mark is cleared the same way.
+            useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
+            check.launch(root, immediately = true).awaitDispatchingEvents()
+            assertEmpty(check.problemFiles(root))
+        } finally {
+            mock.resetDelegate()
+        }
+    }
+
+    /** Waits for the job, running what it hands the EDT (where the test runs) meanwhile. */
+    private fun Job.awaitDispatchingEvents() {
+        PlatformTestUtil.waitWithEventsDispatching("the project check didn't finish", { isCompleted }, 30)
+        runBlocking { join() }
     }
 
     fun testInspectCodeReportsEveryModulesDiagnostics() {

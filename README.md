@@ -461,6 +461,7 @@ Tools are managed with [mise](https://mise.jdx.dev) (`mise install`).
 | `./gradlew buildPlugin` | Build the installable zip |
 | `scripts/check.sh [--full]` | Every check a commit must pass (`--full` adds the real-world projects' tests and the Plugin Verifier); see AGENTS.md. Cuttlebone's integration tests use `$CUTTLEBONE` or `cuttlebone` on PATH, and are skipped (with a message) without one; `--full` requires it |
 | `./gradlew test -PrealWorld --tests '*.RealWorldProjectsIntegrationTest'` | Open real Inko projects against your installed `inko` and `cuttlebone`: Yorick Peterse's public projects and Inko's own (idoc, website), cloned beside this repository (`../yorickpeterse/<name>`, `../inko-lang/<name>`) or under `PARAKEET_FIXTURES`. Each is copied and synced, and skipped (with a message) when it isn't there or doesn't type check; nothing may log an error, and a sample of names must resolve, with hovers, documentation and completion |
+| `./gradlew test -PrealWorld --tests '*.RealWorldRefactoringsIntegrationTest'` | On copies of the same projects, Find Usages of a sample of each kind of declaration must match Cuttlebone's references, and every refactoring, applied at a sample of sites, must leave the copy type checking with its tests passing, or refuse saying why (SESSION-real-world-refactorings.md). `PARAKEET_SWEEP_ONLY=Rename,Inline` runs only some |
 | `scripts/install-hooks.sh` | Run `scripts/check.sh` on what's staged before each commit |
 
 The files in `bundles/inko/` are copied unchanged from inko-lang/vscode
@@ -537,6 +538,7 @@ Audits and session reports, oldest first:
 - [Refactoring follow-ups](docs/history/SESSION-refactoring-follow-ups.md)
 - [Downloading Cuttlebone, and 0.13.0](docs/history/SESSION-download-cuttlebone.md)
 - [Hand-test fixes, and 0.12.1](docs/history/SESSION-hand-test-fixes.md)
+- [Find Usages and the refactorings on real-world code](docs/history/SESSION-real-world-refactorings.md)
 
 ## Icon
 

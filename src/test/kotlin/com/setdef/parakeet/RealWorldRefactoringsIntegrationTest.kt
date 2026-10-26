@@ -224,9 +224,14 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
         FileDocumentManager.getInstance().saveAllDocuments()
     }
 
-    /** Puts the copy back as it was, through the IDE, so its documents and Cuttlebone have it too. */
+    /**
+     * Puts the copy back as it was, through the IDE, so its documents and Cuttlebone have it too. With no editor
+     * open, Cuttlebone reads the files from disk: a document left open sometimes had its answers describe the
+     * text before (SESSION-real-world-refactorings.md).
+     */
     private fun restore() {
         saveAll()
+        com.intellij.openapi.fileEditor.ex.FileEditorManagerEx.getInstanceEx(project).closeAllFiles()
         val now = snapshot()
         if (now == original) return
         WriteCommandAction.runWriteCommandAction(project) {

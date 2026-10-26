@@ -35,7 +35,9 @@ import kotlin.io.path.invariantSeparatorsPathString
  * - Rename, Safe Delete, Extract Method, Inline Method and Variable, Introduce Variable, Parameter and
  *   Constant, Change Signature, and Move, each applied at a sample of sites the way the IDE runs them: after
  *   each, the copy must still type check, and its tests (if it has any) still pass. A refactoring may refuse,
- *   if it says why. The copy is put back as it was after each.
+ *   if it says why. The copy is put back as it was after each. Tests that fail before any refactoring may fail
+ *   after one. Extract Method's placeholder type `Type`, which its template asks to be filled in where the
+ *   compiler's type can't be written, counts as asking, not as broken code.
  *
  * scripts/check.sh --full runs these (`-PrealWorld`); the per-commit check doesn't. To run only some of them,
  * set PARAKEET_SWEEP_ONLY to a part of their names (`Find Usages`, `Inline Method`, …), comma-separated.
@@ -287,7 +289,12 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
                 val test = if (check?.succeeded == true && failingBefore != null) cli.run(listOf("test"), root, timeoutMs = 600_000) else null
                 // Tests that failed before the refactoring may fail after it too.
                 val newlyFailing = test?.takeIf { !it.succeeded }?.let { failures(it.stdout + it.stderr) }
+                // Where Extract Method has no type it can write, its template asks for one at the placeholder `Type`,
+                // which this run accepts as it is.
+                val errors = withoutColors(check?.stderr + check?.stdout).orEmpty().lines().filter { "error(" in it }
+                val asksForAType = errors.isNotEmpty() && errors.all { "the symbol '${InkoExtractMethod.PLACEHOLDER}' is undefined" in it }
                 when {
+                    check?.succeeded != true && asksForAType -> outcomes += "$site: asks for a type (the placeholder `${InkoExtractMethod.PLACEHOLDER}`, ${errors.size} times)"
                     check?.succeeded != true -> problems += "$site: doesn't type check after it:\n" +
                         withoutColors(check?.stderr + check?.stdout).orEmpty().trim().lines().take(6).joinToString("\n") { "    $it" } + "\n${diff(now)}"
                     test != null && !test.succeeded && (newlyFailing.isNullOrEmpty() || !failingBefore!!.containsAll(newlyFailing)) -> problems += "$site: the tests fail after it:\n" +

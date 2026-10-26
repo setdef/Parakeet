@@ -14,6 +14,18 @@ class InkoInlineVariableTest : InkoTestCase() {
         return myFixture.editor.document.text
     }
 
+    // inko-syntax's `let token = helpers.text_or_keyword(@buffer, …)`, then `@buffer.offset += 1` before `token.value`:
+    // inlined, the call would run after the code that changes what it reads.
+    fun testRefusesMovingACallPastOtherCode() {
+        assertEquals(
+            "refused: `token`'s value would be computed after the code between it and where it's used, which may change it.",
+            inline("fn a -> Int {\n  let <caret>token = word(@buffer)\n  if x {\n    @buffer.offset += 1\n    token.size\n  } else {\n    0\n  }\n}\n"),
+        )
+        // Right where it's used, or a value with no call, it's inlined as before.
+        assertEquals("fn a -> Int {\n  show(word(@buffer))\n}\n", inline("fn a -> Int {\n  let <caret>token = word(@buffer)\n  show(token)\n}\n"))
+        assertEquals("fn a -> Int {\n  step\n  show(1 + 2)\n}\n", inline("fn a -> Int {\n  let <caret>n = 1 + 2\n  step\n  show(n)\n}\n"))
+    }
+
     // idoc's `let instance_methods = try …`, used in a closure: there, `try` would return from the closure instead.
     fun testRefusesMovingTryIntoAClosure() = assertEquals(
         "refused: `methods`'s value uses `try`, which would return from the closure it would be moved into.",

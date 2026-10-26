@@ -59,6 +59,23 @@ object InkoInlineVariable {
             if (stream.assignmentAt(i + 1)) return fail("`$name` is assigned a new value, so it can't be inlined.")
         }
 
+        // A value that calls a method or reads a field is computed where the `let` is: past other code, that code
+        // may change it.
+        val computes = (start..end).any { i ->
+            val token = tokens[i]
+            token.type == InkoTokens.FIELD || (token.type == InkoTokens.IDENTIFIER && tokens.getOrNull(i - 1)?.type == InkoTokens.DOT) ||
+                (token.type in InkoTokens.NAMES && tokens.getOrNull(i + 1)?.let { it.type == InkoTokens.LPAREN && it.start == token.end } == true)
+        }
+        val lastUse = uses.maxOfOrNull { use -> tokens.indexOfFirst { it.start == use.startOffset } } ?: -1
+        if (computes && lastUse > end) {
+            val useIndices = uses.map { use -> tokens.indexOfFirst { it.start == use.startOffset } }.toSet()
+            val blocks = listOf(stream.enclosingBlock(tokens[n].start)) + (end + 1 until lastUse).filter { tokens[it].type == InkoTokens.LBRACE }
+            val between = blocks.flatMap { stream.statementsIn(it) }.any { statement ->
+                statement.first > end && statement.last < lastUse && useIndices.none { it in statement }
+            }
+            if (between) return fail("`$name`'s value would be computed after the code between it and where it's used, which may change it.")
+        }
+
         // In a closure, `try`, `throw` and `return` would leave the closure, not the method the `let` is in.
         val control = (start..end).firstOrNull { tokens[it].isKeyword("try", "throw", "return") && !inClosure(stream, it, start) }
         if (control != null && uses.any { use -> inClosure(stream, tokens.indexOfFirst { it.start == use.startOffset }, n) }) {

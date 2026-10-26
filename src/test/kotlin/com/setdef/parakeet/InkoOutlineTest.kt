@@ -66,6 +66,25 @@ class InkoOutlineTest : TestCase() {
         assertEquals(text.indexOf("Helper {"), helper.nameOffset)
     }
 
+    // inko-wobsite's `fn async page(…, builder: uni fn (ref Files, Page) -> Result[…])`: a closure type in the
+    // header isn't a declaration, so the method still has its body, and a `case` in its `match` stays a pattern.
+    fun testAClosureTypeInAMethodsHeaderKeepsItsBody() {
+        val text = """
+            |type async Generator {
+            |  fn async page(builder: uni fn (Int) -> Result[Int, String], other: fn) -> fn -> Int {
+            |    match builder.call(1) {
+            |      case Ok(v) -> v
+            |      case Error(e) -> 0
+            |    }
+            |  }
+            |}
+            |""".trimMargin()
+        val page = InkoOutline.of(text).all.single { it.label == "page" }
+        assertEquals(text.lastIndexOf("  }") + 3, page.range.endOffset)
+        assertFalse(text.indexOf("Error") in InkoDeclarations.offsets(text))
+        assertFalse(text.indexOf("Ok") in InkoDeclarations.offsets(text))
+    }
+
     fun testEnclosingDeclarations() {
         assertEquals(listOf("Helper", "value"), outline.enclosing(text.indexOf("@count\n  }")).map { it.label })
         assertEquals(listOf("impl Show for Helper", "show"), outline.enclosing(text.indexOf("'x'")).map { it.label })

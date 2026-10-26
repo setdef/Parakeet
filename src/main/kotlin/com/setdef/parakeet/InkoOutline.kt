@@ -65,12 +65,23 @@ class InkoOutline private constructor(val roots: List<Node>) {
 
             fun add(node: Node) = (open.lastOrNull()?.first?.children ?: roots).add(node)
 
+            // A closure type (`fn (Int) -> Int`, `fn -> Int`, a bare `fn`), not a method: no name after the `fn` at [index].
+            fun isClosureType(index: Int): Boolean {
+                val next = tokens.getOrNull(index + 1) ?: return true
+                return next.type == InkoTokens.LPAREN || next.type == InkoTokens.COMMA || next.type == InkoTokens.RPAREN ||
+                    next.type == InkoTokens.RBRACKET || (next.text == "-" && tokens.getOrNull(index + 2)?.text == ">")
+            }
+
             // Skip past a declaration's header to its opening brace, if it has a body before the next declaration.
             fun bodyStart(from: Int): Int? {
                 var j = from
                 while (j < tokens.size) {
                     val t = tokens[j]
                     if (t.type == InkoTokens.LBRACE) return j
+                    if (t.type == InkoTokens.KEYWORD && t.text == "fn" && isClosureType(j)) {
+                        j++
+                        continue
+                    }
                     if (t.type == InkoTokens.RBRACE || (t.type == InkoTokens.KEYWORD && t.text in setOf("fn", "let", "type", "trait", "impl", "import"))) return null
                     j++
                 }

@@ -57,6 +57,19 @@ object InkoLocals {
             declared += local
         }
 
+        // A `let`'s names, with the scope they join once its statement ends: its value can't see them
+        // (`let x = x + 1` reads the earlier `x`).
+        val stream by lazy { InkoTokenStream(text) }
+        val pendingLets = mutableListOf<Triple<Int, MutableList<InkoLocal>, List<InkoLocal>>>()
+        fun declareAfterStatement(let: Token, bindings: List<InkoLocal>) {
+            declared += bindings
+            val index = stream.indexAt(let.start)
+            pendingLets += Triple(stream.tokens[stream.statementEnd(index)].end, scopes.last(), bindings)
+        }
+        fun endLets(before: Int) {
+            pendingLets.removeAll { (end, scope, bindings) -> (end <= before).also { if (it) scope += bindings } }
+        }
+
         /** Parameters in the parentheses opening at [open]; returns them and the index after `)`. */
         fun parameters(open: Int): Pair<List<InkoLocal>, Int> {
             val found = mutableListOf<InkoLocal>()
@@ -196,6 +209,7 @@ object InkoLocals {
 
         while (i < tokens.size) {
             val t = tokens[i]
+            endLets(t.start)
             when {
                 t.type == InkoTokens.LBRACE -> {
                     val bound = loopBodies[i] ?: pendingParameters.orEmpty()
@@ -234,12 +248,12 @@ object InkoLocals {
                     // `let x = Foo.new` and `let x = Foo(…)` say what x is.
                     if (name?.type == InkoTokens.IDENTIFIER && isOperator(j + 1, "=") && at(j + 2)?.type == InkoTokens.CONSTANT &&
                         (at(j + 3)?.type == InkoTokens.LPAREN || (at(j + 3)?.type == InkoTokens.DOT && at(j + 4)?.text == "new"))) {
-                        declare(InkoLocal(name.text, name.start, at(j + 2)!!.text))
+                        declareAfterStatement(t, listOf(InkoLocal(name.text, name.start, at(j + 2)!!.text)))
                         i = j + 1
                     } else {
                         val bindings = mutableListOf<InkoLocal>()
                         i = maxOf(pattern(i + 1, bindings), i + 1)
-                        bindings.forEach(::declare)
+                        declareAfterStatement(t, bindings)
                     }
                 }
                 t.type == InkoTokens.KEYWORD && t.text == "for" -> {
@@ -264,6 +278,7 @@ object InkoLocals {
                 else -> i++
             }
         }
+        endLets(end)
         return scopes.flatten().associateBy { it.name }.values.sortedBy { it.offset } to declared
     }
 

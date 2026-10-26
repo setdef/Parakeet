@@ -44,6 +44,16 @@ class InkoLocalsTest : TestCase() {
         assertEquals(setOf("left", "right", "value"), visible(text).keys)
     }
 
+    // A `let`'s names are in scope after its statement, not in its own value: in kvi's `let arguments = arguments`,
+    // the value is `std.env`'s `arguments`, and in `let x = x + 1`, the earlier `x`.
+    fun testALetsNamesAreVisibleOnlyAfterItsValue() {
+        assertEquals(emptySet<String>(), visible("fn run {\n  let arguments = <here>arguments\n}\n").keys)
+        assertEquals(emptySet<String>(), visible("fn run {\n  let Some(x) = foo(<here>x) else return\n}\n").keys)
+        assertEquals(setOf("arguments"), visible("fn run {\n  let arguments = arguments\n  <here>arguments.size\n}\n").keys)
+        val shadowed = "fn run(x: Int) {\n  let x = <here>x.to_string\n}\n"
+        assertEquals(listOf(shadowed.indexOf("x: Int")), InkoLocals.visibleAt(shadowed.replace("<here>", ""), shadowed.indexOf("<here>")).map { it.offset })
+    }
+
     fun testLaterDeclarationsShadowEarlierOnes() {
         assertEquals(mapOf("x" to "Text"), visible("fn f(x: Int) {\n  let x: Text = 'a'\n  <here>\n}\n"))
     }

@@ -174,6 +174,13 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
         assertEquals(main.replace("total", "sum"), myFixture.file.text)
     }
 
+    // kvi's `let arguments = arguments`: the value is std.env's `arguments`, which renaming the local leaves alone.
+    fun testRenameALocalNamedLikeItsValue() {
+        myFixture.configureByText("run.inko", "import std.env (arguments)\n\nfn run -> Int {\n  let <caret>arguments = arguments\n  arguments.size\n}\n")
+        myFixture.renameElementAtCaret("args")
+        assertEquals("import std.env (arguments)\n\nfn run -> Int {\n  let args = arguments\n  args.size\n}\n", myFixture.file.text)
+    }
+
     fun testRenameATypeAcrossFiles() {
         myFixture.renameElement(declaration("src/app/util.inko", "Helper {"), "Assistant")
         assertEquals(util.replace("Helper", "Assistant"), myFixture.findFileInTempDir("src/app/util.inko").let { PsiManager.getInstance(project).findFile(it)!!.text })

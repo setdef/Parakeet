@@ -64,7 +64,8 @@ object InkoIntroduceParameter {
         val imports = InkoImports.parse(text)
         for (name in names) {
             if (InkoNameContext.of(name, imports) is InkoNameContext.Local) return fail("The expression uses `${name.text}`, a variable callers don't have.")
-            if (name.previousToken().isToken(InkoTokens.DOT)) continue
+            // `Self` names the type it's in, and is never imported.
+            if (name.previousToken().isToken(InkoTokens.DOT) || name.text == "Self") continue
             if (InkoResolver.resolveDefinitions(name, exact = true).any { it.first.kind == Kind.INSTANCE_METHOD || it.first.kind == Kind.STATIC_METHOD }) {
                 return fail("The expression calls `${name.text}` on `self`, which callers don't have.")
             }
@@ -144,7 +145,8 @@ object InkoPortableNames {
         val needed = mutableListOf<Pair<String, String>>()
         val private = mutableSetOf<String>()
         for (name in names) {
-            if (name.previousToken().isToken(InkoTokens.DOT)) continue
+            // `Self` names the type it's in, and is never imported.
+            if (name.previousToken().isToken(InkoTokens.DOT) || name.text == "Self") continue
             if (InkoNameContext.of(name, imports) is InkoNameContext.Local) continue
             imports.symbol(name.text)?.let { (from, original) -> needed += from to original; continue }
             val resolved = InkoResolver.resolveDefinitions(name, exact = true)

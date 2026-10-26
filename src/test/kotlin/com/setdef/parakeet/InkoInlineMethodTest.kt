@@ -175,6 +175,38 @@ class InkoInlineMethodTest : InkoTestCase(onDisk = true) {
         )
     }
 
+    private val things = "import std.stdio (Stdout)\n\ntype pub Thing {\n  fn pub static new -> Self {\n    Self()\n  }\n}\n\nfn pub run {\n  Stdout.new\n}\n"
+    private val user = "import app.things (Thing)\nimport app.things\n\nfn go {\n  Thing.new\n  things.run\n}\n"
+
+    /** Inlines the call at [marker] in user.inko of [name] from things.inko, documented as `inko doc` would. */
+    private fun inlineFromThings(name: String, marker: String) {
+        myFixture.addFileToProject("src/app/things.inko", things)
+        myFixture.addFileToProject("src/user.inko", user)
+        fun inThings(marker: String) = At("src/app/things.inko", things, marker)
+        useFakeInko(FakeInkoDoc.cli { mirror ->
+            val thingsFile = mirror.resolve("src/app/things.inko")
+            listOf(FakeInkoDoc.module(
+                "app.things", thingsFile,
+                methods = listOf(FakeInkoDoc.member("run", thingsFile, line(things, "fn pub run"), 1)),
+                types = listOf(FakeInkoDoc.type("Thing", line(things, "type pub Thing"), staticMethods = listOf(FakeInkoDoc.member("new", thingsFile, line(things, "fn pub static new"))))),
+            ))
+        })
+        compiler()
+            .resolves(inThings("Self()"), inThings("Thing {"))
+            .resolves(At("src/user.inko", user, "new\n"), inThings("new -> Self"))
+            .resolves(At("src/user.inko", user, "run\n"), inThings("run {"))
+            .install()
+        val method = PsiTreeUtil.findChildrenOfType(file("src/app/things.inko"), InkoDeclaration::class.java).first { it.name == name && InkoCallHierarchy.isMethod(it) }
+        val call = PsiTreeUtil.getParentOfType(file("src/user.inko").findElementAt(file("src/user.inko").text.indexOf(marker)), InkoName::class.java, false)!!
+        InkoInlineMethodProcessor(project, method, call, keepMethod = true).run()
+    }
+
+    // yorickpeterse.com's `Videos.new` (`Self()`): `Self` is named, not imported.
+    fun testSelfIsNeverImported() {
+        inlineFromThings("new", "new\n")
+        assertEquals(user.replace("Thing.new", "Thing()"), file("src/user.inko").text)
+    }
+
     // Through the processor: the call's module needs no import, since it names them through the module.
     fun testACallThroughTheModuleImportsNothing() {
         val other = "import app.util\n\nfn go -> Int {\n  util.area(1, 2)\n}\n"

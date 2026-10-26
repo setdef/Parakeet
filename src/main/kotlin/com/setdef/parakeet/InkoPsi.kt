@@ -87,6 +87,14 @@ object InkoDeclarations {
         }
     }
 
+    /** Whether [declaration] is a C function (`fn extern name(…)`), whose name and signature are the C library's. */
+    fun isExtern(declaration: InkoDeclaration): Boolean {
+        val text = declaration.containingFile.text
+        val offset = declaration.textRange.startOffset
+        val node = InkoOutline.of(text).enclosing(offset).lastOrNull { it.nameOffset == offset && it.kind == InkoOutline.Kind.METHOD } ?: return false
+        return "extern" in text.subSequence(node.range.startOffset, offset).split(Regex("\\s+"))
+    }
+
     /** What kind of thing [declaration] declares, for Find Usages ("method", "local variable", …). */
     fun kindOf(declaration: InkoDeclaration): String {
         if (declaration.isLocal) return "local variable"

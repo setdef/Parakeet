@@ -42,6 +42,7 @@ object InkoChangeSignature {
         if (owner?.kind == InkoOutline.Kind.IMPL && outline.implTrait(owner) != null) {
             return "`${declaration.name}` implements ${outline.implTrait(owner)}'s method, so its signature has to match the trait's."
         }
+        if (InkoDeclarations.isExtern(declaration)) return "`${declaration.name}` is a C function (`fn extern`), so its signature is the C library's."
         // What the runtime and `inko test` call, which need these signatures.
         if (declaration.name == "main" && owner?.kind == InkoOutline.Kind.TYPE && owner.label == "Main") {
             return "`main` is where the program starts: the runtime calls it with no arguments."

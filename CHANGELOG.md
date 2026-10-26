@@ -22,6 +22,7 @@
 - A trait's method's implementations in `test/` (a test double's `impl Lexer for DummyLexer`, say) are found: Go to Implementation lists them, and renaming the trait's method renames them too, where it left them, so the tests no longer compiled. `inko doc` documents only `src/`, so they're read from the code.
 - Inline Method of a call through the method's module (`bytes.whitespace?(b)`) names the module's constants, functions and types the body uses through it too (`b == bytes.SPACE`), where it left them unqualified, undefined where the call was.
 - Inline Variable refuses a value that calls a method or reads a field when code runs between the `let` and where it's used, saying why: that code may change what the value computes, and inlining moved the call after it (`let token = text(@buffer)`, then `@buffer.offset += 1`, then `token.value`), which changed what the program did.
+- Renaming a C function (`fn extern fnmatch(…)`) lists a conflict, and Change Signature refuses one, saying why: its name and signature are the C library's, so the renamed program didn't link.
 - A `let`'s variable is in scope after its statement, not in its own value, as the compiler has it: in `let arguments = arguments` (calling `std.env`'s `arguments`), renaming the variable renamed the call too, making `let args = args`, and Find Usages and usage highlighting counted the call as a use of the variable. Likewise, in `let x = x + 1` the value's `x` is the earlier one.
 
 ## [0.13.0] - 2026-10-26

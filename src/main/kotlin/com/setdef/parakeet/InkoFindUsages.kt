@@ -148,6 +148,16 @@ class InkoTraitParameterRenameProcessor : RenamePsiElementProcessor() {
     }
 }
 
+/** A C function (`fn extern`): its name is the C library's, which the linker looks for, so renaming it is a conflict. */
+class InkoExternRenameProcessor : RenamePsiElementProcessor() {
+    override fun canProcessElement(element: PsiElement): Boolean = element is InkoDeclaration && InkoDeclarations.isExtern(element)
+
+    override fun findExistingNameConflicts(element: PsiElement, newName: String, conflicts: com.intellij.util.containers.MultiMap<PsiElement, String>) {
+        val function = element as? InkoDeclaration ?: return
+        conflicts.putValue(function, "`${function.name}` is a C function (`fn extern`), so its name is the one the C library gives it.")
+    }
+}
+
 /** Which names Inko accepts: not keywords, and a single name token. */
 class InkoNamesValidator : NamesValidator {
     override fun isKeyword(name: String, project: Project?): Boolean = name in InkoTokens.KEYWORDS

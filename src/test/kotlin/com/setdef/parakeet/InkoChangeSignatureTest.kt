@@ -269,6 +269,14 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
         )
     }
 
+    // inko-wobsite's `fn extern fnmatch(…)`: its signature is the C function's.
+    fun testRefusesExternalFunctions() {
+        val text = "fn extern fnmatch(pattern: Pointer[UInt8]) -> Int32\n"
+        val file = myFixture.addFileToProject("src/app/match.inko", text)
+        val declaration = PsiTreeUtil.getParentOfType(file.findElementAt(text.indexOf("fnmatch")), InkoDeclaration::class.java, false)!!
+        assertEquals("`fnmatch` is a C function (`fn extern`), so its signature is the C library's.", InkoChangeSignature.unsupported(declaration))
+    }
+
     fun testValidatesTheChange() {
         assertNotNull(InkoChangeSignature.invalid(InkoSignatureChange("add", listOf(InkoParameterChange(-1, "c", "Int")), null)))
         assertNotNull(InkoChangeSignature.invalid(InkoSignatureChange("Add", emptyList(), null)))

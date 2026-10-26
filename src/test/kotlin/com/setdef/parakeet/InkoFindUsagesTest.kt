@@ -263,6 +263,17 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
         }
     }
 
+    // inko-wobsite's `fn extern fnmatch(…)`: the name is the C library's function, which the linker then can't find.
+    fun testRenameRefusesAnExternalFunction() {
+        myFixture.configureByText("match.inko", "fn extern <caret>fnmatch(pattern: Pointer[UInt8]) -> Int32\n\nfn matches -> Int32 {\n  fnmatch(0x0 as Pointer[UInt8])\n}\n")
+        try {
+            myFixture.renameElementAtCaret("matched")
+            fail("Expected a conflict")
+        } catch (e: com.intellij.refactoring.BaseRefactoringProcessor.ConflictsInTestsException) {
+            assertEquals(listOf("`fnmatch` is a C function (`fn extern`), so its name is the one the C library gives it."), e.messages.toList())
+        }
+    }
+
     fun testRenameATypeAcrossFiles() {
         myFixture.renameElement(declaration("src/app/util.inko", "Helper {"), "Assistant")
         assertEquals(util.replace("Helper", "Assistant"), myFixture.findFileInTempDir("src/app/util.inko").let { PsiManager.getInstance(project).findFile(it)!!.text })

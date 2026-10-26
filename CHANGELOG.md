@@ -11,6 +11,13 @@
 - A project that doesn't compile, with two dependencies that each have a module of the same name (inko-builder's and inko-markdown's `html`, say), keeps the standard library's and its dependencies' definitions: Parakeet documented them through one module importing both, which the compiler rejects, so it knew only the project's own code.
 - Files with errors are marked in the Project view and the Problems tool window when the check of the whole project finds them, as 0.11.0 said they were: the IDE's problem-file service ignored Inko files, since Parakeet didn't tell it to track them.
 
+## [0.12.1] - 2026-10-25
+
+### Fixed
+
+- Opening a project no longer reports "IDE error occurred" (Access from Event Dispatch Thread is not allowed): the check of the whole project marked files with errors from the EDT, which the IDE's problem-file service doesn't allow (in every supported IDE, 2025.2 through 2026.2).
+- Files with errors are marked in the Project view and the Problems tool window when the check of the whole project finds them, as 0.11.0 said they were: the IDE's problem-file service ignored Inko files, since Parakeet didn't tell it to track them.
+
 ## [0.13.0] - 2026-10-25
 
 ### Added

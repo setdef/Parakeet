@@ -134,6 +134,7 @@
         <refactoring.moveHandler implementation="com.setdef.parakeet.InkoMoveDeclarationHandler" id="inko.declaration" order="first"/>
         <copyPastePostProcessor implementation="com.setdef.parakeet.InkoPasteImportsProcessor"/>
         <postStartupActivity implementation="com.setdef.parakeet.InkoProjectCheckOnStartup"/>
+        <problemFileHighlightFilter implementation="com.setdef.parakeet.InkoProblemFileFilter"/>
         <localInspection language="Inko" shortName="InkoCompiler" displayName="Inko compiler errors and warnings"
                          groupName="Inko" enabledByDefault="true" level="ERROR"
                          implementationClass="com.setdef.parakeet.InkoCompilerInspection"/>

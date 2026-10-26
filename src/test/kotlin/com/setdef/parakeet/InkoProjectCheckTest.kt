@@ -63,11 +63,13 @@ class InkoProjectCheckTest : InkoTestCase(onDisk = true) {
             val broken = myFixture.findFileInTempDir("src/app/broken.inko")
             check.launch(root, immediately = true).awaitDispatchingEvents()
             assertEquals(setOf(broken), check.problemFiles(root))
+            assertTrue("the Project view and the Problems tool window mark it", mock.isProblemFile(broken))
 
             // Fixed: the mark is cleared the same way.
             useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
             check.launch(root, immediately = true).awaitDispatchingEvents()
             assertEmpty(check.problemFiles(root))
+            assertFalse(mock.isProblemFile(broken))
         } finally {
             mock.resetDelegate()
         }

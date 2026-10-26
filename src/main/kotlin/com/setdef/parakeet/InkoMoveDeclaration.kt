@@ -150,16 +150,30 @@ class InkoMoveDeclarationProcessor(
         if (!public && refUsages.get().isNotEmpty()) {
             conflicts.putValue(declaration, "$name isn't public (pub), so the code still using it can't import it from $target. Make it pub first, or the code won't compile.")
         }
-        // Names the moved code uses from its old module must be importable from there.
+        // Names the moved code uses must be importable from the target: a private one only within its root
+        // namespace (`app` for app.util), as the compiler has it (types' has_same_root_namespace).
         val needed = InkoPasteImports.needed(sourceFile, ranges)
-        val sourceOutline = sourceFile.inkoOutline
-        for (import in needed.filter { it.module == source && it.name != name }) {
-            val node = sourceOutline.roots.firstOrNull { it.label == import.name && it.kind != InkoOutline.Kind.IMPL } ?: continue
-            if (!Regex("""\bpub\b""").containsMatchIn(sourceFile.text.substring(node.range.startOffset, node.nameOffset))) {
-                conflicts.putValue(declaration, "The moved code uses ${import.name}, which isn't public in $source, so $target can't import it.")
-            }
+        for (import in needed.filter { it.name != name && rootNamespace(it.module) != rootNamespace(target) }) {
+            if (!isPrivate(import.module, import.name)) continue
+            conflicts.putValue(
+                declaration,
+                if (import.module == source) "The moved code uses ${import.name}, which isn't public in $source, so $target can't import it."
+                else "The moved code uses ${import.name}, which is private to ${import.module}, so $target can't import it.",
+            )
         }
         return showConflicts(conflicts, refUsages.get())
+    }
+
+    private fun rootNamespace(module: String) = module.substringBefore('.')
+
+    /** Whether [module] (the moved code's own, or another in this project) declares [name] without `pub`. */
+    private fun isPrivate(module: String, name: String): Boolean {
+        val file = if (module == source) sourceFile else {
+            val path = InkoMoveDeclaration.moduleFile(root, module)
+            com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByNioFile(path)?.let { PsiManager.getInstance(myProject).findFile(it) } ?: return false
+        }
+        val node = file.inkoOutline.roots.firstOrNull { it.label == name && it.kind != InkoOutline.Kind.IMPL } ?: return false
+        return !Regex("""\bpub\b""").containsMatchIn(file.text.substring(node.range.startOffset, node.nameOffset))
     }
 
     private fun isPublic(declaration: InkoDeclaration): Boolean {

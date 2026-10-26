@@ -86,6 +86,21 @@ class InkoMoveDeclarationTest : InkoTestCase(onDisk = true) {
         assertEquals("fn pub twice -> Int {\n  LIMIT * 2\n}\n\nlet pub LIMIT = 10\n", text("src/app/other.inko"))
     }
 
+    // inko-markdown's `type pub Document` uses `markdown.parser`'s private `Parser`: private names are visible within
+    // their root namespace (`markdown`, `app` here) only, so another can't import it.
+    fun testMovedCodeUsingAnotherModulesPrivateNameStaysInItsNamespace() {
+        myFixture.addFileToProject("src/app/parser.inko", "type Parser {}\n")
+        myFixture.addFileToProject("src/app.inko", "import app.parser (Parser)\n\ntype pub Document {\n  let @parser: Parser\n}\n")
+        try {
+            move("src/app.inko", "Document", "other")
+            fail("Expected a conflict")
+        } catch (e: BaseRefactoringProcessor.ConflictsInTestsException) {
+            assertEquals(listOf("The moved code uses Parser, which is private to app.parser, so other can't import it."), e.messages.toList())
+        }
+        move("src/app.inko", "Document", "app.docs")
+        assertEquals("import app.parser (Parser)\n\ntype pub Document {\n  let @parser: Parser\n}\n", text("src/app/docs.inko"))
+    }
+
     fun testQualifiedUsesBecomeImports() {
         myFixture.addFileToProject("src/app/util.inko", "let pub LIMIT = 10\n\nfn pub other -> Int {\n  1\n}\n")
         myFixture.addFileToProject("src/main.inko", "import app.util\n\nfn main -> Int {\n  util.LIMIT + util.other\n}\n")

@@ -14,6 +14,18 @@ class InkoInlineVariableTest : InkoTestCase() {
         return myFixture.editor.document.text
     }
 
+    // idoc's `let instance_methods = try …`, used in a closure: there, `try` would return from the closure instead.
+    fun testRefusesMovingTryIntoAClosure() = assertEquals(
+        "refused: `methods`'s value uses `try`, which would return from the closure it would be moved into.",
+        inline("fn a -> Result[Int, String] {\n  let <caret>methods = try parse\n  each(fn (x) { show(methods) })\n  Result.Ok(1)\n}\n"),
+    )
+
+    // Outside a closure, or with no `try`, it's inlined as before.
+    fun testInlinesTryOutsideAClosureAndPlainValuesIntoOne() {
+        assertEquals("fn a -> Result[Int, String] {\n  show(try parse)\n}\n", inline("fn a -> Result[Int, String] {\n  let <caret>methods = try parse\n  show(methods)\n}\n"))
+        assertEquals("fn a {\n  each(fn (x) { show(parse) })\n}\n", inline("fn a {\n  let <caret>methods = parse\n  each(fn (x) { show(methods) })\n}\n"))
+    }
+
     fun testInlinesASimpleVariable() = assertEquals(
         "fn a -> Int {\n  items.size + 1\n}\n",
         inline("fn a -> Int {\n  let <caret>size = items.size\n  size + 1\n}\n"),

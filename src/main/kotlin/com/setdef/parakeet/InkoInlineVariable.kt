@@ -59,6 +59,12 @@ object InkoInlineVariable {
             if (stream.assignmentAt(i + 1)) return fail("`$name` is assigned a new value, so it can't be inlined.")
         }
 
+        // In a closure, `try`, `throw` and `return` would leave the closure, not the method the `let` is in.
+        val control = (start..end).firstOrNull { tokens[it].isKeyword("try", "throw", "return") && !inClosure(stream, it, start) }
+        if (control != null && uses.any { use -> inClosure(stream, tokens.indexOfFirst { it.start == use.startOffset }, n) }) {
+            return fail("`$name`'s value uses `${tokens[control].text}`, which would return from the closure it would be moved into.")
+        }
+
         val expression = stream.text.substring(tokens[start].start, tokens[end].end)
         val loose = (start..end).any { isLoose(tokens[it]) && depthBetween(stream, start, it) == 0 } || isPrefix(tokens[start])
         val parenthesized = uses.map { use ->
@@ -74,6 +80,24 @@ object InkoInlineVariable {
         val lineStart = text.lastIndexOf('\n', tokens[n].start - 1) + 1
         val lineEnd = text.indexOf('\n', tokens[end].end).let { if (it < 0) text.length else it + 1 }
         return Result.success(Plan(expression, TextRange(lineStart, lineEnd), parenthesized))
+    }
+
+    /** Whether token [index] is in a closure's body (`fn (…) { … }`) that starts after token [after]. */
+    private fun inClosure(stream: InkoTokenStream, index: Int, after: Int): Boolean =
+        stream.enclosingBlocks(stream.tokens[index].start).any { block -> block > after && isClosureBody(stream, block) }
+
+    // A block whose header, back to its statement's start, is a closure's: `fn`, its parameters, and its return type.
+    private fun isClosureBody(stream: InkoTokenStream, block: Int): Boolean {
+        var j = block - 1
+        while (j >= 0) {
+            val token = stream.tokens[j]
+            if (token.closes) { j = stream.match(j).let { if (it >= 0) it - 1 else j - 1 }; continue }
+            if (token.isKeyword("fn")) return true
+            if (token.type == InkoTokens.LBRACE || token.type == InkoTokens.RBRACE || token.type == InkoTokens.COMMA ||
+                token.type == InkoTokens.LPAREN || stream.lineBreakBetween(j, j + 1)) return false
+            j--
+        }
+        return false
     }
 
     private fun depthBetween(stream: InkoTokenStream, from: Int, to: Int): Int =

@@ -225,11 +225,25 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
     }
 
     /**
+     * Finishes every editor's template (Extract Method's names, Introduce Variable's and Constant's in-place
+     * renames) as accepting it would, and runs what that leaves for later, so nothing edits the copy after it's
+     * put back.
+     */
+    private fun finishTemplates() {
+        for (editor in com.intellij.openapi.editor.EditorFactory.getInstance().allEditors) {
+            TemplateManagerImpl.getTemplateState(editor)?.gotoEnd(false)
+            com.intellij.refactoring.rename.inplace.InplaceRefactoring.getActiveInplaceRenamer(editor)?.finish(true)
+        }
+        com.intellij.testFramework.PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+    }
+
+    /**
      * Puts the copy back as it was, through the IDE, so its documents and Cuttlebone have it too. With no editor
      * open, Cuttlebone reads the files from disk: a document left open sometimes had its answers describe the
      * text before (SESSION-real-world-refactorings.md).
      */
     private fun restore() {
+        finishTemplates()
         saveAll()
         com.intellij.openapi.fileEditor.ex.FileEditorManagerEx.getInstanceEx(project).closeAllFiles()
         val now = snapshot()
@@ -248,8 +262,16 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
             }
         }
         saveAll()
+        // Nothing left for later may change it again.
+        finishTemplates()
+        saveAll()
         val left = snapshot().let { now -> (now.keys + original.keys).filter { now[it] != original[it] } }
         check(left.isEmpty()) { "the copy wasn't put back: $left" }
+        // A Cuttlebone of its own for the next site, as when the project opens: within one, answers after a site
+        // sometimes described a file's text before it was put back (SESSION-real-world-refactorings.md).
+        CuttleboneService.getInstance(project).settingsChanged()
+        openInEditor(files().first())
+        com.intellij.openapi.fileEditor.ex.FileEditorManagerEx.getInstanceEx(project).closeAllFiles()
     }
 
     /** The lines [now] has that the original doesn't, and the other way round, per file. */
@@ -282,7 +304,7 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
             restore()
             return
         }
-        myFixture.editor?.let { TemplateManagerImpl.getTemplateState(it)?.gotoEnd(false) }
+        finishTemplates()
         saveAll()
         val now = snapshot()
         when {

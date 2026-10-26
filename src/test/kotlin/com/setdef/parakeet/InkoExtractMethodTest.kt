@@ -33,6 +33,19 @@ class InkoExtractMethodTest : InkoTestCase() {
         )
     }
 
+    // yorickpeterse.com's `impl Handle for Site { fn pub mut handle … }`: a trait's impl can't have methods of its own.
+    fun testCodeInATraitsImplBecomesAFunctionAfterIt() {
+        assertEquals(
+            "impl Hash for Num {\n  fn pub hash[H: mut + Hasher](hasher: mut H) {\n    extracted(hasher)\n  }\n}\n\n" +
+                "fn extracted[H: mut + Hasher](hasher: mut H) {\n  hasher.write_int(1)\n}\n",
+            extract("impl Hash for Num {\n  fn pub hash[H: mut + Hasher](hasher: mut H) {\n    <selection>hasher.write_int(1)</selection>\n  }\n}\n"),
+        )
+        assertEquals(
+            "The selection uses `self` or its fields, and `impl Handle for Site` can only have Handle's methods.",
+            refusal("impl Handle for Site {\n  fn pub mut handle(request: Int) -> Int {\n    <selection>@count + request</selection>\n  }\n}\n"),
+        )
+    }
+
     fun testAnExpression() {
         val result = extract("fn total(items: Array[Int], extra: Int) -> Int {\n  <selection>items.size * extra</selection> + 1\n}\n")
         assertEquals(

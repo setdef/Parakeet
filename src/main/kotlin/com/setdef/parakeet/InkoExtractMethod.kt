@@ -151,7 +151,14 @@ object InkoExtractMethod {
         if (!statementMode && (outputs.isNotEmpty() || reassigned.isNotEmpty())) return fail("Select whole statements to extract code that defines variables used later.")
 
         // What kind of method, and its name.
-        val owner = path.dropLast(1).lastOrNull { it.kind != InkoOutline.Kind.METHOD }?.takeIf { it.children.contains(methodNode) }
+        val enclosing = path.dropLast(1).lastOrNull { it.kind != InkoOutline.Kind.METHOD }?.takeIf { it.children.contains(methodNode) }
+        // `impl Trait for Type` can only have the trait's methods: the new method is a function after it, if it can be.
+        val traitImpl = enclosing?.takeIf { it.kind == InkoOutline.Kind.IMPL && outline.implTrait(it) != null }
+        if (traitImpl != null && tokens.subList(first, last + 1).any { it.isKeyword("self") || it.type == InkoTokens.FIELD }) {
+            val trait = outline.implTrait(traitImpl)
+            return fail("The selection uses `self` or its fields, and `${traitImpl.label}` can only have $trait's methods.")
+        }
+        val owner = enclosing.takeIf { traitImpl == null }
         val modifiers = text.subSequence(methodNode.range.startOffset, methodNode.nameOffset).split(Regex("\\s+")).toSet()
         val newModifiers = when {
             owner == null -> ""
@@ -183,7 +190,7 @@ object InkoExtractMethod {
         val arguments = if (inputs.isEmpty()) "" else inputs.values.joinToString(", ", "(", ")") { it.name }
 
         // The body (re-indented) and the call.
-        val methodIndent = indentOf(text, methodNode.range.startOffset)
+        val methodIndent = if (traitImpl != null) "" else indentOf(text, methodNode.range.startOffset)
         val bodyIndent = "$methodIndent  "
         val selected = text.substring(range.startOffset, range.endOffset)
         val baseIndent = indentOf(text, range.startOffset)
@@ -254,7 +261,8 @@ object InkoExtractMethod {
         val headerStart = method.indexOf(header)
         val methodName = headerStart + "fn $newModifiers".length
         val placeholders = Regex("\\b$PLACEHOLDER\\b").findAll(header).map { headerStart + it.range.first }.toList()
-        return Result.success(Plan(range, call, callName, methodNode.range.endOffset, method, methodName, placeholders, name))
+        val insertAt = traitImpl?.range?.endOffset ?: methodNode.range.endOffset
+        return Result.success(Plan(range, call, callName, insertAt, method, methodName, placeholders, name))
     }
 
     private fun bodyStart(tokens: List<InkoToken>, bodyOpen: Int) = tokens[bodyOpen].start

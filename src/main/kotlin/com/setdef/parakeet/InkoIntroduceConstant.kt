@@ -64,7 +64,11 @@ object InkoIntroduceConstant {
         val lastConstant = outline.roots.lastOrNull { it.kind == InkoOutline.Kind.CONSTANT && it.range.endOffset <= expression.startOffset }
         val imports = InkoImports.parse(text).statements
         val (insertAt, declaration) = when {
-            lastConstant != null -> lineEnd(text, lastConstant.range.endOffset) to "\nlet $name = $value"
+            // The outline's range ends at the constant's name: its value may go on over several lines.
+            lastConstant != null -> {
+                val let = stream.indexAt(lastConstant.range.startOffset)
+                lineEnd(text, stream.tokens[stream.statementEnd(let)].end) to "\nlet $name = $value"
+            }
             imports.isNotEmpty() -> lineEnd(text, imports.last().range.endOffset) to "\n\nlet $name = $value"
             else -> 0 to "let $name = $value\n\n"
         }

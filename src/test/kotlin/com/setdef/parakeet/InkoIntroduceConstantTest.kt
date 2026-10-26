@@ -55,6 +55,13 @@ class InkoIntroduceConstantTest : InkoTestCase() {
         assertEquals("let VALUE = 1\nlet VALUE_2 = VALUE + 2\n\nfn a -> Int {\n  VALUE_2\n}\n", myFixture.editor.document.text)
     }
 
+    // inko-website's `let MENU = [\n  …\n]`: the new constant goes after the whole of the last one.
+    fun testGoesAfterAConstantWrittenOverSeveralLines() {
+        val text = "let MENU = [\n  1,\n  2,\n]\n\nfn a -> Int {\n  60\n}\n"
+        val plan = InkoIntroduceConstant.plan(InkoTokenStream(text), range(text, "60"), emptyList()).getOrThrow()
+        assertEquals(text.indexOf("]\n") + 1, plan.insertAt)
+    }
+
     fun testNamesStringConstantsAfterWhatTheyAre() {
         val text = "fn a -> String {\n  'Hello'.to_upper\n}\n"
         assertEquals("STRING", InkoIntroduceConstant.plan(InkoTokenStream(text), range(text, "'Hello'"), emptyList()).getOrThrow().name)

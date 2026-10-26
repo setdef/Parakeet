@@ -118,7 +118,12 @@ abstract class RealWorldTestCase : InkoTestCase(onDisk = true, realInko = true) 
     /** Opens [virtualFile] in the editor, and waits until Cuttlebone has its text. */
     protected fun openInEditor(virtualFile: VirtualFile) {
         myFixture.configureFromExistingVirtualFile(virtualFile)
-        PlatformTestUtil.waitWithEventsDispatching({ "Cuttlebone didn't start: ${CuttleboneService.getInstance(project).status?.message}" }, {
+        PlatformTestUtil.waitWithEventsDispatching({
+            val server = CuttleboneService.getInstance(project).server()
+            "Cuttlebone didn't get ${virtualFile.name}'s text: ${CuttleboneService.getInstance(project).status?.message} (sent version " +
+                "${server?.let { CuttleboneService.getInstance(project).sentVersions[it.getDocumentIdentifier(virtualFile).uri] }}, " +
+                "document's ${server?.getDocumentVersion(myFixture.editor.document)})"
+        }, {
             val server = CuttleboneService.getInstance(project).server()
             server != null && CuttleboneService.getInstance(project).sentVersions[server.getDocumentIdentifier(virtualFile).uri] ==
                 server.getDocumentVersion(myFixture.editor.document)

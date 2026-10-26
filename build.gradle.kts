@@ -119,6 +119,7 @@ tasks.test {
     if (providers.gradleProperty("noCuttlebone").isPresent) exclude("**/CuttleboneIntegrationTest*")
     if (!providers.gradleProperty("realWorld").isPresent) exclude("**/$REAL_WORLD*")
     providers.environmentVariable("PARAKEET_FIXTURES").orNull?.let { environment("PARAKEET_FIXTURES", it) }
+    providers.environmentVariable("PARAKEET_SWEEP_ONLY").orNull?.let { environment("PARAKEET_SWEEP_ONLY", it) }
     exclude("**/$TYPING_REPLAY*")
     // Where check.sh found cuttlebone; the tests otherwise look on PATH.
     providers.environmentVariable("CUTTLEBONE").orNull?.let { environment("CUTTLEBONE", it) }

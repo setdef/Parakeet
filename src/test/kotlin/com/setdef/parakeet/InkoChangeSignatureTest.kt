@@ -44,6 +44,14 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
         |trait pub Shape {
         |  fn area -> Int
         |}
+        |
+        |fn pub hello -> String {
+        |  'hi'
+        |}
+        |
+        |fn pub greeting -> String {
+        |  hello
+        |}
         |""".trimMargin()
 
     private val main = """
@@ -85,6 +93,7 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
         .resolves(inMain("Greeter, maybe"), inUtil("Greeter {"))
         .resolves(inMain("greet('a'"), inUtil("greet(greeting"))
         .resolvesEvery("src/main.inko", main, "add(", inUtil("add(a: Int"))
+        .resolves(inUtil("hello\n}"), inUtil("hello ->"))
 
     override fun setUp() {
         super.setUp()
@@ -97,7 +106,7 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
             listOf(
                 FakeInkoDoc.module(
                     "app.util", utilFile,
-                    methods = listOf(member("add", "fn pub add", 1), member("twice", "fn pub twice", 1), member("log", "fn pub log", 1), member("ping", "fn pub ping", 1)),
+                    methods = listOf(member("add", "fn pub add", 1), member("twice", "fn pub twice", 1), member("log", "fn pub log", 1), member("ping", "fn pub ping", 1), member("hello", "fn pub hello", 1), member("greeting", "fn pub greeting", 1)),
                     types = listOf(FakeInkoDoc.type(
                         "Greeter", 1,
                         staticMethods = listOf(member("new", "fn pub static new")),
@@ -166,6 +175,13 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
         change("add", InkoSignatureChange("add", listOf(InkoParameterChange(0, "a", "Int"), InkoParameterChange(1, "b", "Int"), InkoParameterChange(-1, "c", "Int", "0")), "Int"))
         assertTrue(text("src/app/util.inko").contains("fn pub add(a: Int, b: Int, c: Int) -> Int {"))
         assertTrue(text("src/main.inko").contains("add(1, b: 2, c: 0) + add(3, 4, 0)"))
+    }
+
+    // kvi's `match run {`, in the module declaring `fn run`: a call without parentheses gets them, with the new
+    // argument, in the method's own file too.
+    fun testAddsAParameterToACallWithoutParenthesesInTheSameFile() {
+        change("hello", InkoSignatureChange("hello", listOf(InkoParameterChange(-1, "extra", "Int", "0")), "String"))
+        assertTrue(text("src/app/util.inko"), text("src/app/util.inko").contains("fn pub hello(extra: Int) -> String {\n  'hi'\n}\n\nfn pub greeting -> String {\n  hello(0)\n}"))
     }
 
     fun testRemovesUnusedParametersAndTheirArguments() {

@@ -101,6 +101,13 @@ class InkoCompletionTest : InkoTestCase(onDisk = true) {
         assertEquals(listOf("Helper", "helper"), complete("import app.util\n\nfn a {\n  util.<caret>\n}\n").sorted())
     }
 
+    // A local named like the module hides it: these are a Helper's members, not the module's.
+    fun testALocalHidesTheModuleItIsNamedLike() {
+        val members = complete("import app.util (Helper)\nimport app.util\n\nfn a {\n  [Helper.new].each(fn (util: Helper) { util.<caret> })\n}\n")
+        assertTrue(members.toString(), "value" in members)
+        assertFalse(members.toString(), "helper" in members)
+    }
+
     fun testFieldsFromTheFileItself() {
         assertEquals(listOf("@count", "@name"), complete("type A {\n  let @count: Int\n  let @name: String\n\n  fn b {\n    @<caret>\n  }\n}\n").sorted())
     }

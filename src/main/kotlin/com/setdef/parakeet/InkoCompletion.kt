@@ -122,7 +122,8 @@ private class InkoCompletions(private val file: PsiFile) {
         val answer = CuttleboneQueries.getInstance(file.project).completion(file, offset) ?: return emptyList()
         if (!answer.editing) return compiledMembers(answer.value.orEmpty())
         val symbols = symbols ?: return emptyList()
-        if (context.receiverType == InkoTokens.IDENTIFIER) {
+        // A local named like a module hides it.
+        if (context.receiverType == InkoTokens.IDENTIFIER && InkoLocals.visibleAt(file.text, offset).none { it.name == context.receiver }) {
             imports.moduleAliasedAs(context.receiver)?.let { module -> return symbols.topLevelIn(module).map(::definition) }
         }
         if (context.receiverType == InkoTokens.CONSTANT) {

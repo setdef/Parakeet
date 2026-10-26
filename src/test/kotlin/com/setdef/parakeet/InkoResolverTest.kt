@@ -115,6 +115,20 @@ class InkoResolverTest : InkoTestCase(onDisk = true) {
     fun testLocalVariablesResolveToTheirDeclaration() = assertEquals(listOf("main.inko:6:h"), targetsAt("h.value"))
 
     // A definition's name is a declaration (what usages resolve to), not a reference.
+    // A local named like an imported module hides it, as the compiler has it: `html.head` in yorickpeterse.com's
+    // `html.Document.html('en', fn (html) { html.head })` is the closure argument's method, not the module's.
+    fun testALocalHidesTheModuleItIsNamedLike() {
+        val text = main.replace("    util.helper\n", "    [Helper.new].each(fn (util) { util.value })\n")
+        val file = myFixture.addFileToProject("src/main.inko", text)
+        myFixture.configureFromExistingVirtualFile(file.virtualFile)
+        fun at(marker: String): List<String> {
+            myFixture.editor.caretModel.moveToOffset(text.indexOf(marker))
+            return (myFixture.getReferenceAtCaretPositionWithAssertion() as InkoReference).multiResolve(false).mapNotNull { it.element?.location() }
+        }
+        assertEquals(listOf("main.inko:9:util"), at("util.value"))
+        assertEquals(listOf("util.inko:8:value"), at("value })"))
+    }
+
     fun testDefinitionsAreDeclarationsNotReferences() {
         val file = myFixture.addFileToProject("src/main.inko", main)
         myFixture.configureFromExistingVirtualFile(file.virtualFile)

@@ -61,8 +61,8 @@ sealed class InkoNameContext {
             val previous = name.previousToken()
             if (previous.isToken(InkoTokens.DOT)) {
                 val receiver = previous!!.previousToken()
-                if (receiver.isToken(InkoTokens.IDENTIFIER)) {
-                    imports.moduleAliasedAs(receiver!!.text)?.let { return ModuleMember(it, text) }
+                if (receiver.isToken(InkoTokens.IDENTIFIER) && !isLocal(receiver!!)) {
+                    imports.moduleAliasedAs(receiver.text)?.let { return ModuleMember(it, text) }
                 }
                 if (receiver.isToken(InkoTokens.CONSTANT)) return StaticMember(receiver!!.text, text)
                 val compound = isCompoundAssigned(name)
@@ -70,12 +70,16 @@ sealed class InkoNameContext {
             }
             if (name.tokenType == InkoTokens.CONSTANT) return Constant(text)
             if (previous.isKeyword(*DEFINING_KEYWORDS)) return Definition
+            InkoLocals.visibleAt(name.containingFile.text, offset).lastOrNull { it.name == text }?.let { return Local(it) }
             if (name.nextToken().isToken(InkoTokens.DOT)) {
                 imports.moduleAliasedAs(text)?.let { return ModuleReference(it) }
             }
-            InkoLocals.visibleAt(name.containingFile.text, offset).lastOrNull { it.name == text }?.let { return Local(it) }
             return Identifier(text)
         }
+
+        /** Whether [name] is a local or parameter in scope there, which hides a module of that name. */
+        private fun isLocal(name: com.intellij.psi.PsiElement): Boolean =
+            InkoLocals.visibleAt(name.containingFile.text, name.textRange.startOffset).any { it.name == name.text }
 
         /** Whether a plain `=` (not `==` or `=>`) follows [name]: `recv.name = x`. */
         fun isAssigned(name: com.intellij.psi.PsiElement): Boolean {

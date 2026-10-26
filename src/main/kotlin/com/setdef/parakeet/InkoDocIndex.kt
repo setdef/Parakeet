@@ -149,7 +149,7 @@ class InkoDocIndex(private val project: Project, private val scope: CoroutineSco
         InkoMirror.create(root, sources = sources).use { mirror ->
             val standIn = ((if (sources) emptySet() else dependencyImports(mirror.directory)) + testImports(root, cli)).toSortedSet()
             if (!sources || standIn.isNotEmpty()) {
-                Files.writeString(mirror.directory.resolve("src/$STAND_IN.${Inko.EXTENSION}"), standIn.joinToString("") { "import $it\n" })
+                Files.writeString(mirror.directory.resolve("src/$STAND_IN.${Inko.EXTENSION}"), standInImports(standIn))
             }
             val result = cli.run(listOf("doc", "--private", "--dependencies"), mirror.directory, timeoutMs = 60_000)
             if (result?.succeeded != true) return null
@@ -159,6 +159,17 @@ class InkoDocIndex(private val project: Project, private val scope: CoroutineSco
                 .let(InkoSourceDefinitions::withTraitHeaders)
                 .filter { it.module != STAND_IN }
         }
+
+    /**
+     * `import` lines for [modules]. A module is imported as its last name (`html` for `builder.html`), which
+     * one module can import only once: another of that name (`markdown.html`) is imported as a name of its own.
+     */
+    private fun standInImports(modules: Collection<String>): String {
+        val taken = mutableSetOf<String>()
+        return modules.withIndex().joinToString("") { (index, module) ->
+            if (taken.add(module.substringAfterLast('.'))) "import $module\n" else "import $module (self as ${STAND_IN}_$index)\n"
+        }
+    }
 
     /**
      * The standard library's and dependencies' modules the project's tests import: `inko doc` documents what

@@ -108,6 +108,39 @@ class InkoDocIndexTest : InkoTestCase(onDisk = true) {
         assertEquals(listOf("import std.test\n"), standInImports)
     }
 
+    // inko-wobsite's tests import builder.html and markdown.html: two `html`s, which one module can't import as
+    // they are (duplicate-symbol), so inko doc failed, and nothing but the project's own source was known.
+    fun testModulesWithTheSameNameAreImportedUnderTheirOwn() {
+        Files.writeString(root.resolve("inko.pkg"), "require https://github.com/yorickpeterse/inko-builder 0.16.0 abc\nrequire https://github.com/yorickpeterse/inko-markdown 0.24.0 def\n")
+        for ((hash, module) in listOf("0a1b" to "builder", "2c3d" to "markdown")) {
+            val src = Files.createDirectories(root.resolve("dep/$hash/v0/src/$module"))
+            Files.writeString(src.resolve("html.inko"), "")
+            Files.writeString(src.resolve("../$module.inko"), "")
+        }
+        useFakeInko(FakeInkoCli { call ->
+            if (call.args.firstOrNull() != "doc") return@FakeInkoCli FakeInkoCli.ok(stderr = "[]")
+            val mirror = call.workingDirectory!!
+            val standIn = mirror.resolve("src/parakeet_dependency_index.inko").takeIf(Files::exists)?.let(Files::readString).orEmpty()
+            standInImports += standIn
+            // As the compiler does: one module can't import two modules as the same name.
+            val aliases = InkoImports.parse(standIn).statements.mapNotNull { it.moduleAlias }
+            if (aliases.size != aliases.toSet().size) return@FakeInkoCli FakeInkoCli.failed("duplicate-symbol")
+            val docs = Files.createDirectories(mirror.resolve("build/docs"))
+            val file = mirror.resolve("src/app/util.inko")
+            Files.writeString(docs.resolve("app_util.json"), FakeInkoDoc.module("app.util", file, types = listOf(FakeInkoDoc.type("Helper", 1))))
+            for (module in InkoImports.parse(standIn).statements.map { it.module }) {
+                Files.writeString(docs.resolve(module.replace('.', '_') + ".json"), FakeInkoDoc.module(module, file, types = listOf(FakeInkoDoc.type(module.replace(".", "_"), 1))))
+            }
+            FakeInkoCli.ok()
+        })
+        myFixture.addFileToProject("src/app/util.inko", util)
+        myFixture.addFileToProject("test/app/test_util.inko", "import builder.html\nimport markdown.html (self as md)\n\nfn pub tests(t: mut Tests) {}\n")
+
+        assertNotEmpty(symbols().named("builder_html"))
+        assertNotEmpty(symbols().named("markdown_html"))
+        assertNotEmpty(symbols().named("Helper"))
+    }
+
     fun testAProjectThatDoesNotCompileStillGetsTheStandardLibraryDependenciesAndItsOwnDefinitions() {
         compiles = false
         Files.writeString(root.resolve("inko.pkg"), "require https://github.com/yorickpeterse/inko-markdown 0.24.0 abc\nrequire inko 0.21.1\n")

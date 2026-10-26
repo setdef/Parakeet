@@ -44,6 +44,12 @@ class InkoInlineMethodTest : InkoTestCase(onDisk = true) {
         |    grow(1) + self.grow(2)
         |  }
         |}
+        |
+        |impl ToString for Box {
+        |  fn pub to_string -> String {
+        |    'box'
+        |  }
+        |}
         |""".trimMargin()
 
     private val main = """
@@ -172,6 +178,17 @@ class InkoInlineMethodTest : InkoTestCase(onDisk = true) {
             "`of` uses `Self`, which is `Box` with its type arguments, so it can only be inlined inside `Box`.",
             inlined(box, "of(v", "fn run {\n  let b = Box.of(1)\n}\n", "of(1").exceptionOrNull()?.message,
         )
+    }
+
+    // kvi's `impl Clone for Config { fn pub clone … }`: removing it would leave Box not implementing ToString.
+    fun testKeepsAMethodThatImplementsATraitsMethod() {
+        try {
+            InkoInlineMethodProcessor(project, method("to_string"), null, keepMethod = false).run()
+            fail("Expected a conflict")
+        } catch (e: BaseRefactoringProcessor.ConflictsInTestsException) {
+            assertEquals(listOf("`to_string` implements ToString's method, so it's kept: without it, Box wouldn't implement ToString."), e.messages.toList())
+        }
+        assertTrue(file("src/app/util.inko").text.contains("fn pub to_string -> String {"))
     }
 
     fun testRefusesMethodsThatCantBeInlined() {

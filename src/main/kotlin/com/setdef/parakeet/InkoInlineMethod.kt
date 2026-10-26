@@ -367,6 +367,12 @@ class InkoInlineMethodProcessor(
     private val name = method.name
     private val usesSelf = InkoInlineMethod.usesSelf(method)
 
+    /** The type and trait, if the method is in `impl Trait for Type`: it implements the trait's method, so it stays. */
+    private val implementing: Pair<String, String>? = method.containingFile.inkoOutline.let { outline ->
+        val owner = outline.enclosing(method.textRange.startOffset).dropLast(1).lastOrNull()?.takeIf { it.kind == InkoOutline.Kind.IMPL }
+        owner?.let { outline.implTrait(it) }?.let { trait -> outline.implTarget(owner)!! to trait }
+    }
+
     override fun getCommandName(): String = "Inline Method"
 
     override fun createUsageViewDescriptor(usages: Array<out UsageInfo>): UsageViewDescriptor = object : UsageViewDescriptor {
@@ -405,6 +411,10 @@ class InkoInlineMethodProcessor(
             }
         }
         if (failures > 0 && !keepMethod && reference == null) conflicts.putValue(method, "`$name` will be kept, since not every call can be inlined.")
+        else if (implementing != null && !keepMethod && reference == null) {
+            val (type, trait) = implementing
+            conflicts.putValue(method, "`$name` implements $trait's method, so it's kept: without it, $type wouldn't implement $trait.")
+        }
         return showConflicts(conflicts, refUsages.get())
     }
 
@@ -450,7 +460,7 @@ class InkoInlineMethodProcessor(
             }
             manager.commitDocument(document)
         }
-        if (keepMethod || reference != null || failed > 0) return
+        if (keepMethod || reference != null || failed > 0 || implementing != null) return
         // Every call is gone: remove the method, and imports of it.
         val method = methodPointer.element ?: return
         for (usage in usages) {

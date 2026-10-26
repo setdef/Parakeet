@@ -142,11 +142,15 @@ class InkoDocIndex(private val project: Project, private val scope: CoroutineSco
      * Runs `inko doc` in a mirror of [root]. Without [sources], the mirror's
      * only module is a stand-in importing every dependency module, so the
      * standard library and dependencies are documented even when the project
-     * doesn't compile.
+     * doesn't compile. Either way, the stand-in imports what the tests import
+     * from the standard library and dependencies ([testImports]).
      */
     private fun document(root: Path, cli: InkoCli, sources: Boolean): List<InkoDefinition>? =
         InkoMirror.create(root, sources = sources).use { mirror ->
-            if (!sources) Files.writeString(mirror.directory.resolve("src/$STAND_IN.${Inko.EXTENSION}"), dependencyImports(mirror.directory))
+            val standIn = ((if (sources) emptySet() else dependencyImports(mirror.directory)) + testImports(root, cli)).toSortedSet()
+            if (!sources || standIn.isNotEmpty()) {
+                Files.writeString(mirror.directory.resolve("src/$STAND_IN.${Inko.EXTENSION}"), standIn.joinToString("") { "import $it\n" })
+            }
             val result = cli.run(listOf("doc", "--private", "--dependencies"), mirror.directory, timeoutMs = 60_000)
             if (result?.succeeded != true) return null
             val docs = mirror.directory.resolve("build").resolve("docs").takeIf(Files::isDirectory) ?: return null
@@ -157,17 +161,38 @@ class InkoDocIndex(private val project: Project, private val scope: CoroutineSco
         }
 
     /**
-     * `import` lines for every module of the project's direct dependencies.
+     * The standard library's and dependencies' modules the project's tests import: `inko doc` documents what
+     * src/ imports, so a module only tests import (std.test, say) would have no definitions, and `t.equal` in a
+     * test no documentation. Only modules that exist, imported without build tags, so the stand-in can't stop
+     * `inko doc`.
+     */
+    private fun testImports(root: Path, cli: InkoCli): Set<String> {
+        val tests = root.resolve("test").takeIf(Files::isDirectory) ?: return emptySet()
+        val imported = Files.walk(tests).use { paths -> paths.filter { it.toString().endsWith(".${Inko.EXTENSION}") }.toList() }
+            .flatMap { file -> InkoImports.parse(Files.readString(file)).statements.filter { !it.isExtern && it.tagsRange == null }.map { it.module } }
+            .toSortedSet()
+        fun file(base: Path, module: String) = base.resolve(module.replace('.', '/') + ".${Inko.EXTENSION}")
+        val candidates = imported.filterNot { Files.exists(file(root.resolve("src"), it)) }
+        if (candidates.isEmpty()) return emptySet()
+        val std = InkoTestRuns.standardLibrary(cli)
+        val dependencies = root.resolve("dep").takeIf(Files::isDirectory)?.let { dep ->
+            Files.walk(dep, 3).use { paths -> paths.filter { it.fileName?.toString() == "src" && Files.isDirectory(it) }.toList() }
+        }.orEmpty()
+        return candidates.filter { module -> (listOfNotNull(std) + dependencies).any { Files.isRegularFile(file(it, module)) } }.toSet()
+    }
+
+    /**
+     * Every module of the project's direct dependencies.
      * Dependency directories are named by a hash of their URL, so they're
      * matched by import name instead: a URL's last segment, minus any `inko-`
      * prefix (as the compiler does).
      */
-    private fun dependencyImports(mirror: Path): String {
+    private fun dependencyImports(mirror: Path): Set<String> {
         val manifest = mirror.resolve(Inko.MANIFEST).takeIf(Files::exists)?.let(Files::readAllLines).orEmpty()
         val names = manifest.mapNotNull { Regex("""^\s*require\s+(\S+/\S+)\s""").find(it)?.groupValues?.get(1) }
             .map { it.trimEnd('/').substringAfterLast('/').removeSuffix(".git").removePrefix("inko-") }
             .toSet()
-        val dep = mirror.resolve("dep").takeIf(Files::isDirectory) ?: return ""
+        val dep = mirror.resolve("dep").takeIf(Files::isDirectory) ?: return emptySet()
         // dep is a symlink in the mirror, so walking it must follow links.
         val modules = Files.walk(dep, FileVisitOption.FOLLOW_LINKS).use { paths ->
             paths.filter { it.toString().endsWith(".${Inko.EXTENSION}") }.toList()
@@ -175,7 +200,7 @@ class InkoDocIndex(private val project: Project, private val scope: CoroutineSco
             val src = generateSequence(file.parent) { it.parent }.firstOrNull { it.fileName?.toString() == "src" } ?: return@mapNotNull null
             src.relativize(file).joinToString(".").removeSuffix(".${Inko.EXTENSION}").takeIf { it.substringBefore('.') in names }
         }
-        return modules.toSortedSet().joinToString("") { "import $it\n" }
+        return modules.toSet()
     }
 
     /** Every project source file, read from source. */

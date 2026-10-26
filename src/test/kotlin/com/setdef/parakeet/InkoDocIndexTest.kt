@@ -74,6 +74,40 @@ class InkoDocIndexTest : InkoTestCase(onDisk = true) {
         assertEquals(5, symbols().named("Helper").single().line)
     }
 
+    // `inko doc` documents what src/ imports, so std.test, which only tests import, was missing: no documentation
+    // for `t.equal` in a test, and `Tests` in `import std.test (Tests)` resolved to nothing.
+    fun testModulesOnlyTheTestsImportAreDocumentedToo() {
+        val std = Files.createDirectories(root.resolve("inko-std"))
+        val tests = Files.createDirectories(std.resolve("std")).resolve("test.inko")
+        Files.writeString(tests, "type pub Tests {}\n")
+        useFakeInko(FakeInkoCli { call ->
+            when (call.args.firstOrNull()) {
+                "print" -> FakeInkoCli.ok(stdout = "$std\n")
+                "doc" -> {
+                    val mirror = call.workingDirectory!!
+                    val standIn = mirror.resolve("src/parakeet_dependency_index.inko")
+                    if (Files.exists(standIn)) standInImports += Files.readString(standIn)
+                    val docs = Files.createDirectories(mirror.resolve("build/docs"))
+                    val file = mirror.resolve("src/app/util.inko")
+                    Files.writeString(docs.resolve("app_util.json"), FakeInkoDoc.module("app.util", file, types = listOf(FakeInkoDoc.type("Helper", 1))))
+                    // As inko doc does: what the project imports, the stand-in included.
+                    if (standInImports.any { "import std.test\n" in it }) {
+                        Files.writeString(docs.resolve("std_test.json"), FakeInkoDoc.module("std.test", tests, types = listOf(FakeInkoDoc.type("Tests", 1))))
+                    }
+                    FakeInkoCli.ok()
+                }
+                else -> FakeInkoCli.ok(stderr = "[]")
+            }
+        })
+        myFixture.addFileToProject("src/app/util.inko", util)
+        myFixture.addFileToProject("test/app/test_util.inko", "import app.util (Helper)\nimport std.missing\nimport std.test (Tests)\n\nfn pub tests(t: mut Tests) {}\n")
+
+        assertEquals("std.test", symbols().named("Tests").single().module)
+        assertNotEmpty(symbols().named("Helper"))
+        // Only what exists, so the stand-in can't stop inko doc: not the project's own modules, nor what isn't there.
+        assertEquals(listOf("import std.test\n"), standInImports)
+    }
+
     fun testAProjectThatDoesNotCompileStillGetsTheStandardLibraryDependenciesAndItsOwnDefinitions() {
         compiles = false
         Files.writeString(root.resolve("inko.pkg"), "require https://github.com/yorickpeterse/inko-markdown 0.24.0 abc\nrequire inko 0.21.1\n")

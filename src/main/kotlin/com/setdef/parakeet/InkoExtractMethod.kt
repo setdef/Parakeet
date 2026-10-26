@@ -184,7 +184,8 @@ object InkoExtractMethod {
         }
         fun parameterType(local: InkoLocal): String {
             val type = declaredType(local) ?: return PLACEHOLDER
-            if (BORROWS.any { type.startsWith(it) } || type.substringBefore('[').trim() in VALUE_TYPES) return type
+            // A closure's type (`fn (Int) -> Int`) is passed as it's written.
+            if (BORROWS.any { type.startsWith(it) } || type.startsWith("fn") || type.substringBefore('[').trim() in VALUE_TYPES) return type
             return "mut $type"
         }
         val parameters = inputs.values.map { local -> "${local.name}: ${parameterType(local)}" }

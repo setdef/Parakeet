@@ -28,6 +28,7 @@
 - Adding a name to an import written over several lines, as `inko fmt` writes a long one (`import markdown.html (\n  Filter, Generator,\n)`), puts it on a line of its own; it wrote `Generator,, Heading)`, which doesn't parse. Every feature that adds imports did this: quick fixes, completion, imports on paste, and the refactorings.
 - Inline Variable refuses a value that calls a method (`new` too, without parentheses), reads a field or makes an array when the variable is used more than once, saying why: each use would make a value of its own (`let bytes = ByteArray.new`, read into and then used, became two arrays), which the dialog's warning didn't prevent.
 - Introduce Constant puts the new constant after the whole of the last one, where it went after the first line of one written over several lines (`let MENU = [`), inside its value.
+- Extract Method passes a closure parameter as its type is written (`func: fn (Int)`), where it wrote `mut fn (Int)`, which doesn't compile.
 - A `let`'s variable is in scope after its statement, not in its own value, as the compiler has it: in `let arguments = arguments` (calling `std.env`'s `arguments`), renaming the variable renamed the call too, making `let args = args`, and Find Usages and usage highlighting counted the call as a use of the variable. Likewise, in `let x = x + 1` the value's `x` is the earlier one.
 
 ## [0.13.0] - 2026-10-26

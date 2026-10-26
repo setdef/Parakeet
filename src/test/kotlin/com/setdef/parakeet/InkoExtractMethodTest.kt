@@ -52,6 +52,12 @@ class InkoExtractMethodTest : InkoTestCase() {
         )
     }
 
+    // inko-builder's `fn static html(lang: String, func: fn (mut Element))`: a closure's type is passed as written.
+    fun testAClosureParameterKeepsItsType() {
+        val result = extract("fn html(func: fn (Int)) {\n  <selection>func.call(1)</selection>\n}\n")
+        assertTrue(result, result.contains("fn extracted(func: fn (Int)) {"))
+    }
+
     fun testAnExpression() {
         val result = extract("fn total(items: Array[Int], extra: Int) -> Int {\n  <selection>items.size * extra</selection> + 1\n}\n")
         assertEquals(

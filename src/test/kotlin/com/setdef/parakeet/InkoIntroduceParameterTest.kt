@@ -80,6 +80,13 @@ class InkoIntroduceParameterTest : InkoTestCase(onDisk = true) {
         return InkoIntroduceParameter.plan(file("src/app/util.inko"), TextRange(start, start + text.length))
     }
 
+    // inko-wobsite's `Hashes(Map.new)`: the compiler's type (with its type arguments) comes before `Map` from `Map.new`.
+    fun testTheParametersTypeIsTheCompilersFirst() {
+        val start = util.indexOf("LIMIT * 2")
+        val plan = InkoIntroduceParameter.plan(file("src/app/util.inko"), TextRange(start, start + "LIMIT * 2".length)) { "Int" }.getOrThrow()
+        assertEquals("Int", plan.type)
+    }
+
     fun testWarnsWhenCallersElsewhereCantSeeAPrivateName() {
         val plan = plan("LIMIT * 2").getOrThrow()
         assertEquals(setOf("LIMIT"), plan.privateNames)

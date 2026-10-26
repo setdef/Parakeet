@@ -1,8 +1,10 @@
 package com.setdef.parakeet
 
 import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.options.ConfigurationException
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
@@ -41,7 +43,8 @@ object InkoIntroduceParameter {
         fun expressionText(): String = method.containingFile.text.substring(expression.startOffset, expression.endOffset)
     }
 
-    fun plan(file: PsiFile, expression: TextRange): Result<Plan> {
+    /** [compilerType] gives the compiler's type for the expression in a range, if known, to write as the parameter's. */
+    fun plan(file: PsiFile, expression: TextRange, compilerType: (TextRange) -> String? = { null }): Result<Plan> {
         fun fail(message: String) = Result.failure<Plan>(IllegalStateException(message))
         val text = file.text
         val node = file.inkoOutline.enclosing(expression.startOffset).lastOrNull { it.kind == InkoOutline.Kind.METHOD }
@@ -73,7 +76,7 @@ object InkoIntroduceParameter {
             InkoLocals.declarations(text).filter { node.range.contains(it.offset) }.map { it.name }
         val suggested = InkoIntroduceVariable.suggestName(stream, expression)
         val name = if (suggested !in taken) suggested else generateSequence(2) { it + 1 }.map { "$suggested$it" }.first { it !in taken }
-        return Result.success(Plan(method, expression, occurrences, name, inferType(tokens), needed, private))
+        return Result.success(Plan(method, expression, occurrences, name, compilerType(expression) ?: inferType(tokens), needed, private))
     }
 
     /** A type for an expression when it's obvious: a literal, or `Type(…)`/`Type.new(…)`. */
@@ -186,7 +189,11 @@ class InkoIntroduceParameterHandler : RefactoringActionHandler {
     }
 
     private fun introduce(project: Project, editor: Editor, file: PsiFile, expression: TextRange) {
-        val plan = InkoIntroduceParameter.plan(file, expression).getOrElse {
+        // Off the EDT, where asking Cuttlebone for the expression's type may wait for its answer.
+        val type = ProgressManager.getInstance().runProcessWithProgressSynchronously<String?, RuntimeException>(
+            { ReadAction.compute<String?, RuntimeException> { compilerType(file, expression) } }, TITLE, true, project,
+        )
+        val plan = InkoIntroduceParameter.plan(file, expression) { type }.getOrElse {
             return CommonRefactoringUtil.showErrorHint(project, editor, it.message.orEmpty(), TITLE, null)
         }
         InkoIntroduceParameterDialog(project, plan).show()
@@ -201,8 +208,15 @@ class InkoIntroduceParameterHandler : RefactoringActionHandler {
         override fun isValid(): Boolean = file.isValid
     }
 
-    private companion object {
-        const val TITLE = "Introduce Parameter"
+    companion object {
+        private const val TITLE = "Introduce Parameter"
+
+        /** The compiler's type for the expression at [range], if it can be written in [file] as it is (no import needed). */
+        fun compilerType(file: PsiFile, range: TextRange): String? {
+            val inko = file as? InkoFile ?: return null
+            val imports = mutableSetOf<Pair<String, String>>()
+            return InkoCompilerTypes.of(inko, range, stale = false)?.type?.let { InkoCompilerTypes.writable(inko, it, imports) }?.takeIf { imports.isEmpty() }
+        }
     }
 }
 

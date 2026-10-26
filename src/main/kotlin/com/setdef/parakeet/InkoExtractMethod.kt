@@ -199,7 +199,7 @@ object InkoExtractMethod {
             !statementMode -> {
                 val methodReturnsIt = tail && block == bodyOpen && signature?.returnType != null
                 returnType = if (methodReturnsIt) signature!!.returnType
-                    else InkoIntroduceParameter.inferType(tokens.subList(first, last + 1)) ?: expressionType(TextRange(tokens[first].start, tokens[last].end)) ?: PLACEHOLDER
+                    else expressionType(TextRange(tokens[first].start, tokens[last].end)) ?: InkoIntroduceParameter.inferType(tokens.subList(first, last + 1)) ?: PLACEHOLDER
                 call = name + arguments
                 callName = 0
             }
@@ -229,8 +229,8 @@ object InkoExtractMethod {
                 val methodReturnsIt = block == bodyOpen && signature?.returnType != null
                 val lastStatement = statements[endStatement]
                 returnType = if (methodReturnsIt) signature!!.returnType
-                    else InkoIntroduceParameter.inferType(tokens.subList(lastStatement.first, lastStatement.last + 1))
-                        ?: expressionType(TextRange(tokens[lastStatement.first].start, tokens[lastStatement.last].end)) ?: PLACEHOLDER
+                    else expressionType(TextRange(tokens[lastStatement.first].start, tokens[lastStatement.last].end))
+                        ?: InkoIntroduceParameter.inferType(tokens.subList(lastStatement.first, lastStatement.last + 1)) ?: PLACEHOLDER
                 call = name + arguments
                 callName = 0
             }

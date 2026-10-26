@@ -70,6 +70,14 @@ class InkoExtractMethodTypesTest : InkoTestCase(onDisk = true) {
         assertTrue(result, result.contains("fn extracted(p: Type) -> Int {"))
     }
 
+    // inko-wobsite's `Hashes(Map.new)`: `Map.new` says only `Map`, which needs its type arguments.
+    fun testTheCompilersTypeComesBeforeTheConstructorsName() {
+        val code = "fn hashes -> Int {\n  count(<selection>Map.new</selection>)\n}\n"
+        val clean = code.replace("<selection>", "").replace("</selection>", "")
+        Compiler().hover(At("src/main.inko", clean, "Map.new"), "Map[String, Int]", length = 7).install()
+        assertTrue(extract(code).contains("fn extracted -> Map[String, Int] {\n  Map.new\n}"))
+    }
+
     // A stale answer is from the last version that type checked: it may not be the type now.
     fun testAStaleTypeIsNotWritten() {
         stubCuttlebone { method, file, _ ->

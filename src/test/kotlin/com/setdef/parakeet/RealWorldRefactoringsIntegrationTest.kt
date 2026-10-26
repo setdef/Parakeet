@@ -201,12 +201,21 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
      */
     private fun snapshot(): Map<String, String> = listOf("src", "test").flatMap { directory ->
         val dir = root.resolve(directory).takeIf(Files::isDirectory) ?: return@flatMap emptyList()
-        Files.walk(dir).use { paths -> paths.filter { it.toString().endsWith(".${Inko.EXTENSION}") }.toList() }
+        // The walk fails if a temporary file goes while it lists the directory: list it again.
+        generateSequence { runCatching { Files.walk(dir).use { paths -> paths.filter { it.toString().endsWith(".${Inko.EXTENSION}") }.toList() } } }
+            .take(10).firstNotNullOfOrNull { it.getOrNull() } ?: error("couldn't list $dir")
     }.mapNotNull { path ->
         runCatching { Files.readString(path) }.getOrNull()?.let { root.relativize(path).invariantSeparatorsPathString to it }
     }.toMap()
 
     private lateinit var original: Map<String, String>
+
+    /** The tests that fail before any refactoring (inko-wobsite has one), or null if there are no tests. */
+    private var failingBefore: Set<String>? = null
+
+    /** The names of the tests `inko test` says failed, from its "1. Test: name" lines. */
+    private fun failures(output: String): Set<String> =
+        Regex("""^\s*\d+\. Test: (.+)$""", RegexOption.MULTILINE).findAll(withoutColors(output).orEmpty()).map { it.groupValues[1].trim() }.toSet()
 
     private fun saveAll() {
         PsiDocumentManager.getInstance(project).commitAllDocuments()
@@ -275,11 +284,13 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
             now == original -> outcomes += "$site: changed nothing"
             else -> {
                 val check = cli.run(listOf("check"), root, timeoutMs = 600_000)
-                val test = if (check?.succeeded == true && Files.isDirectory(root.resolve("test"))) cli.run(listOf("test"), root, timeoutMs = 600_000) else null
+                val test = if (check?.succeeded == true && failingBefore != null) cli.run(listOf("test"), root, timeoutMs = 600_000) else null
+                // Tests that failed before the refactoring may fail after it too.
+                val newlyFailing = test?.takeIf { !it.succeeded }?.let { failures(it.stdout + it.stderr) }
                 when {
                     check?.succeeded != true -> problems += "$site: doesn't type check after it:\n" +
                         withoutColors(check?.stderr + check?.stdout).orEmpty().trim().lines().take(6).joinToString("\n") { "    $it" } + "\n${diff(now)}"
-                    test != null && !test.succeeded -> problems += "$site: the tests fail after it:\n" +
+                    test != null && !test.succeeded && (newlyFailing.isNullOrEmpty() || !failingBefore!!.containsAll(newlyFailing)) -> problems += "$site: the tests fail after it:\n" +
                         withoutColors(test.stdout + test.stderr).orEmpty().trim().lines().takeLast(10).joinToString("\n") { "    $it" } + "\n${diff(now)}"
                     else -> outcomes += "$site: ok (${now.count { original[it.key] != it.value } + (original.keys - now.keys).size} files changed)"
                 }
@@ -371,6 +382,11 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
 
     private fun refactorings() {
         original = snapshot()
+        if (Files.isDirectory(root.resolve("test"))) {
+            val test = cli.run(listOf("test"), root, timeoutMs = 600_000)
+            failingBefore = if (test?.succeeded == true) emptySet() else failures(test?.stdout + test?.stderr)
+            if (failingBefore!!.isNotEmpty()) report("these tests fail before any refactoring, so they may fail after one: $failingBefore")
+        }
         // As files and offsets: putting the copy back after each refactoring makes new PSI.
         val declarations = declarations(perKind = 2)
         val sample = declarations.mapValues { (_, all) -> sites(all.filter { !isEntryPoint(it) }) }
@@ -451,7 +467,9 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
         for (site in expressions("call", 2) + expressions("literal", 2)) {
             attempt("Introduce Parameter", site.label) {
                 openAt(site.file, site.offset)
-                val plan = InkoIntroduceParameter.plan(psi(site.file), site.range).getOrElse { refuse(it.message) }
+                // As the handler has it: the compiler's type, asked off the EDT.
+                val type = inBackground { InkoIntroduceParameterHandler.compilerType(psi(site.file), site.range) }
+                val plan = InkoIntroduceParameter.plan(psi(site.file), site.range) { type }.getOrElse { refuse(it.message) }
                 InkoIntroduceParameter.processor(project, plan, plan.name, plan.type ?: refuse("its type couldn't be worked out"), replaceAll = true).run()
             }
         }

@@ -8,6 +8,7 @@
 - A named argument's label (`Page(module: module)`) and a call (`escape(v)`) are no longer taken for a local or parameter of the same name: renaming the local renamed the label (`Page(name: name)`) or the call too, Find Usages of the local listed them, and Find Usages of the field or method missed them.
 - Find Usages of a trait no longer lists the uses of the types implementing it, and renaming a trait no longer renames them: a trait and a type implementing it with the same name in another module (inko-syntax's trait `Lexer`, and each lexer's `type Lexer`) were taken for one another. A trait's methods still count their implementations' calls.
 - Find Usages finds a declaration's uses in modules that import it under another name (`import syntax (Lexer as LexerTrait)`), and Rename, Safe Delete, Move and Change Signature see them too. Renaming the declaration renames the name the import names, and leaves the alias and its uses as they are.
+- Find Usages of a type lists where its code names it `Self` (`fn static new -> Self`, `Self(…)`), as Cuttlebone does. Rename and the other refactorings leave `Self` as it is.
 - A `let`'s variable is in scope after its statement, not in its own value, as the compiler has it: in `let arguments = arguments` (calling `std.env`'s `arguments`), renaming the variable renamed the call too, making `let args = args`, and Find Usages and usage highlighting counted the call as a use of the variable. Likewise, in `let x = x + 1` the value's `x` is the earlier one.
 
 ## [0.13.0] - 2026-10-26

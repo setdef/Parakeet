@@ -248,6 +248,29 @@ class InkoFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
     override fun createFindUsagesHandler(element: PsiElement, forHighlightUsages: Boolean): FindUsagesHandler =
         object : FindUsagesHandler(element) {
             override fun processElementUsages(element: PsiElement, processor: Processor<in UsageInfo>, options: FindUsagesOptions): Boolean =
-                InkoSearch.readOnly(element) { super.processElementUsages(element, processor, options) }
+                InkoSearch.readOnly(element) {
+                    super.processElementUsages(element, processor, options) && (!options.isUsages || selfUses(element as InkoDeclaration, options, processor))
+                }
         }
+
+    /**
+     * A type's own code names it `Self` too, which Cuttlebone's references list. Only Find Usages shows them:
+     * `Self` names whatever type it's in, so Rename and the rest leave it alone.
+     */
+    private fun selfUses(declaration: InkoDeclaration, options: FindUsagesOptions, processor: Processor<in UsageInfo>): Boolean {
+        val found = com.intellij.openapi.application.ReadAction.compute<List<InkoName>, RuntimeException> {
+            if (!declaration.isValid || InkoDeclarations.kindOf(declaration) != "type") return@compute emptyList()
+            val scope = options.searchScope as? GlobalSearchScope ?: return@compute emptyList()
+            val references = InkoCompilerReferences.getInstance(declaration.project)
+            val names = mutableListOf<InkoName>()
+            // In the type's own methods, and in impls of it anywhere (`impl Trait for Box`).
+            PsiSearchHelper.getInstance(declaration.project).processElementsWithWord({ element, _ ->
+                val name = PsiTreeUtil.getParentOfType(element, InkoName::class.java, false)
+                if (name != null && name.text == "Self" && name !is InkoDeclaration && references.uses(name, declaration) == true) names += name
+                true
+            }, scope, "Self", UsageSearchContext.IN_CODE, true)
+            names.distinct()
+        }
+        return found.all { processor.process(UsageInfo(it)) }
+    }
 }

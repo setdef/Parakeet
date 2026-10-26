@@ -166,6 +166,32 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
         assertEquals(aliased.replace("Helper", "Aide"), PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/alias.inko"))!!.text)
     }
 
+    private val boxed = "type pub Box {\n  fn pub static new -> Self {\n    Self()\n  }\n}\n\nfn make -> Box {\n  Box.new\n}\n"
+
+    /** A type its own methods name as `Self`, which Cuttlebone lists as uses of the type (kvi's `ReaderWriter`). */
+    private fun withSelf() {
+        myFixture.addFileToProject("src/box.inko", boxed)
+        fun inBox(marker: String, nth: Int = 0) = At("src/box.inko", boxed, marker, nth = nth)
+        compiler()
+            .resolves(inBox("Self {"), inBox("Box {"))
+            .resolves(inBox("Self()"), inBox("Box {"))
+            .resolves(inBox("Box {\n  Box"), inBox("Box {"))
+            .resolves(inBox("Box.new"), inBox("Box {"))
+            .install()
+    }
+
+    fun testATypesUsesIncludeSelf() {
+        withSelf()
+        assertEquals(listOf("box.inko:2", "box.inko:3", "box.inko:7", "box.inko:8"), usagesOf(declaration("src/box.inko", "Box {")))
+    }
+
+    // `Self` names whatever type it's in, so it stays `Self`.
+    fun testRenameATypeLeavesSelf() {
+        withSelf()
+        myFixture.renameElement(declaration("src/box.inko", "Box {"), "Crate")
+        assertEquals(boxed.replace("Box", "Crate"), PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/box.inko"))!!.text)
+    }
+
     fun testALocalStaysInItsFile() = assertEquals(listOf("main.inko:8"), usagesOf(declaration("src/main.inko", "total =")))
 
     fun testAParameter() = assertEquals(listOf("main.inko:5", "main.inko:7"), usagesOf(declaration("src/main.inko", "x: Int")))

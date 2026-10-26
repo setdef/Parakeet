@@ -6,9 +6,12 @@
 # The tests include the integration tests, so `inko` must be installed.
 # Cuttlebone's integration tests are skipped when there's no `cuttlebone`,
 # except with --full, which requires it.
-# --full adds the Plugin Verifier against the oldest and newest supported
-# IDEs, which downloads them the first time and takes a few minutes. Run it
-# before any release or session report.
+# --full adds the real-world projects' tests (RealWorldProjectsIntegrationTest:
+# Inko projects cloned beside this repository, or under PARAKEET_FIXTURES,
+# each skipped with a message when it isn't there) and the Plugin Verifier
+# against the oldest and newest supported IDEs, which downloads them the
+# first time and takes a few minutes. Run it before any release or session
+# report.
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -76,6 +79,7 @@ fi
 step "plugin build" run ./gradlew --quiet --console=plain buildPlugin
 
 if [ "$full" = true ]; then
+    step "real-world projects against Cuttlebone" run ./gradlew --quiet --console=plain test -PrealWorld --tests '*.RealWorldProjectsIntegrationTest' --rerun
     step "plugin verification" run ./gradlew --quiet --console=plain verifyPlugin
 fi
 

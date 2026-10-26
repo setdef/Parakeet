@@ -455,7 +455,8 @@ Tools are managed with [mise](https://mise.jdx.dev) (`mise install`).
 | `./gradlew typingReplay` | Type code into a std module at a person's speed against your installed `inko` and `cuttlebone`, and fail if typing responsiveness regresses ([the limits](docs/history/SESSION-typing-replay.md)); `PARAKEET_REPLAY_PROJECT` adds a project of your own |
 | `./gradlew verifyPlugin` | Check compatibility with the oldest and newest supported IDEs |
 | `./gradlew buildPlugin` | Build the installable zip |
-| `scripts/check.sh [--full]` | Every check a commit must pass (`--full` adds the Plugin Verifier); see AGENTS.md. Cuttlebone's integration tests use `$CUTTLEBONE` or `cuttlebone` on PATH, and are skipped (with a message) without one; `--full` requires it |
+| `scripts/check.sh [--full]` | Every check a commit must pass (`--full` adds the real-world projects' tests and the Plugin Verifier); see AGENTS.md. Cuttlebone's integration tests use `$CUTTLEBONE` or `cuttlebone` on PATH, and are skipped (with a message) without one; `--full` requires it |
+| `./gradlew test -PrealWorld --tests '*.RealWorldProjectsIntegrationTest'` | Open real Inko projects against your installed `inko` and `cuttlebone`: Yorick Peterse's public projects and Inko's own (idoc, website), cloned beside this repository (`../yorickpeterse/<name>`, `../inko-lang/<name>`) or under `PARAKEET_FIXTURES`. Each is copied and synced, and skipped (with a message) when it isn't there or doesn't type check; nothing may log an error, and a sample of names must resolve, with hovers, documentation and completion |
 | `scripts/install-hooks.sh` | Run `scripts/check.sh` on what's staged before each commit |
 
 The files in `bundles/inko/` are copied unchanged from inko-lang/vscode

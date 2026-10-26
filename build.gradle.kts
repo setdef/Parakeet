@@ -3,6 +3,7 @@ import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 val TYPING_REPLAY = "CuttleboneTypingReplayIntegrationTest"
+val REAL_WORLD = "RealWorldProjectsIntegrationTest"
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -112,9 +113,12 @@ tasks.register("updatePluginsXml") {
 
 // `./gradlew test -PunitOnly` skips tests that need a real `inko` installed, and
 // `-PnoCuttlebone` the ones that need a real `cuttlebone` (scripts/check.sh decides).
+// The real-world projects' tests only run with `-PrealWorld` (scripts/check.sh --full).
 tasks.test {
     if (providers.gradleProperty("unitOnly").isPresent) exclude("**/*IntegrationTest*")
     if (providers.gradleProperty("noCuttlebone").isPresent) exclude("**/CuttleboneIntegrationTest*")
+    if (!providers.gradleProperty("realWorld").isPresent) exclude("**/$REAL_WORLD*")
+    providers.environmentVariable("PARAKEET_FIXTURES").orNull?.let { environment("PARAKEET_FIXTURES", it) }
     exclude("**/$TYPING_REPLAY*")
     // Where check.sh found cuttlebone; the tests otherwise look on PATH.
     providers.environmentVariable("CUTTLEBONE").orNull?.let { environment("CUTTLEBONE", it) }

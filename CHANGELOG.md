@@ -2,22 +2,6 @@
 
 ## [Unreleased]
 
-### Fixed
-
-- Opening a project no longer reports "IDE error occurred" (Access from Event Dispatch Thread is not allowed) in IntelliJ 2026.2: the check of the whole project marked files with errors from the EDT, which the IDE's problem-file service no longer allows.
-- A `cuttlebone` on PATH that doesn't run, or doesn't answer `--version` with a Cuttlebone version (like a mise shim for a tool that isn't installed), no longer stops Parakeet from offering to download Cuttlebone: it said "Cuttlebone refused this project" instead. Such a `cuttlebone`, on PATH or in Cargo's bin directory, is skipped for the next one or a download, and the settings' "In use" line says it was. A real Cuttlebone that refuses the project (for another Inko) is reported as before.
-- A local or parameter named like an imported module hides it, as the compiler has it: in `fn (html) { html.head }`, `html.head` resolves to the argument's method (through Cuttlebone), where Parakeet took it for the module `html`'s and resolved it to nothing, and `html` to the parameter, not the module. Completion in code Cuttlebone can't check offered the module's members there.
-- In tests, what only tests import from the standard library or a dependency (`std.test`, above all) has its definitions: `Tests` in `import std.test (Tests)` resolves, and quick documentation, Go to Class and completion know `Tests` and its methods (`t.equal`, `t.test`). `inko doc` documents what `src/` imports, so they were missing.
-- A project that doesn't compile, with two dependencies that each have a module of the same name (inko-builder's and inko-markdown's `html`, say), keeps the standard library's and its dependencies' definitions: Parakeet documented them through one module importing both, which the compiler rejects, so it knew only the project's own code.
-- Files with errors are marked in the Project view and the Problems tool window when the check of the whole project finds them, as 0.11.0 said they were: the IDE's problem-file service ignored Inko files, since Parakeet didn't tell it to track them.
-
-## [0.12.1] - 2026-10-25
-
-### Fixed
-
-- Opening a project no longer reports "IDE error occurred" (Access from Event Dispatch Thread is not allowed): the check of the whole project marked files with errors from the EDT, which the IDE's problem-file service doesn't allow (in every supported IDE, 2025.2 through 2026.2).
-- Files with errors are marked in the Project view and the Problems tool window when the check of the whole project finds them, as 0.11.0 said they were: the IDE's problem-file service ignored Inko files, since Parakeet didn't tell it to track them.
-
 ## [0.13.0] - 2026-10-25
 
 ### Added
@@ -37,6 +21,12 @@
 
 ### Fixed
 
+- Opening a project no longer reports "IDE error occurred" (Access from Event Dispatch Thread is not allowed) in IntelliJ 2026.2: the check of the whole project marked files with errors from the EDT, which the IDE's problem-file service no longer allows.
+- A `cuttlebone` on PATH that doesn't run, or doesn't answer `--version` with a Cuttlebone version (like a mise shim for a tool that isn't installed), no longer stops Parakeet from offering to download Cuttlebone: it said "Cuttlebone refused this project" instead. Such a `cuttlebone`, on PATH or in Cargo's bin directory, is skipped for the next one or a download, and the settings' "In use" line says it was. A real Cuttlebone that refuses the project (for another Inko) is reported as before.
+- A local or parameter named like an imported module hides it, as the compiler has it: in `fn (html) { html.head }`, `html.head` resolves to the argument's method (through Cuttlebone), where Parakeet took it for the module `html`'s and resolved it to nothing, and `html` to the parameter, not the module. Completion in code Cuttlebone can't check offered the module's members there.
+- In tests, what only tests import from the standard library or a dependency (`std.test`, above all) has its definitions: `Tests` in `import std.test (Tests)` resolves, and quick documentation, Go to Class and completion know `Tests` and its methods (`t.equal`, `t.test`). `inko doc` documents what `src/` imports, so they were missing.
+- A project that doesn't compile, with two dependencies that each have a module of the same name (inko-builder's and inko-markdown's `html`, say), keeps the standard library's and its dependencies' definitions: Parakeet documented them through one module importing both, which the compiler rejects, so it knew only the project's own code.
+- Files with errors are marked in the Project view and the Problems tool window when the check of the whole project finds them, as 0.11.0 said they were: the IDE's problem-file service ignored Inko files, since Parakeet didn't tell it to track them.
 - Typing no longer makes Cuttlebone check text nobody will see. Since its seventh milestone, Cuttlebone answers every question for the text it was asked about, even after an edit: Parakeet now cancels the questions an edit leaves nobody waiting for, and usage highlighting (which ran on every keystroke, for the name being typed) asks once typing pauses. Typing a method into std's `json.inko` at about 7 characters a second asked Cuttlebone about 330 questions, each a check of its own, and now about 90 (about 60 checks); hints and parameter info are as quick as before, and usage highlighting shows once typing pauses.
 - Usage highlighting waits up to 2 s, as inlay hints do, instead of 0.4 s: a file's first question pays its whole check, which on a busy machine took longer than 0.4 s, so the highlights didn't show (and a test failed now and then). Moving the caret no longer cancels the question it was waiting for, which made Cuttlebone discard every check it had kept.
 - Renaming a field renames it where a constructor sets it by name (`Point(x: 1)`), and Change Signature no longer renames a named argument of a call to another method in the same file.
@@ -47,6 +37,13 @@
 - Inline Variable refuses a variable that a compound assignment (`n += 2`) assigns, where it inlined its value into the assignment (`1 += 2`, which doesn't parse). Introduce Variable no longer replaces an occurrence that a compound assignment assigns (`sum += 1` became an assignment to the new, immutable variable), nor occurrences past an assignment to a variable or field the expression reads, or in a loop that assigns one, which have another value.
 - Renaming a getter (`fn value`) or a setter (`fn mut value=`) offers to rename the other beside it in the same type too, as IntelliJ does for Java's getters and setters. Renaming both in one go finds every usage, from Cuttlebone's fresh answers, before anything changes; renaming them one after the other, the second rename searched code the first had left not type checking.
 - Every LSP feature IntelliJ would run for Cuttlebone, other than Go to Type Declaration, is off, so none appears twice (inlay hints and parameter info did), and Cuttlebone's own diagnostics are turned off, as Parakeet's come from `inko check`.
+
+## [0.12.1] - 2026-10-25
+
+### Fixed
+
+- Opening a project no longer reports "IDE error occurred" (Access from Event Dispatch Thread is not allowed): the check of the whole project marked files with errors from the EDT, which the IDE's problem-file service doesn't allow (in every supported IDE, 2025.2 through 2026.2).
+- Files with errors are marked in the Project view and the Problems tool window when the check of the whole project finds them, as 0.11.0 said they were: the IDE's problem-file service ignored Inko files, since Parakeet didn't tell it to track them.
 
 ## [0.12.0] - 2026-10-24
 

@@ -10,6 +10,8 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectFileIndex
+import com.intellij.openapi.util.Condition
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -142,6 +144,15 @@ class InkoCompilerInspection : LocalInspectionTool() {
             )
         }.toTypedArray()
     }
+}
+
+/**
+ * Which files the IDE's problem-file service tracks: it ignores the rest, so without this no Inko file is
+ * marked. The project's own Inko files (not its excluded `dep` and `build`, nor libraries).
+ */
+class InkoProblemFileFilter(private val project: Project) : Condition<VirtualFile> {
+    override fun value(file: VirtualFile): Boolean =
+        file.fileType == InkoFileType.INSTANCE && ProjectFileIndex.getInstance(project).isInContent(file)
 }
 
 /** Starts a project-wide check of each Inko project when the IDE opens it. */

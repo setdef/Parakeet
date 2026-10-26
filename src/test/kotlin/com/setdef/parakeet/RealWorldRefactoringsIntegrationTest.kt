@@ -382,10 +382,10 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
             }
         }
         // Used ones (which it refuses, saying where they're used), and unused ones, which it deletes.
-        val unused = sites(inBackground(600) {
-            declarations(perKind = 1000).filterKeys { it in setOf("type", "trait", "method", "function", "field", "constant") }.values.flatten()
-                .filter { !isEntryPoint(it) && ReferencesSearch.search(it, GlobalSearchScope.projectScope(project)).findFirst() == null }
-        }.let { spread(it, 4) })
+        val candidates = declarations(perKind = 1000).filterKeys { it in setOf("type", "trait", "method", "function", "field", "constant") }.values.flatten()
+        val unused = sites(spread(inBackground(600) {
+            candidates.filter { !isEntryPoint(it) && ReferencesSearch.search(it, GlobalSearchScope.projectScope(project)).findFirst() == null }
+        }, 4))
         for (site in of("type", "trait", "method", "function", "field", "constant") + unused) {
             attempt("Safe Delete", site.label) {
                 val declaration = declarationAt(site.file, site.offset)

@@ -170,6 +170,33 @@ object InkoInlineMethod {
         val bodyRange = TextRange(mTokens[definition.open].end, mTokens[definition.close].start)
         val bodyLocals = InkoLocals.declarations(methodText).filter { bodyRange.contains(it.offset) }
         val replacements = mutableMapOf<Int, String>() // token start in methodText -> new text
+        // `Self` is the method's type: outside it (in another type, or module), it's named.
+        val selves = (definition.open + 1 until definition.close).filter { mTokens[it].type == InkoTokens.CONSTANT && mTokens[it].text == "Self" }
+        if (selves.isNotEmpty()) {
+            val methodOutline = InkoOutline.of(methodText)
+            val owner = methodOutline.enclosing(methodNameOffset).dropLast(1).lastOrNull()
+            val type = when (owner?.kind) {
+                InkoOutline.Kind.TYPE -> owner.label
+                InkoOutline.Kind.IMPL -> methodOutline.implTarget(owner)
+                else -> null
+            }
+            val callOutline = InkoOutline.of(callText)
+            val callOwner = callOutline.enclosing(callStart).lastOrNull { it.kind == InkoOutline.Kind.TYPE || it.kind == InkoOutline.Kind.IMPL }
+            val sameFile = callText.toString() == methodText.toString()
+            val inside = sameFile && type != null && callOwner != null &&
+                (if (callOwner.kind == InkoOutline.Kind.TYPE) callOwner.label else callOutline.implTarget(callOwner)) == type
+            if (!inside) {
+                if (type == null) return fail("`${signature.name}` uses `Self`, which is its type, so it can't be inlined elsewhere.")
+                val declared = methodOutline.roots.firstOrNull { it.kind == InkoOutline.Kind.TYPE && it.label == type }
+                val generic = declared?.let { methodText.getOrNull(it.nameOffset + type.length) == '[' } ?: (owner?.label?.contains("$type[") == true)
+                if (generic) return fail("`${signature.name}` uses `Self`, which is `$type` with its type arguments, so it can only be inlined inside `$type`.")
+                // In another module, the name must be imported there already.
+                if (!sameFile && InkoImports.parse(callText).symbol(type) == null) {
+                    return fail("`${signature.name}` uses `Self`, which is `$type`, and the call's module doesn't import `$type`.")
+                }
+                selves.forEach { replacements[mTokens[it].start] = type }
+            }
+        }
         val bindings = mutableListOf<String>()
         for ((index, parameter) in parameters.withIndex()) {
             val declaration = parameterDeclarations.firstOrNull { it.name == parameter.name } ?: continue

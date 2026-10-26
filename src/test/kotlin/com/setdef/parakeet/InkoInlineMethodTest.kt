@@ -154,6 +154,26 @@ class InkoInlineMethodTest : InkoTestCase(onDisk = true) {
         }
     }
 
+    private fun inlined(methodText: String, method: String, callText: String, call: String): Result<String> =
+        InkoInlineMethod.inline(methodText, methodText.indexOf(method), callText, callText.indexOf(call), usesSelf = false).map { edits ->
+            edits.sortedByDescending { it.range.startOffset }.fold(callText) { text, edit -> text.replaceRange(edit.range.startOffset, edit.range.endOffset, edit.text) }
+        }
+
+    // kvi's `ReaderWriter.new`, whose body is `Self(…)`: outside the type, `Self` is that type by its name.
+    fun testSelfInTheBodyBecomesTheTypesNameOutsideIt() {
+        val pair = "type pub Pair {\n  let @a: Int\n\n  fn pub static of(a: Int) -> Self {\n    Self(a: a)\n  }\n}\n"
+        assertEquals("import app.pair (Pair)\n\nfn run -> Pair {\n  let p = Pair(a: 1)\n  p\n}\n", inlined(pair, "of(a", "import app.pair (Pair)\n\nfn run -> Pair {\n  let p = Pair.of(1)\n  p\n}\n", "of(1").getOrThrow())
+        // Within the type, `Self` stays.
+        val within = pair.replace("  }\n}\n", "  }\n\n  fn pub static one -> Self {\n    Pair.of(1)\n  }\n}\n")
+        assertTrue(inlined(within, "of(a", within, "of(1").getOrThrow().contains("fn pub static one -> Self {\n    Self(a: 1)\n  }"))
+        // A generic type's name alone isn't `Self`, which has its type arguments.
+        val box = "type pub Box[T] {\n  let @v: T\n\n  fn pub static of(v: T) -> Self {\n    Self(v: v)\n  }\n}\n"
+        assertEquals(
+            "`of` uses `Self`, which is `Box` with its type arguments, so it can only be inlined inside `Box`.",
+            inlined(box, "of(v", "fn run {\n  let b = Box.of(1)\n}\n", "of(1").exceptionOrNull()?.message,
+        )
+    }
+
     fun testRefusesMethodsThatCantBeInlined() {
         assertTrue(InkoInlineMethod.unsupported(util, util.indexOf("countdown"))!!.contains("`return`"))
         assertNull(InkoInlineMethod.unsupported(util, util.indexOf("double")))

@@ -3,7 +3,7 @@ import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 val TYPING_REPLAY = "CuttleboneTypingReplayIntegrationTest"
-val REAL_WORLD = "RealWorldProjectsIntegrationTest"
+val REAL_WORLD = "RealWorld"
 
 plugins {
     id("org.jetbrains.kotlin.jvm")

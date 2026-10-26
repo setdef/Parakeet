@@ -3,38 +3,26 @@ package com.setdef.parakeet
 import com.intellij.codeInsight.daemon.impl.MockWolfTheProblemSolver
 import com.intellij.codeInsight.daemon.impl.WolfTheProblemSolverImpl
 import com.intellij.lang.annotation.HighlightSeverity
-import com.intellij.openapi.application.AccessToken
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.problems.WolfTheProblemSolver
 import com.intellij.psi.PsiManager
 import com.intellij.psi.util.PsiTreeUtil
-import com.intellij.testFramework.LoggedErrorProcessor
 import com.intellij.testFramework.PlatformTestUtil
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
-import java.nio.file.LinkOption
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.TimeUnit
 import kotlin.io.path.invariantSeparatorsPathString
 
 /**
- * Real-world Inko projects, opened against the real `inko` and `cuttlebone`: Yorick Peterse's public projects
- * and Inko's own, cloned beside this repository (`../yorickpeterse/<name>` and `../inko-lang/<name>`), or under
- * PARAKEET_FIXTURES. Each is copied (without `.git`, `build` and `dep`), synced when it has dependencies, and
- * used only when it type checks with the installed Inko; a project that isn't there, can't be synced or doesn't
- * type check is skipped, with a message. Then nothing may log an error, the whole project's check must find
- * none, and in a sample of its files highlighting finds no error, Cuttlebone has hints, every member call
- * (`x.name`, but a closure's `call`, which nothing declares) and type name resolves (member calls through
- * Cuttlebone's definition), and a sample of member calls have a hover, documentation and completion that
- * offers them. scripts/check.sh --full runs these
- * (`-PrealWorld`); the per-commit check doesn't.
+ * Real-world Inko projects ([RealWorldTestCase]), opened against the real `inko` and `cuttlebone`. Nothing may
+ * log an error, the whole project's check must find none, and in a sample of its files highlighting finds no
+ * error, Cuttlebone has hints, every member call (`x.name`, but a closure's `call`, which nothing declares) and
+ * type name resolves (member calls through Cuttlebone's definition), and a sample of member calls have a hover,
+ * documentation and completion that offers them. scripts/check.sh --full runs these (`-PrealWorld`); the
+ * per-commit check doesn't.
  */
-class RealWorldProjectsIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
+class RealWorldProjectsIntegrationTest : RealWorldTestCase() {
     fun testOpenflow() = project("yorickpeterse", "openflow")
     fun testKvi() = project("yorickpeterse", "kvi")
     fun testShost() = project("yorickpeterse", "shost")
@@ -48,63 +36,8 @@ class RealWorldProjectsIntegrationTest : InkoTestCase(onDisk = true, realInko = 
     fun testIdoc() = project("inko-lang", "idoc")
     fun testWebsite() = project("inko-lang", "website")
 
-    private val errors = CopyOnWriteArrayList<String>()
-    private var recording: AccessToken? = null
-
-    override fun setUp() {
-        super.setUp()
-        // Every error logged on any thread, recorded rather than thrown where it happened, so each test can list them.
-        recording = LoggedErrorProcessor.executeWith(object : LoggedErrorProcessor() {
-            override fun processError(category: String, message: String, details: Array<String>, t: Throwable?): Set<Action> {
-                errors += "$category: $message" + (t?.let { "\n" + it.stackTraceToString().lines().take(30).joinToString("\n") }.orEmpty())
-                return Action.NONE
-            }
-        })
-    }
-
-    override fun tearDown() {
-        try {
-            recording?.close()
-        } catch (e: Throwable) {
-            addSuppressedException(e)
-        } finally {
-            super.tearDown()
-        }
-    }
-
-    private fun source(owner: String, name: String): Path {
-        val base = System.getenv("PARAKEET_FIXTURES")?.takeIf { it.isNotEmpty() }?.let(Path::of) ?: Path.of("").toAbsolutePath().parent
-        return base.resolve(owner).resolve(name)
-    }
-
-    private fun skip(name: String, why: String) = println("$name: skipped, $why")
-
-    private val cli get() = InkoCli.getInstance(project)
-
     private fun project(owner: String, name: String) {
-        val source = source(owner, name)
-        if (!Files.isDirectory(source)) {
-            return skip(name, "as $source isn't there (clone it there, or set PARAKEET_FIXTURES to the directory holding $owner/)")
-        }
-        val cuttlebone = System.getenv("CUTTLEBONE")?.takeIf { it.isNotEmpty() }
-            ?: run { InkoProjectSettings.getInstance(project).cuttlebone = ""; Cuttlebone.executable(project)?.toString() }
-            ?: return skip(name, "as it needs cuttlebone (set CUTTLEBONE)")
-        val root = Path.of(myFixture.tempDirPath)
-        copy(source, root)
-        if (Files.readAllLines(root.resolve(Inko.MANIFEST)).any { it.trimStart().startsWith("require ") }) {
-            val sync = cli.run(listOf("pkg", "sync"), root, timeoutMs = 600_000)
-            if (sync?.succeeded != true) return skip(name, "as `inko pkg sync` failed: ${sync?.stderr?.trim()?.take(500)}")
-        }
-        val check = cli.run(listOf("check"), root, timeoutMs = 600_000)
-        if (check?.succeeded != true) {
-            val error = check?.stderr?.replace(Regex("\u001B\\[[0-9;]*m"), "")?.trim()?.lines()?.firstOrNull()
-            return skip(name, "as it doesn't type check with ${cli.version()}: $error")
-        }
-        println("$name: checking against ${cli.version()} and $cuttlebone")
-
-        VfsUtil.markDirtyAndRefresh(false, true, true, LocalFileSystem.getInstance().refreshAndFindFileByNioFile(root)!!)
-        putTempDirInProjectContent()
-        useCuttlebone(cuttlebone)
+        val root = open(owner, name) ?: return
         val problems = mutableListOf<String>()
 
         wholeProject(root, problems)
@@ -114,18 +47,6 @@ class RealWorldProjectsIntegrationTest : InkoTestCase(onDisk = true, realInko = 
 
         assertTrue("$name logged errors:\n${errors.joinToString("\n\n")}", errors.isEmpty())
         assertTrue("$name:\n${problems.joinToString("\n")}", problems.isEmpty())
-    }
-
-    /** [source]'s files at [root], but not what's generated or fetched: `.git`, `build` and `dep`. */
-    private fun copy(source: Path, root: Path) {
-        val skipped = setOf(".git", "build", "dep")
-        Files.walk(source).use { paths ->
-            paths.filter { path -> source.relativize(path).none { it.toString() in skipped } }.forEach { path ->
-                val target = root.resolve(source.relativize(path).toString())
-                if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) Files.createDirectories(target)
-                else Files.copy(path, target, StandardCopyOption.REPLACE_EXISTING, LinkOption.NOFOLLOW_LINKS)
-            }
-        }
     }
 
     /** What runs for the whole project when it opens and after saves, on the threads it runs on in the IDE. */
@@ -161,21 +82,10 @@ class RealWorldProjectsIntegrationTest : InkoTestCase(onDisk = true, realInko = 
         return sources + withCalls("test").let { tests -> listOfNotNull(tests.getOrNull(tests.size / 2)) }
     }
 
-    private fun <T> inBackground(action: () -> T): T {
-        val future = ApplicationManager.getApplication().executeOnPooledThread<T> { ReadAction.compute<T, Throwable> { action() } }
-        PlatformTestUtil.waitWithEventsDispatching("background action", { future.isDone }, 120)
-        return future.get(1, TimeUnit.SECONDS)
-    }
-
     private fun inFile(projectName: String, root: Path, path: Path, problems: MutableList<String>) {
         val relative = root.relativize(path).invariantSeparatorsPathString
         val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path)!!
-        myFixture.configureFromExistingVirtualFile(virtualFile)
-        PlatformTestUtil.waitWithEventsDispatching({ "Cuttlebone didn't start: ${CuttleboneService.getInstance(project).status?.message}" }, {
-            val server = CuttleboneService.getInstance(project).server()
-            server != null && CuttleboneService.getInstance(project).sentVersions[server.getDocumentIdentifier(virtualFile).uri] ==
-                server.getDocumentVersion(myFixture.editor.document)
-        }, 120)
+        openInEditor(virtualFile)
 
         val document = myFixture.editor.document
         fun at(offset: Int) = "$relative:${document.getLineNumber(offset) + 1}"

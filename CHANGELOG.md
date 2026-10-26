@@ -20,6 +20,7 @@
 - Extract Method in a `fn move` method makes a `fn mut` one, so it can call the type's `mut` methods on `self`, where it made a plain `fn`, which can't.
 - Renaming a parameter of a trait's method, or of a method implementing one, lists a conflict saying why: Inko requires an implementation to use the trait's parameter names, so the renamed method no longer implemented the trait.
 - A trait's method's implementations in `test/` (a test double's `impl Lexer for DummyLexer`, say) are found: Go to Implementation lists them, and renaming the trait's method renames them too, where it left them, so the tests no longer compiled. `inko doc` documents only `src/`, so they're read from the code.
+- Inline Method of a call through the method's module (`bytes.whitespace?(b)`) names the module's constants, functions and types the body uses through it too (`b == bytes.SPACE`), where it left them unqualified, undefined where the call was.
 - A `let`'s variable is in scope after its statement, not in its own value, as the compiler has it: in `let arguments = arguments` (calling `std.env`'s `arguments`), renaming the variable renamed the call too, making `let args = args`, and Find Usages and usage highlighting counted the call as a use of the variable. Likewise, in `let x = x + 1` the value's `x` is the earlier one.
 
 ## [0.13.0] - 2026-10-26

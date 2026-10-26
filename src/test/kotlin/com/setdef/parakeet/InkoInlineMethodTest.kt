@@ -165,6 +165,25 @@ class InkoInlineMethodTest : InkoTestCase(onDisk = true) {
             edits.sortedByDescending { it.range.startOffset }.fold(callText) { text, edit -> text.replaceRange(edit.range.startOffset, edit.range.endOffset, edit.text) }
         }
 
+    // inko-syntax's `bytes.whitespace?(b)`, whose body names the module's constants (`byte == SPACE or …`): called
+    // through the module's name, they're named through it too.
+    fun testNamesFromTheMethodsModuleGoThroughTheModulesNameAtTheCall() {
+        val method = "let SPACE = 32\n\nfn pub space?(byte: Int) -> Bool {\n  byte == SPACE\n}\n"
+        assertEquals(
+            "import app.bytes\n\nfn run(b: Int) -> Bool {\n  b == bytes.SPACE\n}\n",
+            inlined(method, "space?(byte", "import app.bytes\n\nfn run(b: Int) -> Bool {\n  bytes.space?(b)\n}\n", "space?(b").getOrThrow(),
+        )
+    }
+
+    // Through the processor: the call's module needs no import, since it names them through the module.
+    fun testACallThroughTheModuleImportsNothing() {
+        val other = "import app.util\n\nfn go -> Int {\n  util.area(1, 2)\n}\n"
+        myFixture.addFileToProject("src/other.inko", other)
+        compiler().resolves(At("src/other.inko", other, "area(1"), inUtil("area(width")).install()
+        inlineCall("area", "src/other.inko", "area(1")
+        assertEquals("import app.util\n\nfn go -> Int {\n  let w = 1 * util.SCALE\n  w * 2\n}\n", file("src/other.inko").text)
+    }
+
     // kvi's `ReaderWriter.new`, whose body is `Self(…)`: outside the type, `Self` is that type by its name.
     fun testSelfInTheBodyBecomesTheTypesNameOutsideIt() {
         val pair = "type pub Pair {\n  let @a: Int\n\n  fn pub static of(a: Int) -> Self {\n    Self(a: a)\n  }\n}\n"

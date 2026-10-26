@@ -170,6 +170,16 @@ object InkoInlineMethod {
         val bodyRange = TextRange(mTokens[definition.open].end, mTokens[definition.close].start)
         val bodyLocals = InkoLocals.declarations(methodText).filter { bodyRange.contains(it.offset) }
         val replacements = mutableMapOf<Int, String>() // token start in methodText -> new text
+        // Called through its module's name (`bytes.space?(b)`), the module's own names are named through it too.
+        if (receiver != null && InkoImports.parse(callText).moduleAliasedAs(receiver) != null) {
+            val moduleNames = InkoOutline.of(methodText).roots.filter { it.kind != InkoOutline.Kind.IMPL }.map { it.label }.toSet()
+            for (i in definition.open + 1 until definition.close) {
+                val token = mTokens[i]
+                if (token.type != InkoTokens.IDENTIFIER && token.type != InkoTokens.CONSTANT) continue
+                if (token.text !in moduleNames || mTokens.getOrNull(i - 1)?.type == InkoTokens.DOT || definition.localAt(i) != null) continue
+                replacements[token.start] = "$receiver.${token.text}"
+            }
+        }
         // `Self` is the method's type: outside it (in another type, or module), it's named.
         val selves = (definition.open + 1 until definition.close).filter { mTokens[it].type == InkoTokens.CONSTANT && mTokens[it].text == "Self" }
         if (selves.isNotEmpty()) {
@@ -392,6 +402,13 @@ class InkoInlineMethodProcessor(
 
     private fun isImportUse(element: PsiElement): Boolean = InkoImports.parse(element.containingFile.text).at(element.textRange.startOffset) != null
 
+    // A call through the method's module (`bytes.space?(b)`): what the body names from it is named through it too.
+    private fun isThroughTheModule(element: PsiElement): Boolean {
+        val dot = element.previousToken()?.takeIf { it.isToken(InkoTokens.DOT) } ?: return false
+        val receiver = dot.previousToken()?.takeIf { it.isToken(InkoTokens.IDENTIFIER) } ?: return false
+        return InkoImports.parse(element.containingFile.text).moduleAliasedAs(receiver.text) != null
+    }
+
     override fun preprocessUsages(refUsages: Ref<Array<UsageInfo>>): Boolean {
         val conflicts = MultiMap<PsiElement, String>()
         val file = method.containingFile
@@ -406,7 +423,7 @@ class InkoInlineMethodProcessor(
                 val line = PsiDocumentManager.getInstance(myProject).getDocument(element.containingFile)?.getLineNumber(element.textRange.startOffset)?.plus(1)
                 conflicts.putValue(element, "The call in ${element.containingFile.name}${line?.let { ":$it" }.orEmpty()} can't be inlined: ${it.message}")
             }
-            if (element.containingFile != file && Inko.pathOf(element.containingFile.virtualFile)?.let(Inko::moduleName) != module) {
+            if (element.containingFile != file && Inko.pathOf(element.containingFile.virtualFile)?.let(Inko::moduleName) != module && !isThroughTheModule(element)) {
                 private.sorted().forEach { conflicts.putValue(element, "`$it` is private to ${module ?: "its module"}, so the call in ${element.containingFile.name} can't use it once inlined.") }
             }
         }
@@ -443,13 +460,14 @@ class InkoInlineMethodProcessor(
             if (element == null || method == null) { failed++; continue }
             // The call itself is replaced, so note its file first.
             val callFile = element.containingFile
+            val needsImports = !isThroughTheModule(element)
             val document = manager.getDocument(callFile) ?: continue
             manager.doPostponedOperationsAndUnblockDocument(document)
             val edits = InkoInlineMethod.inline(method.containingFile.text, method.textRange.startOffset, document.charsSequence, element.textRange.startOffset, usesSelf)
                 .getOrElse { failed++; continue }
             for (edit in edits.sortedByDescending { it.range.startOffset }) document.replaceString(edit.range.startOffset, edit.range.endOffset, edit.text)
             manager.commitDocument(document)
-            callFiles += callFile
+            if (needsImports) callFiles += callFile
         }
         for (file in callFiles) {
             if (Inko.pathOf(file.virtualFile)?.let(Inko::moduleName) == methodModule) continue

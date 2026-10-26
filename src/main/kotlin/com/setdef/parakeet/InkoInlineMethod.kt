@@ -476,7 +476,7 @@ class InkoInlineMethodProcessor(
             val document = manager.getDocument(file) ?: continue
             for ((from, symbol) in imports) {
                 if (file in throughTheModule && from == methodModule) continue
-                if (InkoImports.parse(document.charsSequence).symbol(symbol) != null) continue
+                if (symbol != "self" && InkoImports.parse(document.charsSequence).symbol(symbol) != null) continue
                 InkoImportEdits.add(document, from, symbol)
             }
             manager.commitDocument(document)

@@ -12,9 +12,18 @@ import com.setdef.parakeet.InkoDefinitionKind as Kind
 
 /** Editing `import` statements. */
 object InkoImportEdits {
-    /** Imports [name] from [module]: into an existing `import module (…)`, else as a new line after the last import. */
+    /**
+     * Imports [name] from [module]: into an existing `import module (…)`, else as a new line after the last import.
+     * `self` imports the module itself (`import module`), unless it already is.
+     */
     fun add(document: Document, module: String, name: String) {
         val imports = InkoImports.parse(document.charsSequence)
+        if (name == "self") {
+            if (imports.moduleAliasedAs(module.substringAfterLast('.')) == module) return
+            val line = "import $module"
+            if (imports.statements.isEmpty()) document.insertString(0, "$line\n\n") else document.insertString(imports.statements.last().range.endOffset, "\n$line")
+            return
+        }
         // Not into a tagged import: the name would only be imported where the tags hold.
         val existing = imports.statements.firstOrNull { it.module == module && it.symbolsRange != null && it.tagsRange == null }
         when {

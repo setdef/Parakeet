@@ -31,6 +31,7 @@
 - Extract Method passes a closure parameter as its type is written (`func: fn (Int)`), where it wrote `mut fn (Int)`, which doesn't compile.
 - Extract Method keeps the lines of a string written over several lines as they are, where it re-indented them, changing the string.
 - Introduce Variable refuses an expression that borrows from a value it makes itself (`Snapshot.of(state).rooms.get('bathroom')`, an `Option[ref RoomSnapshot]`), saying why: the value is dropped at the end of its statement while the variable still borrows from it, which panicked when the program ran.
+- Inline Method and Introduce Parameter import a module the moved code names (`layouts.page`, from `import site.layouts`) where it goes, where they left it undefined.
 - A `let`'s variable is in scope after its statement, not in its own value, as the compiler has it: in `let arguments = arguments` (calling `std.env`'s `arguments`), renaming the variable renamed the call too, making `let args = args`, and Find Usages and usage highlighting counted the call as a use of the variable. Likewise, in `let x = x + 1` the value's `x` is the earlier one.
 
 ## [0.13.0] - 2026-10-26

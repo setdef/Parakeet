@@ -214,6 +214,20 @@ class InkoInlineMethodTest : InkoTestCase(onDisk = true) {
         assertEquals("import app.things (Thing)\nimport app.things\nimport std.stdio (Stdout)\n\nfn go {\n  Thing.new\n  Stdout.new\n}\n", file("src/user.inko").text)
     }
 
+    // inko-website's `build.run`, whose body uses the module `layouts` (`import site.layouts`): the call's module
+    // imports it too.
+    fun testImportsAModuleTheBodyUses() {
+        val tool = "import std.env\n\nfn pub count -> Int {\n  env.arguments.size\n}\n"
+        val caller = "import app.tool (count)\n\nfn go -> Int {\n  count\n}\n"
+        myFixture.addFileToProject("src/app/tool.inko", tool)
+        myFixture.addFileToProject("src/caller.inko", caller)
+        compiler().resolves(At("src/caller.inko", caller, "count\n}"), At("src/app/tool.inko", tool, "count ->")).install()
+        val method = PsiTreeUtil.findChildrenOfType(file("src/app/tool.inko"), InkoDeclaration::class.java).first { it.name == "count" }
+        val call = PsiTreeUtil.getParentOfType(file("src/caller.inko").findElementAt(caller.indexOf("count\n}")), InkoName::class.java, false)!!
+        InkoInlineMethodProcessor(project, method, call, keepMethod = true).run()
+        assertEquals("import app.tool (count)\nimport std.env\n\nfn go -> Int {\n  env.arguments.size\n}\n", file("src/caller.inko").text)
+    }
+
     // Through the processor: the call's module needs no import, since it names them through the module.
     fun testACallThroughTheModuleImportsNothing() {
         val other = "import app.util\n\nfn go -> Int {\n  util.area(1, 2)\n}\n"

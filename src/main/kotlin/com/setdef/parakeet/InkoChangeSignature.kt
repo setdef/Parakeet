@@ -269,7 +269,7 @@ class InkoChangeSignatureProcessor(
         for ((from, name) in imports) {
             if (from == module) continue
             val text = document.charsSequence
-            if (InkoImports.parse(text).symbol(name) != null) continue
+            if (name != "self" && InkoImports.parse(text).symbol(name) != null) continue
             if (InkoOutline.of(text).roots.any { it.label == name }) continue
             InkoImportEdits.add(document, from, name)
         }

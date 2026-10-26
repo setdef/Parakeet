@@ -135,8 +135,9 @@ object InkoIntroduceParameter {
  * What code moving out of its module needs: for [names] (as written in
  * [file]), the (module, name) pairs to import where the code goes, and which
  * of those are private to [file]'s module (so other modules can't import them).
- * Names imported into [file] are imported the same way; names defined in its
- * module are imported from it; anything else (locals, the prelude) needs nothing.
+ * Names imported into [file] are imported the same way, a module it names as
+ * `(module, "self")`; names defined in its module are imported from it;
+ * anything else (locals, the prelude) needs nothing.
  */
 object InkoPortableNames {
     fun of(file: PsiFile, names: List<InkoName>): Pair<List<Pair<String, String>>, Set<String>> {
@@ -148,6 +149,11 @@ object InkoPortableNames {
             // `Self` names the type it's in, and is never imported.
             if (name.previousToken().isToken(InkoTokens.DOT) || name.text == "Self") continue
             if (InkoNameContext.of(name, imports) is InkoNameContext.Local) continue
+            // A module the code names (`layouts.page`), imported as itself (`import site.layouts`): `self` stands for it.
+            if (name.nextToken().isToken(InkoTokens.DOT)) imports.moduleAliasedAs(name.text)?.takeIf { it.substringAfterLast('.') == name.text }?.let {
+                needed += it to "self"
+                continue
+            }
             imports.symbol(name.text)?.let { (from, original) -> needed += from to original; continue }
             val resolved = InkoResolver.resolveDefinitions(name, exact = true)
             val (definition, site) = resolved.firstOrNull { it.first.kind in setOf(Kind.TYPE, Kind.TRAIT, Kind.CONSTANT, Kind.MODULE_METHOD) } ?: continue

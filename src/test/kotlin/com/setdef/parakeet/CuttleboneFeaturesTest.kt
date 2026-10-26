@@ -174,9 +174,12 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         open("src/main.inko", reassigned)
         runningServer()
         assertEquals("fn pub run {\n  let mut «=total» = 0\n  «=total» = 1\n  «total» + 2\n}\n", highlighted("total + 2"))
-        // Its own question first: the caret's definition, asked in advance for the EDT, mustn't hold it up.
-        val asked = messages().mapNotNull { it.get("method")?.asString }.filter { it == "textDocument/documentHighlight" || it == "textDocument/definition" }
-        assertEquals(listOf("textDocument/documentHighlight", "textDocument/definition"), asked)
+        // Its own question first: the caret's definition, asked in advance for the EDT, mustn't hold it up. That's
+        // sent from a pooled thread, and isn't waited for, so on a busy machine it reaches the fake after the
+        // highlights are in: wait for it before reading the order.
+        fun asked() = messages().mapNotNull { it.get("method")?.asString }.filter { it == "textDocument/documentHighlight" || it == "textDocument/definition" }
+        waitFor("the caret's definition to be asked") { "textDocument/definition" in asked() }
+        assertEquals(listOf("textDocument/documentHighlight", "textDocument/definition"), asked())
     }
 
     /** Usage highlighting at [marker] in [reassigned]: «=write» and «read». */

@@ -58,6 +58,12 @@ class InkoExtractMethodTest : InkoTestCase() {
         assertTrue(result, result.contains("fn extracted(func: fn (Int)) {"))
     }
 
+    // inko-builder's tests compare with multi-line strings: their lines are the string's text, never re-indented.
+    fun testAMultiLineStringKeepsItsLines() {
+        val result = extract("fn a {\n  if x {\n    <selection>t.equal(s, '\n<p>foo\n  bar\n</p>')</selection>\n  }\n}\n")
+        assertTrue(result, result.contains("fn extracted -> Type {\n  t.equal(s, '\n<p>foo\n  bar\n</p>')\n}"))
+    }
+
     fun testAnExpression() {
         val result = extract("fn total(items: Array[Int], extra: Int) -> Int {\n  <selection>items.size * extra</selection> + 1\n}\n")
         assertEquals(

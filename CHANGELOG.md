@@ -29,6 +29,7 @@
 - Inline Variable refuses a value that calls a method (`new` too, without parentheses), reads a field or makes an array when the variable is used more than once, saying why: each use would make a value of its own (`let bytes = ByteArray.new`, read into and then used, became two arrays), which the dialog's warning didn't prevent.
 - Introduce Constant puts the new constant after the whole of the last one, where it went after the first line of one written over several lines (`let MENU = [`), inside its value.
 - Extract Method passes a closure parameter as its type is written (`func: fn (Int)`), where it wrote `mut fn (Int)`, which doesn't compile.
+- Extract Method keeps the lines of a string written over several lines as they are, where it re-indented them, changing the string.
 - A `let`'s variable is in scope after its statement, not in its own value, as the compiler has it: in `let arguments = arguments` (calling `std.env`'s `arguments`), renaming the variable renamed the call too, making `let args = args`, and Find Usages and usage highlighting counted the call as a use of the variable. Likewise, in `let x = x + 1` the value's `x` is the earlier one.
 
 ## [0.13.0] - 2026-10-26

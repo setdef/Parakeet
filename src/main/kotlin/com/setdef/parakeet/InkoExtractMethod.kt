@@ -197,10 +197,17 @@ object InkoExtractMethod {
         val selected = text.substring(range.startOffset, range.endOffset)
         val baseIndent = indentOf(text, range.startOffset)
         // Inko parameters can't be reassigned, so ones the code assigns to start as a mutable copy.
-        val bodyLines = (inputs.values.filter { it.offset in assigned }.map { "let mut ${it.name} = ${it.name}" } +
-            selected.split('\n').mapIndexed { index, line ->
-                if (index == 0) line else line.removePrefix(baseIndent).let { if (it.length == line.length) line.trimStart() else it }
-            }).toMutableList()
+        val copies = inputs.values.filter { it.offset in assigned }.map { "let mut ${it.name} = ${it.name}" }
+        // A line that starts inside a string (one over several lines) is the string's text: it stays as it is.
+        val selectedLines = selected.split('\n')
+        val lineStarts = selectedLines.runningFold(range.startOffset) { start, line -> start + line.length + 1 }
+        val inString = selectedLines.indices.filter { index ->
+            index > 0 && tokens.any { it.isString && it.start < lineStarts[index] && it.end > lineStarts[index] }
+        }.map { it + copies.size }.toSet()
+        val bodyLines = (copies + selectedLines.mapIndexed { index, line ->
+            if (index == 0 || index + copies.size in inString) line
+            else line.removePrefix(baseIndent).let { if (it.length == line.length) line.trimStart() else it }
+        }).toMutableList()
         val returnType: String?
         val call: String
         val callName: Int
@@ -259,7 +266,9 @@ object InkoExtractMethod {
         val header = "fn $newModifiers$name$typeParameters" +
             (if (parameters.isEmpty()) "" else parameters.joinToString(", ", "(", ")")) +
             (returnType?.let { " -> $it" } ?: "") + " {"
-        val method = "\n\n$methodIndent$header\n" + bodyLines.joinToString("\n") { if (it.isBlank()) "" else bodyIndent + it } + "\n$methodIndent}"
+        val method = "\n\n$methodIndent$header\n" +
+            bodyLines.withIndex().joinToString("\n") { (index, line) -> if (index in inString) line else if (line.isBlank()) "" else bodyIndent + line } +
+            "\n$methodIndent}"
         val headerStart = method.indexOf(header)
         val methodName = headerStart + "fn $newModifiers".length
         val placeholders = Regex("\\b$PLACEHOLDER\\b").findAll(header).map { headerStart + it.range.first }.toList()

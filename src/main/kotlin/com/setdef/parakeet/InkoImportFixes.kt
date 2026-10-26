@@ -20,8 +20,19 @@ object InkoImportEdits {
         when {
             existing != null -> {
                 val symbols = existing.symbolsRange!!
-                val inside = document.charsSequence.subSequence(symbols.startOffset, symbols.endOffset)
-                document.replaceString(symbols.startOffset, symbols.endOffset, if (inside.isBlank()) name else "${inside.trimEnd()}, $name")
+                val inside = document.charsSequence.subSequence(symbols.startOffset, symbols.endOffset).toString()
+                val written = inside.trimEnd()
+                val replacement = when {
+                    inside.isBlank() -> name
+                    // Over several lines, as `inko fmt` writes a long one (each line ends with a comma): a line of its own.
+                    written.endsWith(",") && '\n' in inside -> {
+                        val lastLine = written.substringAfterLast('\n')
+                        "$written\n${lastLine.takeWhile { it == ' ' || it == '\t' }}$name,${inside.substring(written.length)}"
+                    }
+                    written.endsWith(",") -> "$written $name"
+                    else -> "$written, $name"
+                }
+                document.replaceString(symbols.startOffset, symbols.endOffset, replacement)
             }
             imports.statements.isNotEmpty() -> document.insertString(imports.statements.last().range.endOffset, "\nimport $module ($name)")
             else -> document.insertString(0, "import $module ($name)\n\n")

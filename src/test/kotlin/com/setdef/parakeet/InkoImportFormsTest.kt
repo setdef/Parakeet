@@ -30,6 +30,15 @@ class InkoImportFormsTest : InkoTestCase() {
         added("import extern \"m\"\n\nfn main {}\n", "app.util", "Helper"),
     )
 
+    // inko-markdown's tests, as `inko fmt` writes a long import: each line ends with a comma, the last one too.
+    fun testANameJoinsAnImportWrittenOverSeveralLines() {
+        assertEquals(
+            "import markdown.html (\n  Filter, Generator, percent_encode,\n  Heading,\n)\n",
+            added("import markdown.html (\n  Filter, Generator, percent_encode,\n)\n", "markdown.html", "Heading"),
+        )
+        assertEquals("import a (B, C)\n", added("import a (B,)\n", "a", "C"))
+    }
+
     // A symbol imported under a tag would only exist for that platform.
     fun testASymbolIsNotAddedToATaggedImport() = assertEquals(
         "import std.sys.unix.env (Foo) if unix\nimport std.sys.unix.env (Helper)\n",

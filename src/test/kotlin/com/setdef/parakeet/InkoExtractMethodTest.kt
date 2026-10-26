@@ -33,6 +33,12 @@ class InkoExtractMethodTest : InkoTestCase() {
         )
     }
 
+    // inko-syntax's `fn pub move to_array` calls `self.next`, a `fn mut`: so does the new method, which must be `mut`.
+    fun testAMoveMethodsCodeGoesInAMutMethod() {
+        val result = extract("type A {\n  fn move all -> Int {\n    <selection>self.next</selection>\n  }\n\n  fn mut next -> Int {\n    1\n  }\n}\n")
+        assertTrue(result, result.contains("fn mut extracted -> Int {\n    self.next\n  }"))
+    }
+
     // yorickpeterse.com's `impl Handle for Site { fn pub mut handle … }`: a trait's impl can't have methods of its own.
     fun testCodeInATraitsImplBecomesAFunctionAfterIt() {
         assertEquals(

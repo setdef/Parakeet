@@ -17,6 +17,7 @@
 - Extract Method imports the types it writes from the compiler's answers when the module doesn't import them yet (a `Path` from `std.fs.path`, say), where the code didn't compile; a type the index has no single match for stays the placeholder `Type`.
 - Introduce Parameter writes the compiler's type for the new parameter, and Extract Method prefers it to the type a constructor's name suggests: `Map.new` became `map: Map` and `-> Map`, without the type arguments the compiler requires.
 - Extract Method in `impl Trait for Type` puts the new method after the impl, as a function, where it added it to the impl, which can only have the trait's methods; code using `self` or fields there is refused, saying why.
+- Extract Method in a `fn move` method makes a `fn mut` one, so it can call the type's `mut` methods on `self`, where it made a plain `fn`, which can't.
 - A `let`'s variable is in scope after its statement, not in its own value, as the compiler has it: in `let arguments = arguments` (calling `std.env`'s `arguments`), renaming the variable renamed the call too, making `let args = args`, and Find Usages and usage highlighting counted the call as a use of the variable. Likewise, in `let x = x + 1` the value's `x` is the earlier one.
 
 ## [0.13.0] - 2026-10-26

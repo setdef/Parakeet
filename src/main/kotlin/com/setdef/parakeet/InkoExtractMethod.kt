@@ -163,7 +163,8 @@ object InkoExtractMethod {
         val newModifiers = when {
             owner == null -> ""
             "static" in modifiers -> "static "
-            "mut" in modifiers -> "mut "
+            // A `move` method owns `self`, so it can call a `mut` one.
+            "mut" in modifiers || "move" in modifiers -> "mut "
             else -> ""
         }
         val taken = (owner?.children ?: outline.roots).filter { it.kind == InkoOutline.Kind.METHOD }.map { it.label }.toSet()

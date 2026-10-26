@@ -14,6 +14,19 @@ class InkoInlineVariableTest : InkoTestCase() {
         return myFixture.editor.document.text
     }
 
+    // inko-wobsite's `let bytes = ByteArray.new`, read into and then used, and kvi's `let out = try read(client)`:
+    // at each use, the value would be a new one.
+    fun testRefusesAComputedValueUsedMoreThanOnce() {
+        assertEquals(
+            "refused: `bytes` is used 2 times, and each use would compute `ByteArray.new` anew, not share one value.",
+            inline("fn a -> String {\n  let <caret>bytes = ByteArray.new\n  read(bytes)\n  bytes.into_string\n}\n"),
+        )
+        assertEquals(
+            "refused: `items` is used 2 times, and each use would compute `[]` anew, not share one value.",
+            inline("fn a -> Int {\n  let <caret>items = []\n  items.push(1)\n  items.size\n}\n"),
+        )
+    }
+
     // inko-syntax's `let token = helpers.text_or_keyword(@buffer, …)`, then `@buffer.offset += 1` before `token.value`:
     // inlined, the call would run after the code that changes what it reads.
     fun testRefusesMovingACallPastOtherCode() {

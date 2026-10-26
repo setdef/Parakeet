@@ -229,7 +229,11 @@ compiler, so it always agrees with your installed Inko version.
   precedence and group left to right, and `and`/`or` bind more loosely). For
   the same reason, part of an operator chain (`60 - 60` in `total - 60 - 60`)
   isn't offered as an expression. Inline Variable refuses a variable that's
-  assigned again (`=`, `:=`, or a compound assignment like `+=`), and
+  assigned again (`=`, `:=`, or a compound assignment like `+=`); one whose
+  value calls a method, reads a field or makes an array, when it's used more
+  than once (each use would make its own) or code runs before its last use
+  (which may change it); and one whose value uses `try`, `throw` or `return`,
+  into a closure (where they'd leave the closure). And
   Introduce Variable doesn't replace an occurrence that's assigned, past an
   assignment to what the expression reads, or in a loop that assigns it.
 - **Change Signature, Introduce Parameter, Extract Method, and Inline

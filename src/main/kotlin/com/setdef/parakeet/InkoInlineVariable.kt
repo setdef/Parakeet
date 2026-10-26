@@ -59,12 +59,17 @@ object InkoInlineVariable {
             if (stream.assignmentAt(i + 1)) return fail("`$name` is assigned a new value, so it can't be inlined.")
         }
 
-        // A value that calls a method or reads a field is computed where the `let` is: past other code, that code
-        // may change it.
-        val computes = (start..end).any { i ->
+        // A value that calls a method, reads a field or makes an array is computed where the `let` is: past other
+        // code, that code may change it.
+        val computes = tokens[start].type == InkoTokens.LBRACKET || (start..end).any { i ->
             val token = tokens[i]
             token.type == InkoTokens.FIELD || (token.type == InkoTokens.IDENTIFIER && tokens.getOrNull(i - 1)?.type == InkoTokens.DOT) ||
                 (token.type in InkoTokens.NAMES && tokens.getOrNull(i + 1)?.let { it.type == InkoTokens.LPAREN && it.start == token.end } == true)
+        }
+        // Each use would make a value of its own (a new `ByteArray`, another read), where the variable shares one.
+        if (computes && uses.size > 1) {
+            val value = stream.text.substring(tokens[start].start, tokens[end].end)
+            return fail("`$name` is used ${uses.size} times, and each use would compute `$value` anew, not share one value.")
         }
         val lastUse = uses.maxOfOrNull { use -> tokens.indexOfFirst { it.start == use.startOffset } } ?: -1
         if (computes && lastUse > end) {

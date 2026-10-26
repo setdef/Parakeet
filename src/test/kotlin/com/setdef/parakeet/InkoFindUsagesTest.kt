@@ -181,6 +181,21 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
         assertEquals("import std.env (arguments)\n\nfn run -> Int {\n  let args = arguments\n  args.size\n}\n", myFixture.file.text)
     }
 
+    // idoc's `Method(module: module, …)`: the label names the field, not the local, so renaming the local leaves it.
+    fun testRenameALocalPassedToALabelOfItsName() {
+        myFixture.configureByText("run.inko", "type Page {\n  let @module: String\n}\n\nfn run -> Page {\n  let <caret>module = 'a'\n  Page(module: module)\n}\n")
+        myFixture.renameElementAtCaret("name")
+        assertEquals("type Page {\n  let @module: String\n}\n\nfn run -> Page {\n  let name = 'a'\n  Page(module: name)\n}\n", myFixture.file.text)
+    }
+
+    // inko-builder's `fn node(…, escape: Bool)` calls the imported `escape(v)`: Inko calls a local closure with
+    // `.call`, so `escape(` is the method, and renaming the parameter leaves it.
+    fun testRenameAParameterNamedLikeAMethodItCalls() {
+        myFixture.configureByText("run.inko", "import builder.xml (escape)\n\nfn node(v: String, <caret>escape: Bool) -> String {\n  if escape { escape(v) } else { v }\n}\n")
+        myFixture.renameElementAtCaret("escaped")
+        assertEquals("import builder.xml (escape)\n\nfn node(v: String, escaped: Bool) -> String {\n  if escaped { escape(v) } else { v }\n}\n", myFixture.file.text)
+    }
+
     fun testRenameATypeAcrossFiles() {
         myFixture.renameElement(declaration("src/app/util.inko", "Helper {"), "Assistant")
         assertEquals(util.replace("Helper", "Assistant"), myFixture.findFileInTempDir("src/app/util.inko").let { PsiManager.getInstance(project).findFile(it)!!.text })

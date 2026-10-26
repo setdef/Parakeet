@@ -5,6 +5,7 @@
 ### Fixed
 
 - A method with a closure-typed parameter or return type (`fn page(builder: fn (Int) -> String)`) has its body again: it ended at its header, so the Structure view, breadcrumbs and everything built on them lost the method's body, and in a type's method, each `case Error(e)` in a `match` was taken for an enum constructor the type declares, which Find Usages, Rename and go to definition then treated as a declaration.
+- A named argument's label (`Page(module: module)`) and a call (`escape(v)`) are no longer taken for a local or parameter of the same name: renaming the local renamed the label (`Page(name: name)`) or the call too, Find Usages of the local listed them, and Find Usages of the field or method missed them.
 - A `let`'s variable is in scope after its statement, not in its own value, as the compiler has it: in `let arguments = arguments` (calling `std.env`'s `arguments`), renaming the variable renamed the call too, making `let args = args`, and Find Usages and usage highlighting counted the call as a use of the variable. Likewise, in `let x = x + 1` the value's `x` is the earlier one.
 
 ## [0.13.0] - 2026-10-26

@@ -70,12 +70,28 @@ sealed class InkoNameContext {
             }
             if (name.tokenType == InkoTokens.CONSTANT) return Constant(text)
             if (previous.isKeyword(*DEFINING_KEYWORDS)) return Definition
-            InkoLocals.visibleAt(name.containingFile.text, offset).lastOrNull { it.name == text }?.let { return Local(it) }
+            // A named argument's label (`Page(module: module)`) names a parameter or field, and `name(…)` calls a
+            // method (Inko calls a local closure with `.call`): neither is a local of that name.
+            if (!isLabel(name) && !isCall(name)) {
+                InkoLocals.visibleAt(name.containingFile.text, offset).lastOrNull { it.name == text }?.let { return Local(it) }
+            }
             if (name.nextToken().isToken(InkoTokens.DOT)) {
                 imports.moduleAliasedAs(text)?.let { return ModuleReference(it) }
             }
             return Identifier(text)
         }
+
+        /** Whether [name] is a named argument's label: `(name: value` or `, name: value`, not `name := value`. */
+        private fun isLabel(name: com.intellij.psi.PsiElement): Boolean {
+            val previous = name.previousToken()
+            if (!previous.isToken(InkoTokens.LPAREN) && !previous.isToken(InkoTokens.COMMA)) return false
+            val colon = name.nextToken()?.takeIf { it.isToken(InkoTokens.OPERATOR) && it.text == ":" } ?: return false
+            return !isReplaced(name) && colon.nextToken()?.let { it.isToken(InkoTokens.OPERATOR) && it.text == ":" } != true
+        }
+
+        /** Whether `(` follows [name] right away: `name(…)` calls a method. */
+        private fun isCall(name: com.intellij.psi.PsiElement): Boolean =
+            name.nextToken()?.let { it.isToken(InkoTokens.LPAREN) && it.textRange.startOffset == name.textRange.endOffset } == true
 
         /** Whether [name] is a local or parameter in scope there, which hides a module of that name. */
         private fun isLocal(name: com.intellij.psi.PsiElement): Boolean =

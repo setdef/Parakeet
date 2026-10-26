@@ -12,6 +12,7 @@ import com.intellij.openapi.util.Condition
 import com.intellij.patterns.ElementPattern
 import com.intellij.patterns.PlatformPatterns
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiNamedElement
 import com.intellij.psi.PsiReference
 import com.intellij.psi.search.UsageSearchContext
@@ -68,6 +69,33 @@ class InkoSetterReferencesSearcher : QueryExecutorBase<PsiReference, ReferencesS
         val setter = parameters.elementToSearch as? InkoDeclaration ?: return
         val name = setter.name.takeIf { it.endsWith("=") && it.length > 1 } ?: return
         parameters.optimizer.searchWord(name.removeSuffix("="), parameters.effectiveSearchScope, UsageSearchContext.IN_CODE, true, setter)
+    }
+}
+
+/**
+ * Finds a declaration's uses under another name: in a module that imports it as `Lexer as LexerTrait`, its
+ * uses are spelled `LexerTrait`, so the word index is searched for the alias there too, and each occurrence
+ * checked to resolve to the declaration. Rename leaves those alone ([InkoReference.handleElementRename]).
+ */
+class InkoAliasReferencesSearcher : QueryExecutorBase<PsiReference, ReferencesSearch.SearchParameters>(true) {
+    override fun processQuery(parameters: ReferencesSearch.SearchParameters, consumer: Processor<in PsiReference>) {
+        val declaration = parameters.elementToSearch as? InkoDeclaration ?: return
+        if (declaration.isLocal) return
+        val name = declaration.name
+        val scope = parameters.effectiveSearchScope as? com.intellij.psi.search.GlobalSearchScope ?: return
+        val manager = PsiManager.getInstance(declaration.project)
+        com.intellij.psi.search.PsiSearchHelper.getInstance(declaration.project)
+            .processCandidateFilesForText(scope, UsageSearchContext.IN_CODE, true, name) { file ->
+                val psi = manager.findFile(file) as? InkoFile ?: return@processCandidateFilesForText true
+                for (import in InkoImports.parse(psi.text).statements) {
+                    for ((alias, original) in import.symbols) {
+                        if (original == name && alias != name) {
+                            parameters.optimizer.searchWord(alias, com.intellij.psi.search.LocalSearchScope(psi), UsageSearchContext.IN_CODE, true, declaration)
+                        }
+                    }
+                }
+                true
+            }
     }
 }
 

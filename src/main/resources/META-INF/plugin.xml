@@ -200,6 +200,7 @@
         <lang.findUsagesProvider language="Inko" implementationClass="com.setdef.parakeet.InkoFindUsagesProvider"/>
         <referencesSearch implementation="com.setdef.parakeet.InkoModuleReferencesSearcher"/>
         <referencesSearch implementation="com.setdef.parakeet.InkoSetterReferencesSearcher"/>
+        <referencesSearch implementation="com.setdef.parakeet.InkoAliasReferencesSearcher"/>
         <usageTypeProvider implementation="com.setdef.parakeet.InkoUsageTypeProvider"/>
         <findUsagesHandlerFactory implementation="com.setdef.parakeet.InkoFindUsagesHandlerFactory"/>
         <lang.namesValidator language="Inko" implementationClass="com.setdef.parakeet.InkoNamesValidator"/>

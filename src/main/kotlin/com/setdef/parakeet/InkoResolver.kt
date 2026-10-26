@@ -34,7 +34,12 @@ class InkoReference(element: InkoName) :
 
     // A renamed module file (`util.inko`) renames the module in import paths (`util`).
     // A setter's call (`recv.value = x`) names it without its `=`.
+    // A name imported under an alias (`Helper as Assistant`) keeps it: only the name it imports changes.
     override fun handleElementRename(newElementName: String): PsiElement {
+        val text = element.text
+        if (element.tokenType != InkoTokens.FIELD && InkoImports.parse(element.containingFile.text).symbol(text)?.second?.let { it != text && it != "self" } == true) {
+            return element
+        }
         val name = newElementName.removeSuffix(".${Inko.EXTENSION}")
         return element.rename(if (!element.text.endsWith("=")) name.removeSuffix("=") else name)
     }

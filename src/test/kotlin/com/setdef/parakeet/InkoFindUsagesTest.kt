@@ -137,6 +137,35 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
         usagesOf(declaration("src/app/util.inko", "Helper {")),
     )
 
+    private val aliased = "import app.util (Helper as Assistant)\n\nfn make -> Assistant {\n  Assistant.new\n}\n"
+
+    /** A module importing Helper under another name, as inko-syntax's lexers import the trait `Lexer as LexerTrait`. */
+    private fun withAlias() {
+        myFixture.addFileToProject("src/alias.inko", aliased)
+        fun inAlias(marker: String) = At("src/alias.inko", aliased, marker)
+        compiler()
+            .resolves(inAlias("Helper as"), inUtil("Helper {"))
+            .resolves(inAlias("Assistant)"), inUtil("Helper {"))
+            .resolves(inAlias("Assistant {"), inUtil("Helper {"))
+            .resolves(inAlias("Assistant.new"), inUtil("Helper {"))
+            .install()
+    }
+
+    fun testATypesUsesUnderAnAlias() {
+        withAlias()
+        assertEquals(
+            listOf("alias.inko:1", "alias.inko:1", "alias.inko:3", "alias.inko:4", "main.inko:1", "main.inko:4", "main.inko:4", "util.inko:4", "util.inko:5"),
+            usagesOf(declaration("src/app/util.inko", "Helper {")),
+        )
+    }
+
+    // The alias stays: only the name it imports changes.
+    fun testRenameATypeImportedUnderAnAlias() {
+        withAlias()
+        myFixture.renameElement(declaration("src/app/util.inko", "Helper {"), "Aide")
+        assertEquals(aliased.replace("Helper", "Aide"), PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/alias.inko"))!!.text)
+    }
+
     fun testALocalStaysInItsFile() = assertEquals(listOf("main.inko:8"), usagesOf(declaration("src/main.inko", "total =")))
 
     fun testAParameter() = assertEquals(listOf("main.inko:5", "main.inko:7"), usagesOf(declaration("src/main.inko", "x: Int")))

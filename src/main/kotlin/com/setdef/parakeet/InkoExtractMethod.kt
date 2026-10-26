@@ -341,13 +341,16 @@ class InkoExtractMethodHandler : RefactoringActionHandler {
     private fun extract(project: Project, editor: Editor, file: PsiFile, range: TextRange) {
         val text = editor.document.immutableCharSequence
         val inko = file as? InkoFile
+        // What the compiler's types name that the module must import first.
+        val imports = java.util.concurrent.ConcurrentHashMap.newKeySet<Pair<String, String>>()
+        fun writable(type: String?) = type?.let { inko?.let { file -> InkoCompilerTypes.writable(file, it, imports) } }
         // Off the EDT, where asking Cuttlebone for a local's type may wait for its answer.
         val planned = ProgressManager.getInstance().runProcessWithProgressSynchronously<Result<InkoExtractMethod.Plan>, RuntimeException>(
             { ReadAction.compute<Result<InkoExtractMethod.Plan>, RuntimeException> {
                 InkoExtractMethod.plan(
                     text, range,
-                    bindingType = { offset -> inko?.let { InkoCompilerTypes.ofBinding(it, offset) } },
-                    expressionType = { expression -> inko?.let { InkoCompilerTypes.of(it, expression, stale = false)?.type } },
+                    bindingType = { offset -> writable(inko?.let { InkoCompilerTypes.ofBinding(it, offset) }) },
+                    expressionType = { expression -> writable(inko?.let { InkoCompilerTypes.of(it, expression, stale = false)?.type }) },
                 )
             } },
             TITLE, true, project,
@@ -355,7 +358,18 @@ class InkoExtractMethodHandler : RefactoringActionHandler {
         val plan = planned.getOrElse {
             return CommonRefactoringUtil.showErrorHint(project, editor, it.message.orEmpty(), TITLE, null)
         }
-        val (callName, methodStart) = InkoExtractMethod.apply(project, editor, plan)
+        var (callName, methodStart) = InkoExtractMethod.apply(project, editor, plan)
+        if (imports.isNotEmpty()) {
+            // Imports go above the code, which moves down by what they add.
+            val before = editor.document.textLength
+            WriteCommandAction.writeCommandAction(project).withName("Extract Method").run<RuntimeException> {
+                for ((module, name) in imports.sortedBy { it.second }) InkoImportEdits.add(editor.document, module, name)
+                PsiDocumentManager.getInstance(project).commitDocument(editor.document)
+            }
+            val added = editor.document.textLength - before
+            callName += added
+            methodStart += added
+        }
         editor.selectionModel.removeSelection()
         val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: return
         val builder = TemplateBuilderImpl(psiFile)

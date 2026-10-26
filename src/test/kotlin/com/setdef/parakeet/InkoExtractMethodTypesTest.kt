@@ -44,6 +44,32 @@ class InkoExtractMethodTypesTest : InkoTestCase(onDisk = true) {
         )
     }
 
+    private val pathCode = "fn total -> Int {\n  let p = make\n  <selection>p.size</selection>\n}\n"
+
+    /** [pathCode], where the compiler's type for `p` is `Path`, which the module doesn't import. */
+    private fun withPath() = Compiler().hover(At("src/main.inko", pathCode.replace("<selection>", "").replace("</selection>", ""), "p = make"), "Path", length = 1).install()
+
+    // idoc's `let pwd = …` (a `Path`) and its tests' `t` (a `mut Test`): the type is imported where the index
+    // knows a single type of that name, so the code compiles.
+    fun testATypeTheModuleDoesntImportIsImported() {
+        withPath()
+        putTempDirInProjectContent()
+        useFakeInko(FakeInkoDoc.cli { mirror ->
+            listOf(FakeInkoDoc.module("std.fs.path", mirror.resolve("src/main.inko"), types = listOf(FakeInkoDoc.type("Path", 1))))
+        })
+        assertEquals(
+            "import std.fs.path (Path)\n\nfn total -> Int {\n  let p = make\n  extracted(p)\n}\n\nfn extracted(p: mut Path) -> Int {\n  p.size\n}\n",
+            extract(pathCode),
+        )
+    }
+
+    // Without one, it's the placeholder: a name the module can't see wouldn't compile either.
+    fun testATypeNoImportCanBeFoundForIsAPlaceholder() {
+        withPath()
+        val result = extract(pathCode)
+        assertTrue(result, result.contains("fn extracted(p: Type) -> Int {"))
+    }
+
     // A stale answer is from the last version that type checked: it may not be the type now.
     fun testAStaleTypeIsNotWritten() {
         stubCuttlebone { method, file, _ ->

@@ -64,6 +64,32 @@ object InkoCompilerTypes {
         return null
     }
 
+    /** What every module sees without importing it: Inko's prelude (compiler/src/type_check/define_types.rs, InsertPrelude). */
+    private val PRELUDE = setOf("Int", "Float", "String", "Array", "Bool", "Nil", "InlineArray", "ByteArray", "Option", "Result", "Map", "Self", "Never")
+
+    /**
+     * [type] (the compiler's), if it can be written into [file]: every type it names is in the prelude, declared
+     * or imported there, a type parameter, or the only type or trait of that name the index knows, whose import
+     * is added to [imports]. Null otherwise: the name wouldn't compile there.
+     */
+    fun writable(file: InkoFile, type: String, imports: MutableSet<Pair<String, String>>): String? {
+        val text = file.text
+        val existing = InkoImports.parse(text)
+        val declared = file.inkoOutline.roots.map { it.label }.toSet()
+        val needed = mutableSetOf<Pair<String, String>>()
+        for (name in Regex("\\b[A-Z]\\w*").findAll(type).map { it.value }.distinct()) {
+            if (name in PRELUDE || name in declared || existing.symbol(name) != null) continue
+            // A type parameter of the type or method it's in (`[T]`, `[K: Hash, V]`).
+            if (Regex("[\\[,]\\s*$name\\s*[:\\],]").containsMatchIn(text)) continue
+            val path = Inko.pathOf(file.virtualFile) ?: return null
+            val symbols = InkoDocIndex.getInstance(file.project).symbols(Inko.projectRoot(path)) ?: return null
+            val module = symbols.named(name, InkoDefinitionKind.TYPE, InkoDefinitionKind.TRAIT).map { it.module }.distinct().singleOrNull() ?: return null
+            needed += module to name
+        }
+        imports += needed
+        return type
+    }
+
     /** The compiler's type for the variable a binding's name at [offset] declares (`x` in `let x = …`). Fresh only. */
     fun ofBinding(file: InkoFile, offset: Int): String? {
         val answer = CuttleboneQueries.getInstance(file.project).hover(file, offset)?.takeIf { !it.stale } ?: return null

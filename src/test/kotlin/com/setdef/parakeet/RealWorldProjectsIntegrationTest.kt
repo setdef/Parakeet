@@ -96,7 +96,10 @@ class RealWorldProjectsIntegrationTest : InkoTestCase(onDisk = true, realInko = 
             if (sync?.succeeded != true) return skip(name, "as `inko pkg sync` failed: ${sync?.stderr?.trim()?.take(500)}")
         }
         val check = cli.run(listOf("check"), root, timeoutMs = 600_000)
-        if (check?.succeeded != true) return skip(name, "as it doesn't type check with ${cli.version()}: ${check?.stderr?.trim()?.lines()?.firstOrNull()}")
+        if (check?.succeeded != true) {
+            val error = check?.stderr?.replace(Regex("\u001B\\[[0-9;]*m"), "")?.trim()?.lines()?.firstOrNull()
+            return skip(name, "as it doesn't type check with ${cli.version()}: $error")
+        }
         println("$name: checking against ${cli.version()} and $cuttlebone")
 
         VfsUtil.markDirtyAndRefresh(false, true, true, LocalFileSystem.getInstance().refreshAndFindFileByNioFile(root)!!)

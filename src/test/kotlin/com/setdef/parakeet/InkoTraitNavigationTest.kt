@@ -72,6 +72,16 @@ class InkoTraitNavigationTest : InkoTestCase(onDisk = true) {
 
     fun testATraitMethodsImplementationsAreTheImplMethods() = assertEquals(listOf("16:show", "8:show"), implementationsOf("show -> String\n"))
 
+    // inko-syntax's `impl Lexer for DummyLexer` and openflow's test drivers: `inko doc` documents only `src/`, so an
+    // implementation in `test/` is found from the code. Renaming the trait's method renamed every other one.
+    fun testATraitMethodsImplementationsInTestsToo() {
+        putTempDirInProjectContent()
+        myFixture.addFileToProject("test/app/test_util.inko", "import app.util (Show)\n\ntype Fake {}\n\nimpl Show for Fake {\n  fn pub show -> String {\n    'f'\n  }\n}\n")
+        val declaration = myFixture.file.findElementAt(offsetOf("show -> String\n"))!!.parent as InkoDeclaration
+        val found = DefinitionsScopedSearch.search(declaration).findAll().map { "${it.containingFile.name}:${it.location()}" }.sorted()
+        assertEquals(listOf("test_util.inko:6:show", "util.inko:16:show", "util.inko:8:show"), found)
+    }
+
     // ⌥⌘B on a usage resolves it to its declaration first, then searches from there.
     fun testGoToImplementationFromAUsageOfTheTrait() {
         val usage = myFixture.file.findElementAt(offsetOf("Show for Helper"))!!.parent as InkoName

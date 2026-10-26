@@ -66,7 +66,9 @@ object InkoSearch {
     fun alsoImplementations(target: InkoDeclaration): List<PsiElement> {
         val stamp = PsiModificationTracker.getInstance(target.project).modificationCount
         implementations[target]?.takeIf { it.first == stamp }?.let { return it.second }
-        return (listOf(target) + InkoTraitNavigation.implementations(target)).distinct().also { implementations[target] = stamp to it }
+        // Only a method: a trait's implementations are types, which aren't uses of the trait.
+        val also = if (InkoCallHierarchy.isMethod(target)) InkoTraitNavigation.implementations(target) else emptyList()
+        return (listOf(target) + also).distinct().also { implementations[target] = stamp to it }
     }
 
     /** Whether Find Usages counted [name] without the compiler's answer for it: Cuttlebone can't check the code there. */

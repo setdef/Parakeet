@@ -140,6 +140,14 @@ class InkoTraitNavigationTest : InkoTestCase(onDisk = true) {
         }
     }
 
+    // A search for the trait itself is only its own: its implementing types are what Go to Implementation lists,
+    // not uses of it. In inko-syntax, each lexer's `type Lexer` implements the trait `Lexer`, so Find Usages of
+    // the trait listed every use of those types, and renaming the trait would have renamed them.
+    fun testASearchForATraitDoesntCountItsImplementingTypes() {
+        val trait = myFixture.file.findElementAt(offsetOf("Show {"))!!.parent as InkoDeclaration
+        assertEquals(listOf(trait), InkoSearch.alsoImplementations(trait))
+    }
+
     // Otherwise the implementations would no longer implement it.
     fun testRenamingATraitMethodRenamesItsImplementations() {
         withMain()

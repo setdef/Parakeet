@@ -489,15 +489,24 @@ GitHub Actions runs [`build.yml`](.github/workflows/build.yml) on every push to
 - **Integration tests** on Linux and macOS, each against the newest Inko release
   and the oldest supported one (0.20.0), installed with ivm by
   [`ci/install-inko.sh`](ci/install-inko.sh). ivm builds Inko from source, so
-  installed versions are cached. Cuttlebone isn't installed there, so its
-  integration tests only run locally (`scripts/check.sh`).
+  installed versions are cached. These skip Cuttlebone's integration tests.
+- **Cuttlebone** on Linux and macOS: the latest Cuttlebone release, downloaded
+  through its `manifest.json` and checked against its size and SHA-256 by
+  [`ci/install-cuttlebone.sh`](ci/install-cuttlebone.sh), with the newest
+  Inko it has a build for. It runs the integration tests against it and the
+  typing replay, whose timing limits count here (AGENTS.md). With
+  `real-world` (every release, or run by hand) it also runs the real-world
+  projects' sweeps on Linux, on the commits
+  [`ci/real-world-projects.txt`](ci/real-world-projects.txt) pins, and
+  fails if any project is missing or can't sync.
 
 Dependabot proposes weekly updates to Gradle dependencies and GitHub Actions.
 
 ### Releasing
 
 Pushing a tag like `v0.11.0` (matching `version` in `gradle.properties`) runs
-[`release.yml`](.github/workflows/release.yml): the full build above, then it
+[`release.yml`](.github/workflows/release.yml): the full build above, with the
+real-world sweeps against the latest Cuttlebone, then it
 signs the plugin and creates a GitHub Release with the signed zip and
 `updatePlugins.xml` (the plugin repository file IDEs check for updates). If a
 `PUBLISH_TOKEN` secret exists, it also publishes to the JetBrains Marketplace.

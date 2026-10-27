@@ -119,6 +119,7 @@ tasks.test {
     if (providers.gradleProperty("noCuttlebone").isPresent) exclude("**/Cuttlebone*IntegrationTest*")
     if (!providers.gradleProperty("realWorld").isPresent) exclude("**/$REAL_WORLD*")
     providers.environmentVariable("PARAKEET_FIXTURES").orNull?.let { environment("PARAKEET_FIXTURES", it) }
+    providers.environmentVariable("PARAKEET_FIXTURES_REQUIRED").orNull?.let { environment("PARAKEET_FIXTURES_REQUIRED", it) }
     providers.environmentVariable("PARAKEET_SWEEP_ONLY").orNull?.let { environment("PARAKEET_SWEEP_ONLY", it) }
     providers.environmentVariable("PARAKEET_PROTOCOL").orNull?.let { environment("PARAKEET_PROTOCOL", it) }
     exclude("**/$TYPING_REPLAY*")

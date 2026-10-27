@@ -55,6 +55,16 @@ abstract class RealWorldTestCase : InkoTestCase(onDisk = true, realInko = true) 
 
     protected fun skip(name: String, why: String) = println("$name: skipped, $why")
 
+    /**
+     * [skip], unless PARAKEET_FIXTURES_REQUIRED is set (CI, before a release): then a project that isn't there,
+     * or can't be synced, or no Cuttlebone, fails, since a skip would pass the release untested. One that doesn't
+     * type check with this Inko is still skipped: three of them don't with 0.21.1.
+     */
+    private fun missing(name: String, why: String) {
+        if (System.getenv("PARAKEET_FIXTURES_REQUIRED")?.isNotEmpty() == true) fail("$name: $why, and PARAKEET_FIXTURES_REQUIRED is set")
+        skip(name, why)
+    }
+
     protected val cli get() = InkoCli.getInstance(project)
 
     /**
@@ -64,18 +74,18 @@ abstract class RealWorldTestCase : InkoTestCase(onDisk = true, realInko = true) 
     protected fun open(owner: String, name: String): Path? {
         val source = source(owner, name)
         if (!Files.isDirectory(source)) {
-            skip(name, "as $source isn't there (clone it there, or set PARAKEET_FIXTURES to the directory holding $owner/)")
+            missing(name, "as $source isn't there (clone it there, or set PARAKEET_FIXTURES to the directory holding $owner/)")
             return null
         }
         val cuttlebone = System.getenv("CUTTLEBONE")?.takeIf { it.isNotEmpty() }
             ?: run { InkoProjectSettings.getInstance(project).cuttlebone = ""; Cuttlebone.executable(project)?.toString() }
-            ?: run { skip(name, "as it needs cuttlebone (set CUTTLEBONE)"); return null }
+            ?: run { missing(name, "as it needs cuttlebone (set CUTTLEBONE)"); return null }
         val root = Path.of(myFixture.tempDirPath)
         copy(source, root)
         if (Files.readAllLines(root.resolve(Inko.MANIFEST)).any { it.trimStart().startsWith("require ") }) {
             val sync = cli.run(listOf("pkg", "sync"), root, timeoutMs = 600_000)
             if (sync?.succeeded != true) {
-                skip(name, "as `inko pkg sync` failed (it needs the network): ${sync?.stderr?.trim()?.take(500)}")
+                missing(name, "as `inko pkg sync` failed (it needs the network): ${sync?.stderr?.trim()?.take(500)}")
                 return null
             }
         }

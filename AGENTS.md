@@ -31,6 +31,22 @@ most of these rules. Don't weaken a check to get past it.
 - Keep Gradle's file-system watching off (`org.gradle.vfs.watch`): it
   missed changes here, so checks ran stale code (GuardrailsTest).
 
+## Where checks count
+
+- Correctness (every test's assertions, the sweeps' findings, the Plugin
+  Verifier) counts everywhere: a failure is a bug until shown otherwise.
+- Timing limits (the typing replay's latencies, tests' waits) count on CI:
+  build.yml's Cuttlebone job, on every push to main and every pull
+  request, and release.yml before it publishes. CI's machines run nothing
+  else, so a timing failure there is a regression.
+- Locally, under load, timing limits are advisory. A timing failure that
+  passes when rerun alone is load: rerun it alone before believing it, say
+  so in the commit or report, and never loosen a limit to get past load.
+- The real-world sweeps run against the latest Cuttlebone on CI only for a
+  release (release.yml, or build.yml run by hand with `real-world`), on
+  the commits ci/real-world-projects.txt pins; locally, `check.sh --full`
+  runs them on the checkouts beside this repository.
+
 ## Paths
 
 - Use repository-relative paths in code, scripts and docs, never paths from

@@ -1,0 +1,13 @@
+# The real-world projects CI's sweeps run on (ci/clone-real-world.sh): owner/name, repository, commit.
+yorickpeterse/openflow https://github.com/yorickpeterse/openflow.git 3ce03a9ab05e53bf2eb3290bcefb462ae26dd268
+yorickpeterse/kvi https://github.com/yorickpeterse/kvi.git 7875efd945a0d6b59402b66e57b70c10023384c6
+yorickpeterse/shost https://github.com/yorickpeterse/shost.git 8bdc99c9d5cd7f64d5233e39feae8820f097c7fa
+yorickpeterse/clogs https://github.com/yorickpeterse/clogs.git ae7762e96c14b1312b3035d1cb40c0ec7ea48512
+yorickpeterse/inko-markdown https://github.com/yorickpeterse/inko-markdown.git ff72deef3d2809ff5049dc584ef67e437b0e2d52
+yorickpeterse/inko-syntax https://github.com/yorickpeterse/inko-syntax.git 017c870adec7602c548354be2155ac5bc86c75a6
+yorickpeterse/inko-builder https://github.com/yorickpeterse/inko-builder.git 119e47d225eeac52b62ed4f1bf0b57b6a245bf1c
+yorickpeterse/inko-wobsite https://github.com/yorickpeterse/inko-wobsite.git 133e46d92bec60e4e26099f11034abdbaefbbe0a
+yorickpeterse/code-formatting-in-inko https://github.com/yorickpeterse/code-formatting-in-inko.git 76f91dcbe9f031ffba38c2a14b6bc8681dd00914
+yorickpeterse/yorickpeterse.com https://github.com/yorickpeterse/yorickpeterse.com.git b288746266d092ecc1eae15f78dc5f96b5a796ea
+inko-lang/idoc https://github.com/inko-lang/idoc.git fffdf604f9306d706736b46e106ee8dcfb8c7816
+inko-lang/website https://github.com/inko-lang/website.git 792be40906a52748941fafa4aa07ac83b0f85355

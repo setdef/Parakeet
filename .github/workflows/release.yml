@@ -29,8 +29,11 @@ defaults:
     shell: bash
 
 jobs:
+  # Everything build.yml runs on main, and the real-world sweeps against the latest Cuttlebone.
   build:
     uses: ./.github/workflows/build.yml
+    with:
+      real-world: true
 
   release:
     name: Publish ${{ github.ref_name }}

@@ -1,14 +1,27 @@
 # Builds the plugin, runs unit tests, checks compatibility with the Plugin
 # Verifier, and runs integration tests against real Inko releases installed
 # with ivm (the newest release and the oldest supported one, on Linux and
-# macOS). Also called by release.yml before publishing.
+# macOS), and against the latest Cuttlebone release: its integration tests
+# and the typing replay, and with `real-world` (release.yml, before
+# publishing; or by hand) the real-world projects' sweeps.
 name: Build
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      real-world:
+        description: Run the real-world projects' sweeps against Cuttlebone too
+        type: boolean
+        default: false
   workflow_call:
+    inputs:
+      real-world:
+        description: Run the real-world projects' sweeps against Cuttlebone too
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -139,3 +152,78 @@ jobs:
         with:
           name: integration-test-reports-${{ matrix.os }}-inko-${{ steps.inko.outputs.version }}
           path: build/reports/tests
+
+  cuttlebone:
+    name: Cuttlebone (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-read-only: true
+          # Unpacked IDEs (about 1.5 GB each) are rebuilt from the cached IDE downloads in
+          # under a minute, so caching them too only crowds GitHub's 10 GB budget.
+          gradle-home-cache-excludes: caches/*/transforms
+      # Each Cuttlebone build links one Inko: the newest the latest release has a build for.
+      - name: Choose the Inko for the latest Cuttlebone
+        id: inko
+        run: |
+          version="$(ci/install-cuttlebone.sh inko)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Inko $version"
+      - name: Find ivm's data directory
+        id: ivm
+        run: |
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            echo "data=$HOME/Library/Application Support/ivm" >> "$GITHUB_OUTPUT"
+          else
+            echo "data=${XDG_DATA_HOME:-$HOME/.local/share}/ivm" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin/ivm
+            ${{ steps.ivm.outputs.data }}
+          key: ivm-${{ matrix.os }}-inko-${{ steps.inko.outputs.version }}
+      - name: Install Inko
+        run: ./ci/install-inko.sh "${{ steps.inko.outputs.version }}"
+      # Downloaded fresh each time, checked against the release's manifest (size and SHA-256).
+      - name: Install Cuttlebone
+        id: cuttlebone
+        run: echo "path=$(ci/install-cuttlebone.sh install "$RUNNER_TEMP/cuttlebone")" >> "$GITHUB_OUTPUT"
+      # Timing limits count here (AGENTS.md): CI's machines aren't shared with other work.
+      - name: Run the integration tests against Cuttlebone
+        env:
+          CUTTLEBONE: ${{ steps.cuttlebone.outputs.path }}
+        run: ./gradlew test --tests '*IntegrationTest'
+      - name: Replay typing against Cuttlebone
+        env:
+          CUTTLEBONE: ${{ steps.cuttlebone.outputs.path }}
+        run: ./gradlew typingReplay
+      - name: Clone the real-world projects
+        if: inputs.real-world && runner.os == 'Linux'
+        run: ci/clone-real-world.sh "$RUNNER_TEMP/fixtures"
+      # Every project must be there and sync: a skip here would pass a release untested.
+      - name: Run the real-world projects' sweeps against Cuttlebone
+        if: inputs.real-world && runner.os == 'Linux'
+        env:
+          CUTTLEBONE: ${{ steps.cuttlebone.outputs.path }}
+          PARAKEET_FIXTURES: ${{ runner.temp }}/fixtures
+          PARAKEET_FIXTURES_REQUIRED: '1'
+        run: ./gradlew test -PrealWorld --tests '*.RealWorld*IntegrationTest'
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cuttlebone-test-reports-${{ matrix.os }}
+          path: |
+            build/reports/tests
+            build/test-results

@@ -26,6 +26,10 @@ most of these rules. Don't weaken a check to get past it.
 
 - Run `scripts/check.sh` (tests and build). The pre-commit hook runs it on
   what's staged; set the hook up once with `scripts/install-hooks.sh`.
+- Never bypass the hook: no `git commit --no-verify` (or `-n`), no
+  disabling or editing the hook to get a commit through. If the hook fails,
+  fix the cause, or make the check itself robust (e.g. to load, see below),
+  in a commit that passes it.
 - Run `scripts/check.sh --full` (adds the Plugin Verifier) before any
   release or session report.
 - Keep Gradle's file-system watching off (`org.gradle.vfs.watch`): it

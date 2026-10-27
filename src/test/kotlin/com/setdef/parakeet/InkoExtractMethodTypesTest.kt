@@ -78,6 +78,14 @@ class InkoExtractMethodTypesTest : InkoTestCase(onDisk = true) {
         assertTrue(extract(code).contains("fn extracted -> Map[String, Int] {\n  Map.new\n}"))
     }
 
+    // inko-wobsite's `Hashes(Map.new)` again, with no answer from Cuttlebone (its check crashed): `Map` alone,
+    // from the constructor's name, needs type arguments, so it's the placeholder, which asks for them.
+    fun testWithNoAnswerAGenericConstructorsTypeIsAPlaceholder() {
+        val code = "fn hashes -> Int {\n  count(<selection>Map.new</selection>)\n}\n"
+        Compiler().crashed().install()
+        assertTrue(extract(code).contains("fn extracted -> Type {\n  Map.new\n}"))
+    }
+
     // A stale answer is from the last version that type checked: it may not be the type now.
     fun testAStaleTypeIsNotWritten() {
         stubCuttlebone { method, file, _ ->

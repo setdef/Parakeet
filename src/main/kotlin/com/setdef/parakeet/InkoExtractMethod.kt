@@ -215,7 +215,7 @@ object InkoExtractMethod {
             !statementMode -> {
                 val methodReturnsIt = tail && block == bodyOpen && signature?.returnType != null
                 returnType = if (methodReturnsIt) signature!!.returnType
-                    else expressionType(TextRange(tokens[first].start, tokens[last].end)) ?: InkoIntroduceParameter.inferType(tokens.subList(first, last + 1)) ?: PLACEHOLDER
+                    else expressionType(TextRange(tokens[first].start, tokens[last].end)) ?: InkoIntroduceParameter.inferType(tokens.subList(first, last + 1)) { InkoIntroduceParameter.isGeneric(it, text) } ?: PLACEHOLDER
                 call = name + arguments
                 callName = 0
             }
@@ -246,7 +246,7 @@ object InkoExtractMethod {
                 val lastStatement = statements[endStatement]
                 returnType = if (methodReturnsIt) signature!!.returnType
                     else expressionType(TextRange(tokens[lastStatement.first].start, tokens[lastStatement.last].end))
-                        ?: InkoIntroduceParameter.inferType(tokens.subList(lastStatement.first, lastStatement.last + 1)) ?: PLACEHOLDER
+                        ?: InkoIntroduceParameter.inferType(tokens.subList(lastStatement.first, lastStatement.last + 1)) { InkoIntroduceParameter.isGeneric(it, text) } ?: PLACEHOLDER
                 call = name + arguments
                 callName = 0
             }

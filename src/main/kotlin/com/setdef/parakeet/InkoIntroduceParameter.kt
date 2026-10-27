@@ -77,11 +77,19 @@ object InkoIntroduceParameter {
             InkoLocals.declarations(text).filter { node.range.contains(it.offset) }.map { it.name }
         val suggested = InkoIntroduceVariable.suggestName(stream, expression)
         val name = if (suggested !in taken) suggested else generateSequence(2) { it + 1 }.map { "$suggested$it" }.first { it !in taken }
-        return Result.success(Plan(method, expression, occurrences, name, compilerType(expression) ?: inferType(tokens), needed, private))
+        return Result.success(Plan(method, expression, occurrences, name, compilerType(expression) ?: inferType(tokens) { isGeneric(it, text) }, needed, private))
     }
 
     /** A type for an expression when it's obvious: a literal, or `Type(…)`/`Type.new(…)`. */
-    fun inferType(tokens: List<InkoToken>): String? {
+    /**
+     * Whether a guess from a constructor (`Type(…)`, `Type.new`) can't name [type] alone: it takes type arguments,
+     * as the prelude's generic types do and any [text] declares with type parameters (`type Box[T]`), and `Map`
+     * alone doesn't compile.
+     */
+    fun isGeneric(type: String, text: CharSequence = ""): Boolean =
+        type in setOf("Array", "Map", "Option", "Result", "InlineArray") || Regex("""(^|\n)\s*type\b[^\n{]*\b${Regex.escape(type)}\[""").containsMatchIn(text)
+
+    fun inferType(tokens: List<InkoToken>, generic: (String) -> Boolean = { isGeneric(it) }): String? {
         val first = tokens.firstOrNull() ?: return null
         if (tokens.size == 1) when {
             first.type == InkoTokens.STRING -> return "String"
@@ -89,8 +97,8 @@ object InkoIntroduceParameter {
             first.isKeyword("true", "false") -> return "Bool"
         }
         if (first.type == InkoTokens.STRING_START && tokens.last().type == InkoTokens.STRING_END && depthReturnsToZeroOnlyAtEnd(tokens)) return "String"
-        if (tokens.size == 2 && first.isOperator("-") && tokens[1].type == InkoTokens.NUMBER) return inferType(tokens.drop(1))
-        if (first.type == InkoTokens.CONSTANT) {
+        if (tokens.size == 2 && first.isOperator("-") && tokens[1].type == InkoTokens.NUMBER) return inferType(tokens.drop(1), generic)
+        if (first.type == InkoTokens.CONSTANT && !generic(first.text)) {
             val second = tokens.getOrNull(1)
             // `Type(…)` as the whole expression, or `Type.new` / `Type.new(…)`.
             if (second?.type == InkoTokens.LPAREN && tokens.last().type == InkoTokens.RPAREN && depthReturnsToZeroOnlyAtEnd(tokens.drop(1))) return first.text

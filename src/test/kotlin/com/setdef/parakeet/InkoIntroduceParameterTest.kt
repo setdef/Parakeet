@@ -149,6 +149,15 @@ class InkoIntroduceParameterTest : InkoTestCase(onDisk = true) {
         assertNull(type("LIMIT * 2"))
     }
 
+    // `Map.new` alone is `Map`, which needs type arguments: no guess, rather than code that doesn't compile.
+    fun testDoesntGuessAGenericType() {
+        fun type(text: String, declared: String = "") = InkoIntroduceParameter.inferType(InkoTokenStream(text).tokens) { InkoIntroduceParameter.isGeneric(it, declared) }
+        assertNull(type("Map.new"))
+        assertNull(type("Option.Some(1)"))
+        assertNull(type("Box.new", "type pub Box[T] {\n  let @value: T\n}\n"))
+        assertEquals("Box", type("Box.new", "type pub Box {\n  let @value: Int\n}\n"))
+    }
+
     fun testTheDialogBuilds() {
         val dialog = InkoIntroduceParameterDialog(project, plan("LIMIT * 2").getOrThrow())
         dialog.close(0)

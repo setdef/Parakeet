@@ -168,3 +168,24 @@ for (sandbox in listOf("prepareTestSandbox", "prepareSandbox_typingReplay")) {
         }
     }
 }
+
+// The test classes are compiled against the main classes, which reach compileTestKotlin only through its
+// `libraries`, which Kotlin's classpath snapshots leave out of the task's inputs: so, by its cache key, the main
+// classes may change without the test classes being compiled again. Here they're an input, by content.
+tasks.named("compileTestKotlin") {
+    inputs.files(sourceSets.main.map { it.output.classesDirs }).withPropertyName("mainClasses").withNormalizer(ClasspathNormalizer::class.java)
+}
+
+// compileTestKotlin's build cache key must change when the main classes do: otherwise, after a signature change
+// in src/main, the cache (or the task being up to date) gave test classes compiled against the old one
+// (NoSuchMethodError; SESSION-0.13.1-and-stale-answers.md). scripts/check.sh runs this first.
+val checkTestCompileInputs by tasks.registering {
+    group = "verification"
+    description = "Fails unless compileTestKotlin's fingerprinted inputs include the main classes."
+    val inputs = tasks.named("compileTestKotlin").map { task -> task.inputs.files.files.map { it.canonicalFile } }
+    val main = sourceSets.main.map { set -> set.output.classesDirs.files.map { it.canonicalFile } }
+    doLast {
+        val missing = main.get().filter { dir -> inputs.get().none { it == dir || it.startsWith(dir) } }
+        check(missing.isEmpty()) { "compileTestKotlin's inputs don't include $missing, so its cache key ignores changes there" }
+    }
+}

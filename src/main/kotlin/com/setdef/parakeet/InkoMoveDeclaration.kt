@@ -161,6 +161,10 @@ class InkoMoveDeclarationProcessor(
                 else "The moved code uses ${import.name}, which is private to ${import.module}, so $target can't import it.",
             )
         }
+        // Names Cuttlebone had no answer for, which the search couldn't count.
+        for (declaration in InkoSearch.alsoImplementations(declaration).filterIsInstance<InkoDeclaration>()) {
+            for ((name, why) in InkoSearch.undecidedConflicts(declaration)) conflicts.putValue(name, why)
+        }
         return showConflicts(conflicts, refUsages.get())
     }
 

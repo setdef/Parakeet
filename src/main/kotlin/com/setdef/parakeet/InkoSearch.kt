@@ -102,6 +102,36 @@ object InkoSearch {
         return found.distinct()
     }
 
+    /**
+     * The names a search for [target] couldn't decide: spelled as it is, where the compiler's answer says what a
+     * name means, but Cuttlebone had no fresh answer for the project's references or for the name (its check
+     * crashed, it ran out of time, or the code there is being edited). The search counted none of them, but each
+     * may be a use, so what changes code refuses rather than leave one behind (kvi's `run`, deleted while still
+     * used). Only answers the search already had count, so this doesn't wait. A local's search is in its method
+     * and asks Cuttlebone nothing.
+     */
+    fun undecided(target: InkoDeclaration): List<InkoName> {
+        if (target.isLocal) return emptyList()
+        val word = target.text.removePrefix("@").removeSuffix("=")
+        val references = InkoCompilerReferences.getInstance(target.project)
+        val queries = CuttleboneQueries.getInstance(target.project)
+        val found = mutableListOf<InkoName>()
+        PsiSearchHelper.getInstance(target.project).processElementsWithWord({ element, _ ->
+            val name = PsiTreeUtil.getParentOfType(element, InkoName::class.java, false)
+            if (name != null && name !is InkoDeclaration && references.uses(name, target) == null &&
+                InkoResolver.isGuessed(InkoNameContext.of(name, InkoImports.parse(name.containingFile.text))) &&
+                queries.definition(name.containingFile, name.textRange.startOffset, budgetMs = 0).let { it == null || it.editing }) found += name
+            true
+        }, GlobalSearchScope.projectScope(target.project), word, UsageSearchContext.IN_CODE, true)
+        return found.distinct()
+    }
+
+    /** Why each of [target]'s [undecided] names stops what changes code, for its conflicts. */
+    fun undecidedConflicts(target: InkoDeclaration): List<Pair<InkoName, String>> = undecided(target).map { name ->
+        val line = name.containingFile.viewProvider.document?.getLineNumber(name.textRange.startOffset)?.plus(1)
+        name to "Cuttlebone has no answer for `${name.text}` at ${name.containingFile.name}${line?.let { ":$it" }.orEmpty()}, so it may be a use."
+    }
+
     private val asked = ConcurrentHashMap<Pair<VirtualFile, String>, Long>()
 
     /**

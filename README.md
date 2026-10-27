@@ -400,6 +400,11 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | "Specify type explicitly" and "Remove explicit type" | hover's fresh type, of the variable or of a value that says its type itself | not offered |
 | Go to Type Declaration | `textDocument/typeDefinition`, through IntelliJ's LSP support | nothing |
 
+Where a search for what a refactoring changes has no fresh answer from
+Cuttlebone for a name that may be a use (its check crashed, it ran out of
+time, or the code there is being edited), the
+refactoring refuses, listing where, rather than leave the name as it is.
+
 Where Cuttlebone answers that there's nothing there (a name that doesn't
 resolve, say), or has no answer for another reason (it's starting, or a
 question ran out of time), nothing is shown: Parakeet's reading stands in

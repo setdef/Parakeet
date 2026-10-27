@@ -199,6 +199,10 @@ class InkoChangeSignatureProcessor(
                 conflicts.putValue(element, "The call in ${element.containingFile.name}${line?.let { ":$it" }.orEmpty()} can't be updated: ${it.message}.")
             }
         }
+        // Names Cuttlebone had no answer for, which the search couldn't count.
+        for (declaration in InkoSearch.alsoImplementations(method).filterIsInstance<InkoDeclaration>()) {
+            for ((name, why) in InkoSearch.undecidedConflicts(declaration)) conflicts.putValue(name, why)
+        }
         return showConflicts(conflicts, refUsages.get())
     }
 

@@ -249,10 +249,7 @@ class InkoInstanceMethodRenameProcessor : RenamePsiElementProcessor() {
                 conflicts.putValue(method, "`${method.name}` implements a trait's method from outside the project, which can't be renamed, so it would no longer implement it.")
             }
         }
-        for (name in InkoSearch.unchecked(method)) {
-            val line = name.containingFile.viewProvider.document?.getLineNumber(name.textRange.startOffset)?.plus(1)
-            conflicts.putValue(name, "Cuttlebone can't check the code at ${name.containingFile.name}${line?.let { ":$it" }.orEmpty()} (it doesn't type check), so `${name.text}` there isn't renamed.")
-        }
+        InkoRenameConflicts.add(method, conflicts)
     }
 
     /**
@@ -284,6 +281,27 @@ class InkoInstanceMethodRenameProcessor : RenamePsiElementProcessor() {
                     "`$site` at ${name.containingFile.name}:${line + 1} also $verb `$other`, which isn't renamed, so it would $would `${if (other.startsWith("@")) "@" else ""}$renamed` instead."
             }
         }
+    }
+}
+
+/** What every rename of an Inko declaration lists before renaming: the uses its search couldn't decide. */
+object InkoRenameConflicts {
+    fun add(declaration: InkoDeclaration, conflicts: com.intellij.util.containers.MultiMap<PsiElement, String>) {
+        val unchecked = InkoSearch.unchecked(declaration)
+        for (name in unchecked) {
+            val line = name.containingFile.viewProvider.document?.getLineNumber(name.textRange.startOffset)?.plus(1)
+            conflicts.putValue(name, "Cuttlebone can't check the code at ${name.containingFile.name}${line?.let { ":$it" }.orEmpty()} (it doesn't type check), so `${name.text}` there isn't renamed.")
+        }
+        for ((name, why) in InkoSearch.undecidedConflicts(declaration)) if (name !in unchecked) conflicts.putValue(name, why)
+    }
+}
+
+/** Renaming the Inko declarations no other processor of Parakeet's takes, with [InkoRenameConflicts]. */
+class InkoRenameProcessor : RenamePsiElementProcessor() {
+    override fun canProcessElement(element: PsiElement): Boolean = element is InkoDeclaration
+
+    override fun findExistingNameConflicts(element: PsiElement, newName: String, conflicts: com.intellij.util.containers.MultiMap<PsiElement, String>) {
+        InkoRenameConflicts.add(element as? InkoDeclaration ?: return, conflicts)
     }
 }
 
@@ -319,4 +337,40 @@ class InkoRefactoringSupportProvider : RefactoringSupportProvider() {
     // removing one would mean editing every call.
     override fun isSafeDeleteAvailable(element: PsiElement): Boolean =
         element is InkoDeclaration && InkoDeclarations.extent(element) != null && Cuttlebone.canSearch(element)
+}
+
+/**
+ * Safe Delete of an Inko declaration, as IntelliJ does it for any element, and with the uses its search couldn't
+ * decide as conflicts ([InkoSearch.undecided]): one may be a use, so it isn't safe to delete.
+ */
+class InkoSafeDeleteProcessor : com.intellij.refactoring.safeDelete.SafeDeleteProcessorDelegate {
+    override fun handlesElement(element: PsiElement): Boolean = element is InkoDeclaration
+
+    override fun findUsages(element: PsiElement, allElementsToDelete: Array<out PsiElement>, result: MutableList<in UsageInfo>): com.intellij.refactoring.safeDelete.NonCodeUsageSearchInfo {
+        com.intellij.refactoring.safeDelete.SafeDeleteProcessor.findGenericElementUsages(element, result, allElementsToDelete, element.useScope)
+        return com.intellij.refactoring.safeDelete.NonCodeUsageSearchInfo(com.intellij.refactoring.safeDelete.SafeDeleteProcessor.getDefaultInsideDeletedCondition(allElementsToDelete), element)
+    }
+
+    override fun getElementsToSearch(element: PsiElement, allElementsToDelete: MutableCollection<out PsiElement>): Collection<PsiElement> = listOf(element)
+
+    override fun getAdditionalElementsToDelete(element: PsiElement, allElementsToDelete: MutableCollection<out PsiElement>, askUser: Boolean): Collection<PsiElement>? = null
+
+    override fun findConflicts(element: PsiElement, allElementsToDelete: Array<out PsiElement>): Collection<String> =
+        (element as? InkoDeclaration)?.let { InkoSearch.undecidedConflicts(it).map { (_, why) -> why } }.orEmpty()
+
+    override fun preprocessUsages(project: com.intellij.openapi.project.Project, usages: Array<out UsageInfo>): Array<UsageInfo> = arrayOf(*usages)
+
+    override fun prepareForDeletion(element: PsiElement) {}
+
+    override fun isToSearchInComments(element: PsiElement): Boolean = com.intellij.refactoring.RefactoringSettings.getInstance().SAFE_DELETE_SEARCH_IN_COMMENTS
+
+    override fun setToSearchInComments(element: PsiElement, enabled: Boolean) {
+        com.intellij.refactoring.RefactoringSettings.getInstance().SAFE_DELETE_SEARCH_IN_COMMENTS = enabled
+    }
+
+    override fun isToSearchForTextOccurrences(element: PsiElement): Boolean = com.intellij.refactoring.RefactoringSettings.getInstance().SAFE_DELETE_SEARCH_IN_NON_JAVA
+
+    override fun setToSearchForTextOccurrences(element: PsiElement, enabled: Boolean) {
+        com.intellij.refactoring.RefactoringSettings.getInstance().SAFE_DELETE_SEARCH_IN_NON_JAVA = enabled
+    }
 }

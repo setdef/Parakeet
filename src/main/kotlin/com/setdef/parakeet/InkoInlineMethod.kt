@@ -432,6 +432,10 @@ class InkoInlineMethodProcessor(
             val (type, trait) = implementing
             conflicts.putValue(method, "`$name` implements $trait's method, so it's kept: without it, $type wouldn't implement $trait.")
         }
+        // Names Cuttlebone had no answer for, which the search couldn't count.
+        for (declaration in InkoSearch.alsoImplementations(method).filterIsInstance<InkoDeclaration>()) {
+            for ((name, why) in InkoSearch.undecidedConflicts(declaration)) conflicts.putValue(name, why)
+        }
         return showConflicts(conflicts, refUsages.get())
     }
 

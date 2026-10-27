@@ -283,4 +283,38 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
         assertNotNull(InkoChangeSignature.invalid(InkoSignatureChange("add", listOf(InkoParameterChange(0, "a", "Int"), InkoParameterChange(1, "a", "Int")), null)))
         assertNull(InkoChangeSignature.invalid(InkoSignatureChange("add?", listOf(InkoParameterChange(-1, "c", "Int", "0")), null)))
     }
+
+    // kvi's `run`, given a parameter while `match run` still called it without one: Cuttlebone's check crashed,
+    // so the search had no answer and found no call.
+    fun testWithNoAnswerForAPossibleCallItRefuses() {
+        Compiler().crashed().install()
+        try {
+            change("ping", InkoSignatureChange("ping", listOf(InkoParameterChange(0, "times", "Int"), InkoParameterChange(-1, "loud", "Bool", "true")), null))
+            fail("expected a conflict, not:\n${text("src/main.inko")}")
+        } catch (e: BaseRefactoringProcessor.ConflictsInTestsException) {
+            assertTrue(e.messages.toString(), e.messages.contains("Cuttlebone has no answer for `ping` at main.inko:${line(main, "ping(3")}, so it may be a use."))
+        }
+    }
+
+    // The same for Rename, of a function as of any declaration.
+    fun testRenameWithNoAnswerForAPossibleCallRefuses() {
+        Compiler().crashed().install()
+        try {
+            myFixture.renameElement(method("ping"), "pong")
+            fail("expected a conflict, not:\n${text("src/main.inko")}")
+        } catch (e: BaseRefactoringProcessor.ConflictsInTestsException) {
+            assertTrue(e.messages.toString(), e.messages.contains("Cuttlebone has no answer for `ping` at main.inko:${line(main, "ping(3")}, so it may be a use."))
+        }
+    }
+
+    // Nor where the code is being edited, so Cuttlebone has no fresh answer for the call.
+    fun testWithTheCallBeingEditedItRefuses() {
+        compiler().editing(inMain("ping(3")).install()
+        try {
+            change("ping", InkoSignatureChange("ping", listOf(InkoParameterChange(0, "times", "Int"), InkoParameterChange(-1, "loud", "Bool", "true")), null))
+            fail("expected a conflict, not:\n${text("src/main.inko")}")
+        } catch (e: BaseRefactoringProcessor.ConflictsInTestsException) {
+            assertTrue(e.messages.toString(), e.messages.contains("Cuttlebone has no answer for `ping` at main.inko:${line(main, "ping(3")}, so it may be a use."))
+        }
+    }
 }

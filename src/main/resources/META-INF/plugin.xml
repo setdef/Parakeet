@@ -208,6 +208,8 @@
         <renamePsiElementProcessor implementation="com.setdef.parakeet.InkoInstanceMethodRenameProcessor" order="first"/>
         <renamePsiElementProcessor implementation="com.setdef.parakeet.InkoTraitParameterRenameProcessor" order="first"/>
         <renamePsiElementProcessor implementation="com.setdef.parakeet.InkoExternRenameProcessor" order="first"/>
+        <renamePsiElementProcessor implementation="com.setdef.parakeet.InkoRenameProcessor"/>
+        <refactoring.safeDeleteProcessor implementation="com.setdef.parakeet.InkoSafeDeleteProcessor"/>
         <vetoRenameCondition implementation="com.setdef.parakeet.InkoRenameVeto"/>
         <lang.refactoringSupport language="Inko" implementationClass="com.setdef.parakeet.InkoRefactoringSupportProvider"/>
         <highlightUsagesHandlerFactory implementation="com.setdef.parakeet.InkoHighlightUsagesHandlerFactory"/>

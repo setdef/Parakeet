@@ -54,6 +54,25 @@ class InkoSafeDeleteTest : InkoTestCase(onDisk = true) {
         }
     }
 
+    // kvi's `run`, deleted while `match run` still used it: Cuttlebone's check crashed, so the search had no
+    // answer, and found no use. A name the compiler couldn't decide may be one, so it isn't safe to delete.
+    fun testWithNoAnswerForAPossibleUseItRefuses() {
+        putTempDirInProjectContent()
+        val source = "fn helper -> Int {\n  1\n}\n\nfn a -> Int {\n  helper\n}\n"
+        useFakeInko(FakeInkoDoc.cli { mirror ->
+            val file = mirror.resolve("src/main.inko")
+            listOf(FakeInkoDoc.module("main", file, methods = listOf(FakeInkoDoc.member("helper", file, 1, 1), FakeInkoDoc.member("a", file, 5, 1))))
+        })
+        myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/main.inko", source).virtualFile)
+        Compiler().crashed().install()
+        try {
+            SafeDeleteHandler.invoke(project, arrayOf(declaration("helper ->")), true)
+            fail("expected a conflict, not:\n${myFixture.editor.document.text}")
+        } catch (e: BaseRefactoringProcessor.ConflictsInTestsException) {
+            assertEquals(listOf("Cuttlebone has no answer for `helper` at main.inko:6, so it may be a use."), e.messages.toList())
+        }
+    }
+
     fun testParametersCannotBeSafeDeleted() {
         myFixture.configureByText("main.inko", "fn a(x: Int) {}\n")
         assertFalse(InkoRefactoringSupportProvider().isSafeDeleteAvailable(declaration("x:")))

@@ -124,6 +124,11 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
         }
 
         fun otherwiseEditing() = apply { otherwiseEditing = true }
+
+        private var crashed = false
+
+        /** Every check crashes, so nothing has an answer: as Cuttlebone 0.12.0 said (`checkCrashed`) when a check panicked. */
+        fun crashed() = apply { crashed = true }
         fun hover(at: At, type: String, length: Int = at.marker.length - at.shift) = apply { hovers += Triple(at, type, length) }
         fun editing(at: At) = apply { editing += at }
 
@@ -140,6 +145,7 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
 
         fun install() = stubCuttlebone { method, file, offset ->
             fun status(status: String, reason: String? = null) = CuttleboneStatus(method, file.url, status, reason, 1.0)
+            if (crashed) return@stubCuttlebone CuttleboneQueries.Answer<Any>(null, status("unavailable", "checkCrashed"))
             val known = definitions.any { matches(it.first, file, offset) } || hovers.any { matches(it.first, file, offset) }
             if (editing.any { matches(it, file, offset) } || (otherwiseEditing && !known)) return@stubCuttlebone CuttleboneQueries.Answer<Any>(null, status("unavailable", "declarationErrors"))
             val value: Any? = when (method) {

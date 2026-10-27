@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-10-26
+
 ### Fixed
 
 - With Cuttlebone 0.12.0, whose hover gives the declaration of the name there and its doc comment after the type, what uses the compiler's type takes the type alone, where it took the whole hover: Extract Method wrote the placeholder `Type` for an expression's value and Introduce Parameter had no type, where each had the compiler's, "Remove explicit type" wasn't offered, Introduce Variable refused an expression whose method's declaration says `mut` or `ref` (`make.reset`, for `fn pub mut reset -> Int`) as a borrow, and the documentation popup's "Type here" and Expression Type showed the declaration and docs too. A variable's hover has no declaration, so "Specify type explicitly" and Extract Method's types for locals were right already. Cuttlebone 0.11.0 and older work as before.

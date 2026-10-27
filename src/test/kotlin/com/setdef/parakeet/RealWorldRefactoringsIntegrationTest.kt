@@ -336,7 +336,11 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
             now == original -> outcomes += "$site: changed nothing"
             else -> {
                 val check = cli.run(listOf("check"), root, timeoutMs = 600_000)
+                val testStart = System.nanoTime()
                 val test = if (check?.succeeded == true && failingBefore != null) cli.run(listOf("test"), root, timeoutMs = 600_000) else null
+                // Whether `inko test` was cut off (kvi's once stopped after 52 of its 53 tests, three sweeps out of four).
+                val testRun = "exit ${test?.exitCode}" + (if (test?.interrupted == true) ", cut off" else "") +
+                    " after ${java.util.concurrent.TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - testStart)} s"
                 // Tests that failed before the refactoring may fail after it too.
                 val newlyFailing = test?.takeIf { !it.succeeded }?.let { failures(it.stdout + it.stderr) }
                 // Where Extract Method has no type it can write, its template asks for one at the placeholder `Type`,
@@ -347,7 +351,7 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
                     check?.succeeded != true && asksForAType -> outcomes += "$site: asks for a type (the placeholder `${InkoExtractMethod.PLACEHOLDER}`, ${errors.size} times)"
                     check?.succeeded != true -> problems += "$site: doesn't type check after it:\n" +
                         withoutColors(check?.stderr + check?.stdout).orEmpty().trim().lines().take(6).joinToString("\n") { "    $it" } + "\n${diff(now)}"
-                    test != null && !test.succeeded && (newlyFailing.isNullOrEmpty() || !failingBefore!!.containsAll(newlyFailing)) -> problems += "$site: the tests fail after it:\n" +
+                    test != null && !test.succeeded && (newlyFailing.isNullOrEmpty() || !failingBefore!!.containsAll(newlyFailing)) -> problems += "$site: the tests fail after it ($testRun):\n" +
                         withoutColors(test.stdout + test.stderr).orEmpty().trim().lines().takeLast(10).joinToString("\n") { "    $it" } + "\n${diff(now)}"
                     else -> outcomes += "$site: ok (${now.count { original[it.key] != it.value } + (original.keys - now.keys).size} files changed)"
                 }

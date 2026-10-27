@@ -556,6 +556,7 @@ Audits and session reports, oldest first:
 - [Downloading Cuttlebone, and 0.13.0](docs/history/SESSION-download-cuttlebone.md)
 - [Hand-test fixes, and 0.12.1](docs/history/SESSION-hand-test-fixes.md)
 - [Find Usages and the refactorings on real-world code](docs/history/SESSION-real-world-refactorings.md)
+- [0.13.1, and stale answers](docs/history/SESSION-0.13.1-and-stale-answers.md)
 
 ## Icon
 

@@ -73,6 +73,10 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
         if (picked("Find Usages")) findUsages()
         refactorings()
         report("refactorings:\n  ${outcomes.joinToString("\n  ")}")
+        // With one Cuttlebone for every site, a site whose answers it couldn't give refuses: a refusal, not a
+        // problem, but Cuttlebone's to fix (SESSION-0.13.1-and-stale-answers.md), so it's counted apart.
+        val unanswered = outcomes.count { NO_ANSWER in it }
+        if (unanswered > 0) report("$unanswered refused for want of Cuttlebone's answer")
 
         assertTrue("$name logged errors:\n${errors.joinToString("\n\n")}", errors.isEmpty())
         assertTrue("$name:\n${problems.joinToString("\n")}", problems.isEmpty())
@@ -222,6 +226,25 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
     private fun saveAll() {
         PsiDocumentManager.getInstance(project).commitAllDocuments()
         FileDocumentManager.getInstance().saveAllDocuments()
+        recordDisk()
+    }
+
+    private var recordedDisk: Map<String, String> = emptyMap()
+
+    /**
+     * With PARAKEET_PROTOCOL, the sources on disk wherever they changed, after as much of the protocol as was sent
+     * by then (`disk.jsonl`): what Cuttlebone reads of a file no editor has open, which the protocol doesn't show.
+     */
+    private fun recordDisk() {
+        val directory = System.getenv("PARAKEET_PROTOCOL")?.takeIf { it.isNotEmpty() }?.let { Path.of(it).resolve(projectName) } ?: return
+        val sent = directory.resolve("sent.jsonrpc").takeIf(Files::exists)?.let(Files::size) ?: return
+        val now = snapshot()
+        val changed = now.filter { (path, text) -> recordedDisk[path] != text }
+        val deleted = (recordedDisk.keys - now.keys).toList()
+        if (changed.isEmpty() && deleted.isEmpty()) return
+        recordedDisk = now
+        val line = com.google.gson.Gson().toJson(mapOf("sentBytes" to sent, "files" to changed, "deleted" to deleted))
+        Files.writeString(directory.resolve("disk.jsonl"), line + "\n", java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)
     }
 
     /**
@@ -267,11 +290,8 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
         saveAll()
         val left = snapshot().let { now -> (now.keys + original.keys).filter { now[it] != original[it] } }
         check(left.isEmpty()) { "the copy wasn't put back: $left" }
-        // A Cuttlebone of its own for the next site, as when the project opens: within one, answers after a site
-        // sometimes described a file's text before it was put back (SESSION-real-world-refactorings.md).
-        CuttleboneService.getInstance(project).settingsChanged()
-        openInEditor(files().first())
-        com.intellij.openapi.fileEditor.ex.FileEditorManagerEx.getInstanceEx(project).closeAllFiles()
+        // One Cuttlebone for every site, as in the IDE: answers after a site must describe the copy as it was put
+        // back (SESSION-0.13.1-and-stale-answers.md).
     }
 
     /** The lines [now] has that the original doesn't, and the other way round, per file. */
@@ -334,6 +354,11 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
             }
         }
         restore()
+    }
+
+    private companion object {
+        /** How a refactoring says Cuttlebone had no fresh answer for a possible use (InkoSearch.undecidedConflicts). */
+        const val NO_ANSWER = "Cuttlebone has no answer for"
     }
 
     /** A refactoring's own check said no, before it would show its message. */

@@ -88,7 +88,10 @@ abstract class RealWorldTestCase : InkoTestCase(onDisk = true, realInko = true) 
 
         VfsUtil.markDirtyAndRefresh(false, true, true, LocalFileSystem.getInstance().refreshAndFindFileByNioFile(root)!!)
         putTempDirInProjectContent()
-        useCuttlebone(cuttlebone)
+        // PARAKEET_PROTOCOL: a directory to keep what Cuttlebone is sent and answers in, a directory per project.
+        val recorded = System.getenv("PARAKEET_PROTOCOL")?.takeIf { it.isNotEmpty() }
+            ?.let { CuttleboneProtocolRecorder.script(cuttlebone, Path.of(it).resolve(name)).toString() }
+        useCuttlebone(recorded ?: cuttlebone)
         return root
     }
 

@@ -60,13 +60,7 @@ class CuttleboneStaleAnswersIntegrationTest : InkoTestCase(onDisk = true, realIn
         assertNotNull("cuttlebone must be installed (or CUTTLEBONE set) to run these tests", executable)
         // Outside the test's directory, which goes at the end of the test.
         protocol = Files.createTempDirectory("parakeet-protocol-${getTestName(true)}-")
-        val script = protocol.resolve("cuttlebone")
-        Files.writeString(script, """
-            |#!/bin/sh
-            |case "${'$'}{1-}" in --version) exec '$executable' "${'$'}@" ;; esac
-            |tee -a '${protocol.resolve("sent.jsonrpc")}' | '$executable' "${'$'}@" | tee -a '${protocol.resolve("received.jsonrpc")}'
-            |""".trimMargin())
-        script.toFile().setExecutable(true)
+        val script = CuttleboneProtocolRecorder.script(executable!!, protocol)
         println("Testing against cuttlebone at $executable; what it was sent and answered is in $protocol")
         putTempDirInProjectContent()
         useCuttlebone(script.toString())

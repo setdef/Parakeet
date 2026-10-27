@@ -80,7 +80,9 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   it's defined, and its doc comment, and the type at the caret ("Type here"); ⇧F1 opens standard library definitions on
   docs.inko-lang.org
 - **Go to Class / Go to Symbol** (⌘O / ⌥⌘O) and Search Everywhere for Inko
-  types, traits, methods, and constants
+  types, traits, methods, fields, and constants, from Cuttlebone's workspace
+  symbols: the project's, its dependencies' and the standard library's,
+  including what isn't saved yet
 - **Structure view**, breadcrumbs, and sticky lines for each file's
   declarations
 - **Code folding** for blocks, argument lists, comment runs, and imports, from
@@ -148,7 +150,7 @@ compiler, so it always agrees with your installed Inko version.
   project into a temporary directory (symlinking every source file) with your
   unsaved text in place of the file, then runs `inko check` there, so imports in
   both directions and dependencies resolve.
-- **Go to definition, quick documentation, Go to Class/Symbol, completion,
+- **Go to definition, quick documentation, completion,
   parameter info and hints, and trait gutter icons** use the definitions
   `inko doc --private --dependencies` reports, rebuilt in the background when
   you save. `inko doc` only works on saved files in a project that compiles,
@@ -402,6 +404,7 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | Expression Type | hover's type, when its range is the expression | none, and it says why |
 | "Specify type explicitly" and "Remove explicit type" | hover's fresh type, of the variable or of a value that says its type itself | not offered |
 | Go to Type Declaration | `textDocument/typeDefinition`, through IntelliJ's LSP support | nothing |
+| Go to Class and Go to Symbol | `workspace/symbol`, through IntelliJ's LSP support | Cuttlebone's: it reads declarations from the syntax |
 | Code folding | `textDocument/foldingRange`, through IntelliJ's LSP support | Cuttlebone's: it folds from the tokens |
 | Reformat Code | `textDocument/formatting`, through IntelliJ's LSP support | none: `inko fmt` refuses code that doesn't parse too |
 

@@ -14,7 +14,8 @@
             <li>Intentions: flip comparisons, invert <code>if</code>, <code>if</code> &#8644; <code>match</code>, add or remove argument names, and specify or remove a <code>let</code>'s type</li>
             <li>Inspections for Inko's style guide: naming, Bool methods ending in <code>?</code>, redundant argument names, and empty parentheses</li>
             <li>Reformat Code (and format on save) as <code>inko fmt</code> formats, from Cuttlebone</li>
-            <li>Go to definition, quick documentation, Go to Class/Symbol, and completion (including names from modules not yet imported, imported as you choose them), using the definitions <code>inko doc</code> reports, plus local variables and parameters</li>
+            <li>Go to Class and Go to Symbol, from Cuttlebone</li>
+            <li>Go to definition, quick documentation, and completion (including names from modules not yet imported, imported as you choose them), using the definitions <code>inko doc</code> reports, plus local variables and parameters</li>
             <li>Imports added when pasting Inko code, and Expression Type where the code states the type</li>
             <li>Find Usages and Rename across the project, and highlight usages</li>
             <li>Parameter info, parameter-name hints, trait gutter icons, Go to Implementation and Super Method, Implement/Override Methods, and Generate (constructor, trait implementation)</li>
@@ -109,8 +110,6 @@
         <codeInsight.overrideMethod language="Inko" implementationClass="com.setdef.parakeet.InkoOverrideMethodsHandler"/>
         <lang.inspectionSuppressor language="Inko" implementationClass="com.setdef.parakeet.InkoInspectionSuppressor"/>
         <platform.backend.documentation.psiTargetProvider implementation="com.setdef.parakeet.InkoDocumentationTargetProvider"/>
-        <gotoClassContributor implementation="com.setdef.parakeet.InkoGotoClassContributor"/>
-        <gotoSymbolContributor implementation="com.setdef.parakeet.InkoGotoSymbolContributor"/>
         <postStartupActivity implementation="com.setdef.parakeet.InkoIndexOnStartup"/>
 
         <configurationType implementation="com.setdef.parakeet.InkoRunConfigurationType"/>

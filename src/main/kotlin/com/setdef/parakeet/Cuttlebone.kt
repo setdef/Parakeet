@@ -72,7 +72,7 @@ import com.intellij.platform.lsp.api.customization.LspSymbolKindCustomizer
 import com.intellij.platform.lsp.api.customization.LspTypeHierarchyCustomizer
 import com.intellij.platform.lsp.api.customization.LspTypeHierarchyDisabled
 import com.intellij.platform.lsp.api.customization.LspWorkspaceSymbolCustomizer
-import com.intellij.platform.lsp.api.customization.LspWorkspaceSymbolDisabled
+import com.intellij.platform.lsp.api.customization.LspWorkspaceSymbolSupport
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.io.BaseDataReader
 import com.intellij.util.io.BaseOutputReader
@@ -353,13 +353,15 @@ abstract class CuttleboneCustomization : LspCustomization() {
     override val signatureHelpCustomizer: LspSignatureHelpCustomizer get() = LspSignatureHelpDisabled
     // Parakeet's usage highlighting asks Cuttlebone's documentHighlight, and falls back to its own in broken code.
     override val documentHighlightsCustomizer: LspDocumentHighlightsCustomizer get() = LspDocumentHighlightsDisabled
-    // Parakeet's TextMate grammar highlights; the Structure view and Go to Symbol are Parakeet's.
+    // Parakeet's TextMate grammar highlights. The Structure view and breadcrumbs are Parakeet's: Cuttlebone's document
+    // symbols leave out what encloses a brace that isn't closed yet, so they'd come and go as code is typed.
     override val semanticTokensCustomizer: LspSemanticTokensCustomizer get() = LspSemanticTokensDisabled
     override val documentSymbolCustomizer: LspDocumentSymbolCustomizer get() = LspDocumentSymbolDisabled
-    override val workspaceSymbolCustomizer: LspWorkspaceSymbolCustomizer get() = LspWorkspaceSymbolDisabled
+    // Go to Class and Go to Symbol are Cuttlebone's workspace symbols: the projects', dependencies' and std's.
+    override val workspaceSymbolCustomizer: LspWorkspaceSymbolCustomizer get() = LspWorkspaceSymbolSupport()
     // Cuttlebone's folding ranges: blocks, comment runs and imports, from the tokens, so also in code that doesn't parse.
     override val foldingRangeCustomizer: LspFoldingRangeCustomizer get() = LspFoldingRangeSupport()
-    // Only used for symbols, which are off.
+    // Workspace symbols' kinds, as IntelliJ shows them.
     override val symbolKindCustomizer: LspSymbolKindCustomizer get() = LspSymbolKindCustomizer()
     // Parakeet's quick fixes and intentions.
     override val codeActionsCustomizer: LspCodeActionsCustomizer get() = LspCodeActionsDisabled

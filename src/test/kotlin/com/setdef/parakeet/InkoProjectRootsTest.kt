@@ -1,19 +1,16 @@
 package com.setdef.parakeet
 
-import com.intellij.navigation.NavigationItem
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.testFramework.PsiTestUtil
-import com.intellij.util.indexing.FindSymbolParameters
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
-/** Go to Class/Symbol, with `inko doc` output supplied by a fake. */
-class InkoGotoTest : InkoTestCase(onDisk = true) {
+/** Finding the Inko projects, and indexing them at startup, with `inko doc` output supplied by a fake. */
+class InkoProjectRootsTest : InkoTestCase(onDisk = true) {
     private lateinit var std: Path
     private lateinit var contentRoot: VirtualFile
 
@@ -48,18 +45,6 @@ class InkoGotoTest : InkoTestCase(onDisk = true) {
         }
     }
 
-    private fun names(contributor: InkoGotoContributor): Set<String> {
-        val names = mutableSetOf<String>()
-        contributor.processNames({ names.add(it) }, GlobalSearchScope.allScope(project), null)
-        return names
-    }
-
-    private fun items(contributor: InkoGotoContributor, name: String, libraries: Boolean): List<NavigationItem> {
-        val items = mutableListOf<NavigationItem>()
-        contributor.processElementsWithName(name, { items.add(it) }, FindSymbolParameters.wrap(name, project, libraries))
-        return items
-    }
-
     fun testFindsTheInkoProject() {
         assertEquals(listOf(Path.of(myFixture.tempDirPath)), InkoProjectRoots.find(project))
     }
@@ -85,28 +70,5 @@ class InkoGotoTest : InkoTestCase(onDisk = true) {
             runBlocking { InkoIndexOnStartup().execute(project) }
         }.get(60, TimeUnit.SECONDS)
         assertNotEmpty(InkoDocIndex.getInstance(project).symbols(Path.of(myFixture.tempDirPath))!!.named("Helper"))
-    }
-
-    fun testClassesAreTypesAndTraits() {
-        assertEquals(setOf("Helper", "String"), names(InkoGotoClassContributor()))
-    }
-
-    fun testSymbolsIncludeMethods() {
-        assertTrue(names(InkoGotoSymbolContributor()).containsAll(setOf("Helper", "value", "String")))
-        val item = items(InkoGotoSymbolContributor(), "value", libraries = false).single() as InkoDefinitionItem
-        assertEquals("app.util.Helper", item.locationString)
-    }
-
-    fun testLibrariesOnlyWhenAskedFor() {
-        assertEmpty(items(InkoGotoClassContributor(), "String", libraries = false))
-        assertEquals(1, items(InkoGotoClassContributor(), "String", libraries = true).size)
-    }
-
-    fun testNavigatesToTheName() {
-        val item = items(InkoGotoClassContributor(), "Helper", libraries = false).single()
-        item.navigate(true)
-        val editor = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).selectedTextEditor!!
-        assertEquals("util.inko", editor.virtualFile!!.name)
-        assertEquals("type pub ".length, editor.caretModel.offset)
     }
 }

@@ -137,6 +137,32 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         PlatformTestUtil.waitWithEventsDispatching({ "not formatted: ${myFixture.editor.document.text}" }, { myFixture.editor.document.text == "fn pub run -> Int {\n  1 + 2\n}\n" }, TimingLimits.seconds(30))
     }
 
+    /** What IntelliJ's LSP Go to Class or Go to Symbol ([classes]) lists for [pattern]: each item's name and location. */
+    private fun goTo(classes: Boolean, pattern: String, libraries: Boolean): List<String> = inBackground {
+        // Under a progress indicator, as Go to Class and Search Everywhere ask.
+        com.intellij.openapi.progress.ProgressManager.getInstance().runProcess<List<String>>({ goToNow(classes, pattern, libraries) }, com.intellij.openapi.progress.EmptyProgressIndicator())
+    }
+
+    private fun goToNow(classes: Boolean, pattern: String, libraries: Boolean): List<String> {
+        val ep = if (classes) com.intellij.navigation.ChooseByNameContributor.CLASS_EP_NAME else com.intellij.navigation.ChooseByNameContributor.SYMBOL_EP_NAME
+        val contributor = ep.extensionList.single { it.javaClass.simpleName.startsWith("LspGoTo") } as com.intellij.navigation.ChooseByNameContributorEx2
+        val parameters = com.intellij.util.indexing.FindSymbolParameters.wrap(pattern, project, libraries)
+        val names = mutableSetOf<String>()
+        contributor.processNames({ names += it; true }, parameters)
+        return names.filter { it.startsWith(pattern) }.flatMap { name ->
+            mutableListOf<com.intellij.navigation.NavigationItem>().also { items -> contributor.processElementsWithName(name, { items += it; true }, parameters) }
+        }.map { "${it.name} ${it.presentation?.locationString.orEmpty()}".trim() }.sorted()
+    }
+
+    // Go to Class and Go to Symbol are Cuttlebone's (workspace/symbol, through IntelliJ's LSP support): the
+    // project's declarations, and with libraries, its dependencies' and the standard library's.
+    fun testGoToClassAndSymbolAreCuttlebones() {
+        open()
+        assertTrue(goTo(classes = true, "B", libraries = false).toString(), goTo(classes = true, "B", libraries = false).any { it.startsWith("B") })
+        assertEquals("A, B and C have one each", 3, goTo(classes = false, "size", libraries = false).count { it.startsWith("size") })
+        assertTrue("std's Stdout", goTo(classes = true, "Stdout", libraries = true).any { it.startsWith("Stdout") })
+    }
+
     fun testResolvesAMemberCallToTheMethodTheCompilerCalls() {
         open()
         assertEquals(listOf("util.inko:8:size"), targets(main, "size(2.0)"))

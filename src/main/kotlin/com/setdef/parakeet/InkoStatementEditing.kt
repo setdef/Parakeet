@@ -23,7 +23,7 @@ class InkoStatementMover : StatementUpDownMover() {
         val lineEnd = document.getLineEndOffset(document.getLineNumber(editor.caretModel.offset))
         // The statement on the caret's line, in the innermost block containing it.
         val token = stream.tokens.indexOfFirst { it.start in caret..lineEnd }.takeIf { it >= 0 } ?: return false
-        val block = stream.enclosingBlock(stream.tokens[token].start)
+        val block = stream.blockOf(token)
         val statements = stream.statementsIn(block)
         val index = statements.indexOfFirst { token in it }.takeIf { it >= 0 } ?: return false
         val neighbor = statements.getOrNull(if (down) index + 1 else index - 1)

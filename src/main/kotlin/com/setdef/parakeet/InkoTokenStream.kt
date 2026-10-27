@@ -91,6 +91,13 @@ class InkoTokenStream(val text: CharSequence) {
         return best
     }
 
+    /**
+     * The `{` of the innermost block the token at [index] is in. [enclosingBlock] takes an offset, and an offset
+     * at a `}`'s start is inside the block it closes; the `}` itself is in the block around that one, with the
+     * statement it ends (a `match`, an `if`, a loop, a closure).
+     */
+    fun blockOf(index: Int): Int = tokens[index].let { enclosingBlock(if (it.type == InkoTokens.RBRACE) it.end else it.start) }
+
     /** The `{` of every block containing [offset], outermost first. */
     fun enclosingBlocks(offset: Int): List<Int> = tokens.indices.filter { index ->
         val close = match(index)

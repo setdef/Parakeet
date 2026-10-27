@@ -103,7 +103,7 @@ object InkoExtractMethod {
         val statements = stream.statementsIn(block)
         val startStatement = statements.indexOfFirst { it.first == first }
         val endStatement = statements.indexOfFirst { it.last == last }
-        var statementMode = startStatement >= 0 && endStatement >= startStatement && stream.enclosingBlock(tokens[last].start) == block
+        var statementMode = startStatement >= 0 && endStatement >= startStatement && stream.blockOf(last) == block
         if (statementMode && (startStatement..endStatement).any { tokens[statements[it].first].isKeyword("case") }) {
             return fail("Match arms (`case …`) can't be extracted; select the code inside an arm.")
         }

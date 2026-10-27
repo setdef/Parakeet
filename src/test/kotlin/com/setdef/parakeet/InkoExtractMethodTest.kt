@@ -153,6 +153,29 @@ class InkoExtractMethodTest : InkoTestCase() {
         )
     }
 
+    // openflow's motion.inko: statements whose last is a `match` end at its `}`, which is in the block the
+    // statements are in, not in the block it closes.
+    fun testStatementsEndingInAMatch() {
+        val code = "fn check(sensor: Sensor) {\n  if sensor.on? {\n    sensor.wait\n  } else {\n" +
+            "    <selection>let updated = sensor.last_update.elapsed\n\n    match sensor.presence {\n" +
+            "      case Pending if updated >= 10 -> {\n        info(sensor, 'not enough motion detected')\n        sensor.update(Presence.False)\n      }\n" +
+            "      case _ -> {}\n    }</selection>\n  }\n}\n"
+        assertNull(refusal(code))
+        val result = extract(code)
+        assertTrue(result, result.contains("  } else {\n    extracted(sensor)\n  }\n}\n"))
+        assertTrue(result, result.contains("  let updated = sensor.last_update.elapsed\n\n  match sensor.presence {\n"))
+    }
+
+    fun testStatementsEndingInAnIfOrAWhile() {
+        for (block in listOf("if b > 2 {\n    print(b)\n  }", "while b > 2 {\n    print(b)\n  }")) {
+            val code = "fn run(a: Int) -> Int {\n  <selection>let b = a + 1\n  $block</selection>\n  a\n}\n"
+            assertNull(block, refusal(code))
+            val result = extract(code)
+            assertTrue(result, result.startsWith("fn run(a: Int) -> Int {\n  extracted(a)\n  a\n}\n"))
+            assertTrue(result, result.contains("  let b = a + 1\n  $block\n}\n"))
+        }
+    }
+
     fun testRefusesWhatCantBeExtracted() {
         assertTrue(refusal("fn f(x: Int) -> Int {\n  <selection>return x</selection>\n}\n")!!.contains("`return`"))
         assertTrue(refusal("fn f(x: Int) {\n  loop {\n    <selection>break</selection>\n  }\n}\n")!!.contains("`break`"))

@@ -65,6 +65,13 @@ class GuardrailsTest : TestCase() {
         assertTrue(id, id.contains("parakeet"))
     }
 
+    // Gradle's file-system watching missed changes on a busy machine (a new test file, and two changed sources
+    // after `git apply`), so the checks ran stale code: SESSION-0.13.1-and-stale-answers.md.
+    fun testGradleDoesntWatchTheFileSystem() {
+        val properties = java.util.Properties().apply { File(root, "gradle.properties").reader().use(::load) }
+        assertEquals("org.gradle.vfs.watch in gradle.properties", "false", properties.getProperty("org.gradle.vfs.watch"))
+    }
+
     private companion object {
         const val THIS_FILE = "src/test/kotlin/com/setdef/parakeet/GuardrailsTest.kt"
 

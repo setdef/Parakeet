@@ -28,6 +28,8 @@ most of these rules. Don't weaken a check to get past it.
   what's staged; set the hook up once with `scripts/install-hooks.sh`.
 - Run `scripts/check.sh --full` (adds the Plugin Verifier) before any
   release or session report.
+- Keep Gradle's file-system watching off (`org.gradle.vfs.watch`): it
+  missed changes here, so checks ran stale code (GuardrailsTest).
 
 ## Paths
 

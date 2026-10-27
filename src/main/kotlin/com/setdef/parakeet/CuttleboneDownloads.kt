@@ -156,11 +156,11 @@ sealed class CuttleboneLookup {
 }
 
 /**
- * Where Cuttlebone's releases are listed: the latest release's manifest, its index of every release's Inko
- * versions (from Cuttlebone 0.11.0), and GitHub's releases API, for releases before there was an index: of
- * those, only the ones with an archive for the Inko version have their manifest fetched.
+ * Where Cuttlebone's releases are listed: the latest release's manifest, and its index of every release's Inko
+ * versions, for an older release with a build for an older Inko. Only releases Parakeet uses count
+ * ([Cuttlebone.MINIMUM] or newer), and every one of those has an index.
  */
-open class CuttleboneReleases(private val latestManifest: String, private val latestIndex: String, private val releasesApi: String) {
+open class CuttleboneReleases(private val latestManifest: String, private val latestIndex: String) {
     /** The newest build for [inko] on [platform]: the latest release's, else the newest older release's that has one. */
     open fun find(inko: String, platform: CuttlebonePlatform, indicator: ProgressIndicator?): CuttleboneLookup {
         val latest = try {
@@ -172,14 +172,7 @@ open class CuttleboneReleases(private val latestManifest: String, private val la
         }
         val latestVersion = latest.firstOrNull()?.cuttlebone
         pick(latest, inko, platform)?.let { return it }
-        val older = try {
-            indexedManifests(inko, latestVersion, indicator) ?: olderManifests(inko, latestVersion, indicator)
-        } catch (e: ProcessCanceledException) {
-            throw e
-        } catch (e: IOException) {
-            return CuttleboneLookup.Failed(describe(releasesApi, e))
-        }
-        for (manifest in older) {
+        for (manifest in indexedManifests(inko, latestVersion, indicator)) {
             val builds = try {
                 CuttleboneManifest.parse(fetch(manifest, indicator))
             } catch (e: ProcessCanceledException) {
@@ -194,64 +187,42 @@ open class CuttleboneReleases(private val latestManifest: String, private val la
     }
 
     /**
-     * The manifests of releases other than [latest] that the release index says have builds for [inko], newest
-     * first; null when there's no index (before Cuttlebone 0.11.0), or it's in a schema this Parakeet doesn't read.
+     * The manifests of releases other than [latest], from [Cuttlebone.MINIMUM] on, that the release index says
+     * have builds for [inko], newest first; none when there's no index, or it's in a schema this Parakeet doesn't read.
      */
-    private fun indexedManifests(inko: String, latest: String?, indicator: ProgressIndicator?): List<String>? {
+    private fun indexedManifests(inko: String, latest: String?, indicator: ProgressIndicator?): List<String> {
         val index = try {
             JsonParser.parseString(fetch(latestIndex, indicator)).asJsonObject
         } catch (e: ProcessCanceledException) {
             throw e
         } catch (e: Exception) {
             LOG.info("no release index: ${if (e is IOException) describe(latestIndex, e) else e.toString()}")
-            return null
+            return emptyList()
         }
         val schema = index.get("schema")?.takeIf { it.isJsonPrimitive }?.asInt
         if (schema != 1) {
             LOG.info("the release index's schema is $schema, which this Parakeet doesn't read")
-            return null
+            return emptyList()
         }
-        val releases = index.get("releases")?.takeIf { it.isJsonArray }?.asJsonArray ?: return null
+        val releases = index.get("releases")?.takeIf { it.isJsonArray }?.asJsonArray ?: return emptyList()
         return releases.mapNotNull { element ->
             val release = element.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
             val version = release.get("cuttlebone")?.takeIf { it.isJsonPrimitive }?.asString ?: return@mapNotNull null
             val inkos = release.get("inko")?.takeIf { it.isJsonArray }?.asJsonArray?.mapNotNull { it.takeIf { it.isJsonPrimitive }?.asString }.orEmpty()
-            if (version == latest || inko !in inkos) return@mapNotNull null
+            if (version == latest || inko !in inkos || !Cuttlebone.supported(version)) return@mapNotNull null
             release.get("manifest")?.takeIf { it.isJsonPrimitive }?.asString?.let { version to it }
         }.sortedWith(compareBy(VERSIONS) { it.first }).map { it.second }
     }
 
     private fun pick(builds: List<CuttleboneBuild>, inko: String, platform: CuttlebonePlatform): CuttleboneLookup? {
-        val build = builds.firstOrNull { it.inko == inko && it.os == platform.os && it.arch == platform.arch } ?: return null
+        val build = builds.firstOrNull { it.inko == inko && it.os == platform.os && it.arch == platform.arch && Cuttlebone.supported(it.cuttlebone) } ?: return null
         val minimum = build.minimumOs
         if (minimum != null && !CuttlebonePlatform.meets(platform.osVersion, minimum)) return CuttleboneLookup.NeedsNewerOs(build, platform)
         return CuttleboneLookup.Found(build)
     }
 
-    /** The manifests of releases other than [latest] with an archive for [inko], newest first. */
-    private fun olderManifests(inko: String, latest: String?, indicator: ProgressIndicator?): List<String> {
-        val releases = try {
-            JsonParser.parseString(fetch(releasesApi, indicator, "application/vnd.github+json")).asJsonArray
-        } catch (e: IllegalStateException) {
-            throw IOException("the releases list isn't a list")
-        } catch (e: com.google.gson.JsonParseException) {
-            throw IOException("the releases list isn't JSON")
-        }
-        return releases.mapNotNull { element ->
-            val release = element.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
-            if (release.get("draft")?.asBoolean == true || release.get("prerelease")?.asBoolean == true) return@mapNotNull null
-            val version = release.get("tag_name")?.asString?.removePrefix("v") ?: return@mapNotNull null
-            if (version == latest) return@mapNotNull null
-            val assets = release.getAsJsonArray("assets")?.mapNotNull { it.asJsonObject } ?: return@mapNotNull null
-            val names = assets.mapNotNull { it.get("name")?.asString }
-            if (names.none { it.startsWith("cuttlebone-$version-inko-$inko-") }) return@mapNotNull null
-            val manifest = assets.firstOrNull { it.get("name")?.asString == "manifest.json" }?.get("browser_download_url")?.asString
-            manifest?.let { version to it }
-        }.sortedWith(compareBy(VERSIONS) { it.first }).map { it.second }
-    }
-
-    protected open fun fetch(url: String, indicator: ProgressIndicator?, accept: String = "application/json"): String =
-        HttpRequests.request(url).productNameAsUserAgent().accept(accept)
+    protected open fun fetch(url: String, indicator: ProgressIndicator?): String =
+        HttpRequests.request(url).productNameAsUserAgent().accept("application/json")
             .connectTimeout(TIMEOUT_MS).readTimeout(TIMEOUT_MS)
             .readString(indicator)
 
@@ -263,7 +234,6 @@ open class CuttleboneReleases(private val latestManifest: String, private val la
         val GITHUB = CuttleboneReleases(
             "https://github.com/setdef/Cuttlebone/releases/latest/download/manifest.json",
             "https://github.com/setdef/Cuttlebone/releases/latest/download/index.json",
-            "https://api.github.com/repos/setdef/Cuttlebone/releases?per_page=100",
         )
 
         fun describe(url: String, e: IOException): String {
@@ -312,9 +282,9 @@ object CuttleboneDownloads {
 
     fun directoryName(cuttlebone: String, inko: String) = "cuttlebone-$cuttlebone-inko-$inko"
 
-    /** The newest Cuttlebone downloaded for [inko]. */
+    /** The newest Cuttlebone downloaded for [inko], if it's one Parakeet uses ([Cuttlebone.MINIMUM] or newer). */
     fun installed(inko: String, root: Path = CuttleboneLocations.getInstance().downloads): CuttleboneInstall? =
-        all(root).filter { it.inko == inko }.maxWithOrNull { a, b -> if (a.cuttlebone == b.cuttlebone) 0 else if (Ivm.isAtLeast(a.cuttlebone, b.cuttlebone)) 1 else -1 }
+        all(root).filter { it.inko == inko && Cuttlebone.supported(it.cuttlebone) }.maxWithOrNull { a, b -> if (a.cuttlebone == b.cuttlebone) 0 else if (Ivm.isAtLeast(a.cuttlebone, b.cuttlebone)) 1 else -1 }
 
     /** Every downloaded Cuttlebone. Temporary directories start with a dot, so a download in progress isn't one. */
     fun all(root: Path = CuttleboneLocations.getInstance().downloads): List<CuttleboneInstall> {

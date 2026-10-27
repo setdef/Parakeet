@@ -112,10 +112,6 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf("util.inko:2:size"), targets(document.text, "size(2.0)"))
     }
 
-    /** Whether this cuttlebone answers textDocument/inlayHint (milestone 4 and later). */
-    private fun hasInlayHints(): Boolean =
-        CuttleboneService.getInstance(project).server()?.initializeResult?.capabilities?.inlayHintProvider != null
-
     // `y.get(0).or(0)`: Array's `get(index)`, and Option's `or(default)`, which Parakeet can tell too.
     private val index get() = main.indexOf("0).or")
     private val default get() = main.indexOf("0)\n")
@@ -124,12 +120,6 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         open()
         val parameters = inBackground { InkoParameterHints.inFile(myFixture.file) }
         val types = inBackground { InkoParameterHints.types(myFixture.file) }
-        if (!hasInlayHints()) {
-            println("This cuttlebone has no inlay hints, so Parakeet's own are checked instead")
-            assertEquals("x.size: two parameter lists fit, so no hint", listOf(default to "default"), parameters)
-            assertEquals(emptyList<Any>(), types)
-            return
-        }
         assertEquals(listOf(index to "index", default to "default", main.indexOf("2.0") to "scale"), parameters)
         assertEquals(listOf(main.indexOf("x = make") + 1 to ": B", main.indexOf("y = [") + 1 to ": Array[Int]"), types)
     }
@@ -139,11 +129,6 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         val text = main.replace("x.size(2.0)", "x.size(")
         open(text)
         val help = inBackground { CuttleboneQueries.getInstance(project).signatureHelp(myFixture.file, text.indexOf("x.size(") + 7) }
-        if (CuttleboneService.getInstance(project).server()?.initializeResult?.capabilities?.signatureHelpProvider == null) {
-            println("This cuttlebone has no signature help, so parameter info is Parakeet's")
-            assertNull(help)
-            return
-        }
         val signature = help!!.value!!.signatures.single()
         assertEquals("fn pub size(scale: Float) -> Int", signature.label)
         assertEquals(0, signature.activeParameter ?: help.value!!.activeParameter)
@@ -156,11 +141,6 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         val handler = InkoHighlightUsagesHandlerFactory().createHighlightUsagesHandler(myFixture.editor, myFixture.file, name) as InkoHighlightUsagesHandler
         inBackground { handler.computeUsages(handler.targets) }
         val writes = handler.writeUsages.map { it.startOffset }.sorted()
-        if (CuttleboneService.getInstance(project).server()?.initializeResult?.capabilities?.documentHighlightProvider == null) {
-            println("This cuttlebone has no document highlight, so usage highlighting is Parakeet's")
-            assertEquals(listOf(text.indexOf("total = 0")), writes)
-            return
-        }
         assertEquals(listOf(text.indexOf("total = 0"), text.indexOf("total = 1")), writes)
         assertEquals(listOf(text.indexOf("total + 2")), handler.readUsages.map { it.startOffset })
     }
@@ -197,14 +177,9 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf(text.indexOf("x = make") + 1 to ": B", text.indexOf("y = [") + 1 to ": Array[Int]"), inBackground { InkoParameterHints.types(myFixture.file) })
     }
 
-    /** The running cuttlebone's version is [version] or newer. */
-    private fun cuttleboneIsAtLeast(version: String): Boolean =
-        CuttleboneService.getInstance(project).server()?.initializeResult?.serverInfo?.version?.let { Ivm.isAtLeast(it, version) } == true
-
     fun testOpenedWithAnImportOfAMissingModuleThereAreNoHints() {
         // A file importing a module that doesn't exist, and no check of it good yet, so nothing stale answers.
-        // Before milestone 11 nothing in it is type checked (noHir): Cuttlebone has no answer anywhere in it.
-        // Since then, the import is blank in a repaired copy, which answers wherever the import can't matter:
+        // The import is blank in a repaired copy, which answers wherever the import can't matter:
         // not in `uses_nope`, which uses it. Hints only inform, so none are guessed where there's no answer.
         val usesNope = "\nfn uses_nope -> Int {\n  let v = nope.value\n  twice(4)\n}\n"
         val text = "import app.nope\n" + main + twiceAndUses + usesNope
@@ -212,12 +187,6 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         val answer = inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }!!
         val parameters = inBackground { InkoParameterHints.inFile(myFixture.file) }
         val types = inBackground { InkoParameterHints.types(myFixture.file) }
-        if (!cuttleboneIsAtLeast("0.11.0")) {
-            assertTrue("code being edited", answer.editing)
-            assertEquals(emptyList<Any>(), parameters)
-            assertEquals("only Cuttlebone knows types", emptyList<Any>(), types)
-            return
-        }
         assertTrue("fresh, from a repaired copy: ${answer.status}", answer.status!!.fresh && answer.repaired)
         assertNull("a repaired answer is fresh, so not marked", inBackground { InkoParameterHints.tooltip(myFixture.file) })
         val shift = "import app.nope\n".length
@@ -270,8 +239,7 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
      * (saved, not open: Cuttlebone has no edits of it to blank) and imports it a line above everything in
      * main.inko. No check of the code as it is, or of a repaired copy, answers; `run` is unchanged, and the
      * import is about `broken`, which it doesn't mention, so the answers that hold there come from the last
-     * good check, mapped to where their text is now. (An import of a module that doesn't exist did this
-     * before Cuttlebone 0.11.0, which answers around one from a repaired copy.)
+     * good check, mapped to where their text is now.
      */
     private fun openThenBreakRun(): String {
         open()
@@ -320,14 +288,9 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     fun testAfterAnEditImportingAMissingModuleTheRepairedAnswersAreUsedLikeFreshOnes() {
-        // Since Cuttlebone 0.11.0, an import of a module that doesn't exist is blank in a repaired copy, which
-        // answers (fresh) wherever the import can't matter: Parakeet uses those answers as it would any fresh
-        // one, for what changes code too. Before 0.11.0 this edit left only stale answers (as above).
+        // An import of a module that doesn't exist is blank in a repaired copy, which answers (fresh) wherever
+        // the import can't matter: Parakeet uses those answers as it would any fresh one, for what changes code too.
         open()
-        if (!cuttleboneIsAtLeast("0.11.0")) {
-            println("This cuttlebone doesn't answer around an import of a missing module")
-            return
-        }
         val document = myFixture.editor.document
         com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) {
             document.insertString(main.indexOf("\n") + 1, "import app.nope\n")

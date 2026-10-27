@@ -5,17 +5,13 @@ import org.eclipse.lsp4j.Hover
 import org.eclipse.lsp4j.MarkupContent
 
 /**
- * The type in Cuttlebone's hover. Before 0.12.0 a hover is the type alone; since 0.12.0 it has up to three
+ * The type in Cuttlebone's hover, which has up to three
  * sections (Cuttlebone's docs/lsp.md, "textDocument/hover"): the type, the declaration, and its doc comment.
  * The examples are as Cuttlebone writes them (src/lsp.rs, `hover`).
  */
 class InkoHoverTest : TestCase() {
     private fun markdown(value: String) = InkoHover.type(Hover(MarkupContent("markdown", value)))
     private fun plain(value: String) = InkoHover.type(Hover(MarkupContent("plaintext", value)))
-
-    fun testBefore012TheHoverIsTheType() {
-        assertEquals("Result[ref Int, OutOfBounds]", markdown("```inko\nResult[ref Int, OutOfBounds]\n```"))
-    }
 
     fun testSince012TheTypeIsTheFirstSection() {
         assertEquals(

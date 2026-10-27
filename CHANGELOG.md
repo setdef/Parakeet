@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Parakeet needs Cuttlebone 0.13.0 or newer. An older one on `PATH` or in Cargo's `bin` directory is skipped, as one that doesn't run is, and the download is offered as when there's none; one that old in the settings is refused, saying why; an older download is left unused. Older releases are no longer offered for download, and GitHub's releases API is no longer asked (every release from 0.13.0 on has an index).
+
 ### Fixed
 
 - Extract Method accepts statements whose last is a `match`, `if`, loop or closure (openflow's `let updated = …` and the `match` after it), where it said "Select whole statements, or one whole expression.": the `}` ending them was taken for part of the block it closes. Move Statement had the same mistake, and from a line starting with `}` it moved that line alone, breaking the code; it moves the whole statement the `}` ends now.

@@ -300,8 +300,8 @@ compiler, so it always agrees with your installed Inko version.
   ivm-installed version or another executable for a project, use
   *Settings → Languages & Frameworks → Inko*.
 
-- [Cuttlebone](#cuttlebone), for the compiler's types and definitions:
-  Parakeet offers to download it
+- [Cuttlebone](#cuttlebone) 0.13.0 or newer, for the compiler's types and
+  definitions: Parakeet offers to download it
 
 ## Installing
 
@@ -342,9 +342,8 @@ IntelliJ's own LSP support, and stops it when the project closes.
 Cuttlebone has builds for macOS 15 or newer and Linux, on ARM64 and
 x86-64. Each build works with one Inko version, the compiler it links. When
 the newest release has none for your Inko, Parakeet looks for an older
-release that has one (in Cuttlebone's release index, or, for releases from
-before it had one, through GitHub's releases API), and if none does, says
-so instead of offering a build that wouldn't run.
+release from 0.13.0 on that has one (in Cuttlebone's release index), and if
+none does, says so instead of offering a build that wouldn't run.
 
 - **Downloads** come from [Cuttlebone's GitHub
   releases](https://github.com/setdef/Cuttlebone/releases), through the
@@ -367,9 +366,11 @@ also checks Cargo's `bin` directory, where `cargo install` puts it), or set
 setting comes first, then `PATH`, and either takes precedence over a
 download. A `cuttlebone` on `PATH` or in Cargo's `bin` directory that
 doesn't run, or whose `--version` doesn't print a Cuttlebone version (a
-mise shim for a tool that isn't installed, say), isn't counted: Parakeet
-skips it, goes on to the next one or a download, and says so on the
-settings page. Building Cuttlebone yourself needs Rust and LLVM 18 (its README
+mise shim for a tool that isn't installed, say), or that's older than
+0.13.0, isn't counted: Parakeet skips it, goes on to the next one or a
+download, and says so on the settings page. One that old in the setting
+is refused, saying why, and an older download is left unused, with the
+newer one offered as for none. Building Cuttlebone yourself needs Rust and LLVM 18 (its README
 says how), and it refuses any Inko but the one it links:
 `cuttlebone --version` prints it (e.g. `cuttlebone 0.10.0 (Inko 0.21.1)`).
 
@@ -413,9 +414,7 @@ only for code being edited.
 Errors and warnings come from `inko check`, with or without Cuttlebone, and
 Parakeet turns off Cuttlebone's own diagnostics: IntelliJ's display of them
 would have no quick fixes, wouldn't be in Inspect Code, and wouldn't mark
-files that aren't open. Hints, parameter info and usage highlighting need
-a Cuttlebone that answers them (since its fourth milestone); with an
-older one, they're unavailable. Every other LSP feature IntelliJ offers is
+files that aren't open. Every other LSP feature IntelliJ offers is
 turned off, so nothing shows twice. Cuttlebone answers from each open file's unsaved text,
 and from saved text for the rest. A file changed with no editor open (by a
 refactoring, or by undoing one) is saved right after the change, since
@@ -452,8 +451,7 @@ check, and since its eleventh milestone only what uses that import; a file
 importing a module that doesn't parse; and, since its eighth milestone, only the method or item with a
 declaration's error and those naming what it's in), the features in the
 table above read the code themselves. Elsewhere in a project with a
-declaration error, Cuttlebone's answers are fresh. A Cuttlebone before
-milestone 5 never sends either kind, and has no answer in such code.
+declaration error, Cuttlebone's answers are fresh.
 
 ## Development
 

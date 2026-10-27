@@ -174,7 +174,7 @@ object Cuttlebone {
             when {
                 setting.isNotEmpty() -> "Cuttlebone wasn't found at $setting"
                 skipped.isEmpty() -> "Cuttlebone isn't installed (it isn't set, on PATH, or downloaded)"
-                else -> "Cuttlebone isn't installed (it isn't set or downloaded, and ${skipped.joinToString(" or ") { "${it.located.path} ${it.located.source.description}" }} isn't a working Cuttlebone)"
+                else -> "Cuttlebone isn't installed (it isn't set or downloaded, and ${skipped.joinToString(" or ") { "${it.located.path} ${it.located.source.description}" }} isn't a Cuttlebone Parakeet can use)"
             } + ", so $NEEDED_FOR are unavailable.",
             setup = true,
         )
@@ -191,7 +191,13 @@ object Cuttlebone {
     /** What `--version` printed, or why it doesn't count as a Cuttlebone's answer. */
     private class Version(val output: com.intellij.execution.process.ProcessOutput?, val problem: String?)
 
-    private val VERSION = Regex("""^cuttlebone \d+\.\d+""")
+    private val VERSION = Regex("""^cuttlebone (\d+\.\d+\S*)""")
+
+    /** The oldest Cuttlebone Parakeet uses: what it asks for (documentation in hover, symbols, folding, ...) is there since. */
+    const val MINIMUM = "0.13.0"
+
+    /** Whether Cuttlebone [version] (`0.13.0`, `0.13.0-fake`) is [MINIMUM] or newer. */
+    fun supported(version: String): Boolean = Ivm.isAtLeast(version.substringBefore('-'), MINIMUM)
 
     private fun version(executable: Path): Version {
         val output = try {
@@ -205,6 +211,8 @@ object Cuttlebone {
             output.isTimeout -> Version(output, "--version didn't answer in 10 s")
             output.exitCode != 0 -> Version(output, "--version failed" + (said?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: " (exit code ${output.exitCode})"))
             !VERSION.containsMatchIn(output.stdout.trim()) -> Version(output, "--version printed \"${output.stdout.trim().lineSequence().firstOrNull().orEmpty().take(200)}\", not a Cuttlebone version")
+            !supported(VERSION.find(output.stdout.trim())!!.groupValues[1]) ->
+                Version(output, "it's Cuttlebone ${VERSION.find(output.stdout.trim())!!.groupValues[1]}, and Parakeet needs $MINIMUM or newer")
             else -> Version(output, null)
         }
     }
@@ -241,7 +249,7 @@ object Cuttlebone {
         if (!cli.isAvailable) return Status.NoInko
         val version = versions[executable] ?: version(executable)
         // The setting, or a download: what it names is the user's to fix, or Parakeet's to report.
-        version.problem?.let { return Status.Refused("$executable $it.") }
+        version.problem?.let { return Status.Refused("$executable: $it.") }
         val output = version.output!!
         service.versionOutput = output.stdout.trim()
         val linked = linkedInko(output.stdout) ?: return null
@@ -735,7 +743,7 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         fun code(path: Path) = "<code>${StringUtil.escapeXmlEntities(path.toString())}</code>"
         val located = located
         val skipped = skipped.joinToString(" ") {
-            "Skipped ${code(it.located.path)} ${it.located.source.description}, which isn't a working Cuttlebone: ${StringUtil.escapeXmlEntities(it.reason)}."
+            "Skipped ${code(it.located.path)} ${it.located.source.description}, which Parakeet can't use: ${StringUtil.escapeXmlEntities(it.reason)}."
         }
         if (located == null) return skipped.ifEmpty { null }?.let { "None. $it" }
         val version = versionOutput?.let { "${StringUtil.escapeXmlEntities(it)}, " }.orEmpty()

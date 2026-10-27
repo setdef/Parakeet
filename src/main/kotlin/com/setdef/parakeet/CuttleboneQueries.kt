@@ -38,7 +38,6 @@ import org.eclipse.lsp4j.ReferenceContext
 import org.eclipse.lsp4j.ReferenceParams
 import org.eclipse.lsp4j.SignatureHelp
 import org.eclipse.lsp4j.SignatureHelpParams
-import org.eclipse.lsp4j.ServerCapabilities
 import org.eclipse.lsp4j.TextDocumentIdentifier
 import org.eclipse.lsp4j.TypeDefinitionParams
 import org.eclipse.lsp4j.jsonrpc.messages.Either
@@ -249,8 +248,6 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
      * the hints pass is one. Hints are only shown, so a stale answer counts: they're marked.
      */
     fun inlayHints(file: PsiFile, budgetMs: Long = HINTS_BUDGET_MS): Answer<List<InlayHint>>? {
-        // Cuttlebone before milestone 4 has none.
-        if (capabilities()?.inlayHintProvider?.let { it.isRight || it.left == true } != true) return null
         val document = file.originalFile.virtualFile?.let { FileDocumentManager.getInstance().getDocument(it) } ?: return null
         val end = position(document, document.textLength)
         return query(file, 0, "textDocument/inlayHint", budgetMs, { hints: List<InlayHint>? -> hints }, waitInHighlighting = true, stale = true) { server, identifier, start ->
@@ -263,7 +260,6 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
      * Only parameter info shows it, so a stale answer counts: it's marked.
      */
     fun signatureHelp(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<SignatureHelp>? {
-        if (capabilities()?.signatureHelpProvider == null) return null
         return query(file, offset, "textDocument/signatureHelp", budgetMs, { help: SignatureHelp? -> help }, stale = true) { server, document, position ->
             server.textDocumentService.signatureHelp(SignatureHelpParams(document, position))
         }
@@ -275,18 +271,10 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
      * Highlights change nothing, and Cuttlebone gives stale ones only when the list is complete, so they count.
      */
     fun documentHighlights(file: PsiFile, offset: Int, budgetMs: Long = HIGHLIGHT_BUDGET_MS): Answer<List<DocumentHighlight>>? {
-        if (capabilities()?.documentHighlightProvider?.let { it.isRight || it.left == true } != true) return null
         return query(file, offset, "textDocument/documentHighlight", budgetMs, { highlights: List<DocumentHighlight>? -> highlights }, waitInHighlighting = true, stale = true) { server, document, position ->
             server.textDocumentService.documentHighlight(DocumentHighlightParams(document, position))
         }
     }
-
-    private fun capabilities() =
-        if (stub != null) ServerCapabilities().apply {
-            inlayHintProvider = Either.forLeft(true)
-            signatureHelpProvider = org.eclipse.lsp4j.SignatureHelpOptions()
-            documentHighlightProvider = Either.forLeft(true)
-        } else CuttleboneService.getInstance(project).server()?.initializeResult?.capabilities
 
     /**
      * For tests: answers each question (method, file, offset) in place of a server, as Cuttlebone's answer

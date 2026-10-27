@@ -143,8 +143,7 @@ object InkoStdDocs {
 }
 
 /**
- * Cuttlebone's hover: the type at a position, as a code block. Before 0.12.0 that's all of it. Since 0.12.0
- * the type is the first of up to three sections, `\n\n---\n\n` apart (Cuttlebone's docs/lsp.md,
+ * Cuttlebone's hover: the type at a position, as a code block, the first of up to three sections, `\n\n---\n\n` apart (Cuttlebone's docs/lsp.md,
  * "textDocument/hover"): the type, the declaration of the name there (its signature in a code block, then
  * `Defined in …`; for a module, `Module …`), and its doc comment. At a declaration's own name there's no
  * expression, so no type, and the declaration comes first. In plain text, sections are a blank line apart.

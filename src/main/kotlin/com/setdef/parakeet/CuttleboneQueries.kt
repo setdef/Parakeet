@@ -109,8 +109,29 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
                 editedAt = System.nanoTime()
                 edits.incrementAndGet()
                 cancelOutdated()
+                if (!com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).isFileOpen(file)) saveUnsynced()
             }
         }, this)
+    }
+
+    private val saving = java.util.concurrent.atomic.AtomicBoolean()
+
+    /**
+     * Saves, once the change is done, the project's Inko documents that Cuttlebone doesn't have and that have no
+     * editor: IntelliJ sends Cuttlebone the text of the files open in an editor, and it reads the rest from
+     * disk ([CuttleboneService.unsynced]). Those open in an editor are left to IntelliJ.
+     */
+    private fun saveUnsynced() {
+        if (!saving.compareAndSet(false, true)) return
+        ApplicationManager.getApplication().invokeLater({
+            saving.set(false)
+            val server = CuttleboneService.getInstance(project).server() ?: return@invokeLater
+            val editors = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
+            for (document in CuttleboneService.getInstance(project).unsynced(server)) {
+                val file = FileDocumentManager.getInstance().getFile(document) ?: continue
+                if (!editors.isFileOpen(file)) FileDocumentManager.getInstance().saveDocument(document)
+            }
+        }, com.intellij.openapi.application.ModalityState.nonModal(), project.disposed)
     }
 
     override fun dispose() {}
@@ -321,6 +342,12 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         val server = service.server() ?: return null
         val document = FileDocumentManager.getInstance().getDocument(virtualFile) ?: return null
         if (!service.isSynced(server, virtualFile, document)) return null
+        // Nor while another document's text isn't Cuttlebone's: it would answer from what's on disk. One with no
+        // editor is saved (as IntelliJ would before long), so that what asks again has an answer.
+        if (service.unsynced(server).isNotEmpty()) {
+            saveUnsynced()
+            return null
+        }
         if (offset < 0 || offset > document.textLength) return null
         val identifier = server.getDocumentIdentifier(virtualFile)
         val position = position(document, offset)

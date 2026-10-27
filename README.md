@@ -412,7 +412,10 @@ files that aren't open. Hints, parameter info and usage highlighting need
 a Cuttlebone that answers them (since its fourth milestone); with an
 older one, they're unavailable. Every other LSP feature IntelliJ offers is
 turned off, so nothing shows twice. Cuttlebone answers from each open file's unsaved text,
-and from saved text for the rest.
+and from saved text for the rest. A file changed with no editor open (by a
+refactoring, or by undoing one) is saved right after the change, since
+Cuttlebone would read its old text from disk; until it is, Parakeet uses no
+answer from Cuttlebone.
 
 ### Answers in code being edited
 

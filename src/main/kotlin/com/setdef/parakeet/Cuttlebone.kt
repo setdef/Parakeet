@@ -521,6 +521,18 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         return if (sent != null) sent == server.getDocumentVersion(document) else !FileDocumentManager.getInstance().isFileModified(file)
     }
 
+    /**
+     * The project's unsaved Inko documents the running server doesn't have as they are. Cuttlebone answers from
+     * the whole project (a search checks all of it, and a type depends on what's imported), and reads from disk
+     * each file IntelliJ hasn't sent it: IntelliJ sends only the files open in an editor. So a document changed
+     * with no editor open (by a refactoring, or by undoing one) is only on disk once it's saved.
+     */
+    fun unsynced(server: LspServer): List<com.intellij.openapi.editor.Document> = FileDocumentManager.getInstance().unsavedDocuments.filter { document ->
+        val file = FileDocumentManager.getInstance().getFile(document) ?: return@filter false
+        file.extension == Inko.EXTENSION && file.isInLocalFileSystem && !project.isDisposed &&
+            com.intellij.openapi.roots.ProjectFileIndex.getInstance(project).isInContent(file) && !isSynced(server, file, document)
+    }
+
     @Volatile var status: Cuttlebone.Status? = null
         private set
 

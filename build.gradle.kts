@@ -116,7 +116,7 @@ tasks.register("updatePluginsXml") {
 // The real-world projects' tests only run with `-PrealWorld` (scripts/check.sh --full).
 tasks.test {
     if (providers.gradleProperty("unitOnly").isPresent) exclude("**/*IntegrationTest*")
-    if (providers.gradleProperty("noCuttlebone").isPresent) exclude("**/CuttleboneIntegrationTest*")
+    if (providers.gradleProperty("noCuttlebone").isPresent) exclude("**/Cuttlebone*IntegrationTest*")
     if (!providers.gradleProperty("realWorld").isPresent) exclude("**/$REAL_WORLD*")
     providers.environmentVariable("PARAKEET_FIXTURES").orNull?.let { environment("PARAKEET_FIXTURES", it) }
     providers.environmentVariable("PARAKEET_SWEEP_ONLY").orNull?.let { environment("PARAKEET_SWEEP_ONLY", it) }

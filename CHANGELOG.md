@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Find Usages, Rename and everything else built on Cuttlebone's answers no longer answer from a file's old text after a change to a file with no editor open, such as undoing a Rename: IntelliJ sends Cuttlebone only the files open in an editor, so it read the others from disk, where the change wasn't yet. A file changed back with no editor had its uses found where they had been; after a Rename across files and its undo, Cuttlebone had no answer at all (the other file, on disk, still imported the new name). Such a file is now saved right after the change, and until it is, Cuttlebone's answers aren't used.
+
 ## [0.13.1] - 2026-10-26
 
 ### Fixed

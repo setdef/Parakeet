@@ -26,6 +26,20 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         |    1
         |  }
         |}
+        |
+        |type pub C {
+        |  fn pub static new -> C {
+        |    C()
+        |  }
+        |
+        |  fn pub size -> Int {
+        |    1
+        |  }
+        |
+        |  fn pub mut reset -> Int {
+        |    0
+        |  }
+        |}
         |""".trimMargin()
 
     private val main = """
@@ -358,6 +372,75 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
             provider.getExpressionsAt(myFixture.file.findElementAt(call + 2)!!).associate { it.text to provider.getInformationHint(it) }
         }
         assertEquals("Result[Int, OutOfBounds]", types["y.get(0)"])
+    }
+
+    /**
+     * Code where each expression's hover, since Cuttlebone 0.12.0, has the declaration of the name there after
+     * its type (`make`, `new`, `reset`), and the declaration of `reset` says `mut`: what reads the type must
+     * take the type alone.
+     */
+    private val typed = """
+        |import app.util (C)
+        |
+        |fn make -> C {
+        |  C()
+        |}
+        |
+        |fn pub run -> Int {
+        |  let x = make
+        |  let c: C = C.new
+        |  x.size + c.size + make.reset
+        |}
+        |""".trimMargin()
+
+    private fun range(text: String, part: String) = text.indexOf(part).let { com.intellij.openapi.util.TextRange(it, it + part.length) }
+
+    fun testExpressionTypeOfANameIsTheTypeAlone() {
+        open(typed)
+        val provider = InkoExpressionTypeProvider()
+        val types = inBackground {
+            provider.getExpressionsAt(myFixture.file.findElementAt(typed.indexOf("make\n"))!!).associate { it.text to provider.getInformationHint(it) }
+        }
+        assertEquals("C", types["make"])
+    }
+
+    fun testSpecifyTypeExplicitlyWritesTheTypeAlone() {
+        open(typed)
+        val rewrite = inBackground { InkoLetTypes.add(myFixture.file, typed.indexOf("x = make")) }
+        assertEquals(listOf(": C"), rewrite?.edits?.map { it.text })
+    }
+
+    fun testRemoveExplicitTypeComparesTheTypeAlone() {
+        open(typed)
+        assertEquals("Remove explicit type", inBackground { InkoLetTypes.remove(myFixture.file, typed.indexOf("c: C")) }?.title)
+    }
+
+    fun testExtractMethodWritesTheTypeAlone() {
+        open(typed)
+        com.intellij.codeInsight.template.impl.TemplateManagerImpl.setTemplateTesting(testRootDisposable)
+        val call = range(typed, "make\n")
+        myFixture.editor.selectionModel.setSelection(call.startOffset, call.startOffset + "make".length)
+        InkoExtractMethodHandler().invoke(project, myFixture.editor, myFixture.file, null)
+        com.intellij.codeInsight.template.impl.TemplateManagerImpl.getTemplateState(myFixture.editor)?.gotoEnd(false)
+        val text = myFixture.editor.document.text
+        assertTrue(text, text.contains("fn extracted -> C {\n  make\n}"))
+    }
+
+    fun testIntroduceParameterWritesTheTypeAlone() {
+        open(typed)
+        val call = range(typed, "make.reset").let { com.intellij.openapi.util.TextRange(it.startOffset, it.startOffset + "make".length) }
+        val type = inBackground { InkoIntroduceParameterHandler.compilerType(myFixture.file, call) }
+        assertEquals("C", type)
+        val plan = InkoIntroduceParameter.plan(myFixture.file, call) { type }.getOrThrow()
+        InkoIntroduceParameter.processor(project, plan, "made", plan.type!!, replaceAll = true).run()
+        val text = myFixture.editor.document.text
+        assertTrue(text, text.contains("fn pub run(made: C) -> Int {"))
+    }
+
+    // `fn pub mut reset` says `mut`, but `make.reset` is an `Int`, not a borrow: Introduce Variable keeps it.
+    fun testIntroduceVariableChecksTheTypeAloneForABorrow() {
+        open(typed)
+        assertNull(inBackground { InkoIntroduceVariable.borrowsFromATemporary(myFixture.file as InkoFile, range(typed, "make.reset")) })
     }
 
     fun testGoToTypeDeclarationIsIntellijs() {

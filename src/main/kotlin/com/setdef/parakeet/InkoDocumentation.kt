@@ -142,11 +142,23 @@ object InkoStdDocs {
     }
 }
 
-/** Cuttlebone's hover: the type at a position, as a code block. */
+/**
+ * Cuttlebone's hover: the type at a position, as a code block. Before 0.12.0 that's all of it. Since 0.12.0
+ * the type is the first of up to three sections, `\n\n---\n\n` apart (Cuttlebone's docs/lsp.md,
+ * "textDocument/hover"): the type, the declaration of the name there (its signature in a code block, then
+ * `Defined in …`; for a module, `Module …`), and its doc comment. At a declaration's own name there's no
+ * expression, so no type, and the declaration comes first. In plain text, sections are a blank line apart.
+ */
 object InkoHover {
     fun type(hover: org.eclipse.lsp4j.Hover): String? {
         val contents = hover.contents ?: return null
+        val plain = contents.isRight && contents.right.kind == org.eclipse.lsp4j.MarkupKind.PLAINTEXT
         val text = if (contents.isRight) contents.right.value else contents.left.joinToString("\n") { if (it.isLeft) it.left else it.right.value }
-        return text.trim().removePrefix("```inko").removePrefix("```").removeSuffix("```").trim().takeIf { it.isNotEmpty() }
+        val sections = text.trim().split(if (plain) "\n\n" else "\n\n---\n\n")
+        val first = sections.first().trim()
+        val declaration = first.startsWith("Module ") ||
+            (if (plain) sections.getOrNull(1)?.startsWith("Defined in ") == true else "\n\nDefined in " in first)
+        if (declaration) return null
+        return first.removePrefix("```inko").removePrefix("```").removeSuffix("```").trim().takeIf { it.isNotEmpty() }
     }
 }

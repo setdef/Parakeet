@@ -294,6 +294,20 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
         // back (SESSION-0.13.1-and-stale-answers.md).
     }
 
+    /**
+     * `inko test` in the copy, run once more if it was cut off, and whether it was. kvi's tests hang about once in
+     * 200 runs, on its own code as on a refactoring's: a child process of a `t.fork` test (std.test runs each with
+     * one thread for processes) spins in `std.sync`'s lock, and its test waits for it (SESSION-slimming.md). So a
+     * sweep, which runs a project's tests once per site, hung in most full runs. A run cut off twice is still a
+     * failure, and the rerun is in the outcome.
+     */
+    private fun inkoTest(): Pair<InkoCliResult?, Boolean> {
+        val first = cli.run(listOf("test"), root, timeoutMs = 600_000)
+        if (first?.interrupted != true) return first to false
+        report("`inko test` was cut off after 600 s; running it again")
+        return cli.run(listOf("test"), root, timeoutMs = 600_000) to true
+    }
+
     /** The lines [now] has that the original doesn't, and the other way round, per file. */
     private fun diff(now: Map<String, String>): String = (now.keys + original.keys).sorted().filter { now[it] != original[it] }.joinToString("\n") { path ->
         val before = original[path]?.lines().orEmpty()
@@ -337,9 +351,9 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
             else -> {
                 val check = cli.run(listOf("check"), root, timeoutMs = 600_000)
                 val testStart = System.nanoTime()
-                val test = if (check?.succeeded == true && failingBefore != null) cli.run(listOf("test"), root, timeoutMs = 600_000) else null
-                // Whether `inko test` was cut off (kvi's once stopped after 52 of its 53 tests, three sweeps out of four).
-                val testRun = "exit ${test?.exitCode}" + (if (test?.interrupted == true) ", cut off" else "") +
+                val (test, rerun) = if (check?.succeeded == true && failingBefore != null) inkoTest() else null to false
+                // Whether `inko test` was cut off, and how long it ran.
+                val testRun = "exit ${test?.exitCode}" + (if (test?.interrupted == true) ", cut off" else "") + (if (rerun) ", rerun after a run was cut off" else "") +
                     " after ${java.util.concurrent.TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - testStart)} s"
                 // Tests that failed before the refactoring may fail after it too.
                 val newlyFailing = test?.takeIf { !it.succeeded }?.let { failures(it.stdout + it.stderr) }
@@ -353,7 +367,8 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
                         withoutColors(check?.stderr + check?.stdout).orEmpty().trim().lines().take(6).joinToString("\n") { "    $it" } + "\n${diff(now)}"
                     test != null && !test.succeeded && (newlyFailing.isNullOrEmpty() || !failingBefore!!.containsAll(newlyFailing)) -> problems += "$site: the tests fail after it ($testRun):\n" +
                         withoutColors(test.stdout + test.stderr).orEmpty().trim().lines().takeLast(10).joinToString("\n") { "    $it" } + "\n${diff(now)}"
-                    else -> outcomes += "$site: ok (${now.count { original[it.key] != it.value } + (original.keys - now.keys).size} files changed)"
+                    else -> outcomes += "$site: ok (${now.count { original[it.key] != it.value } + (original.keys - now.keys).size} files changed" +
+                        (if (rerun) "; $testRun" else "") + ")"
                 }
             }
         }
@@ -449,7 +464,7 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
     private fun refactorings() {
         original = snapshot()
         if (Files.isDirectory(root.resolve("test"))) {
-            val test = cli.run(listOf("test"), root, timeoutMs = 600_000)
+            val (test, _) = inkoTest()
             failingBefore = if (test?.succeeded == true) emptySet() else failures(test?.stdout + test?.stderr)
             if (failingBefore!!.isNotEmpty()) report("these tests fail before any refactoring, so they may fail after one: $failingBefore")
         }

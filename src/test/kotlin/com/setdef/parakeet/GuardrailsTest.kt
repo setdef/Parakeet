@@ -72,6 +72,15 @@ class GuardrailsTest : TestCase() {
         assertEquals("org.gradle.vfs.watch in gradle.properties", "false", properties.getProperty("org.gradle.vfs.watch"))
     }
 
+    // Timing limits count on CI as written (AGENTS.md, "Where checks count"): its Cuttlebone job, which runs the
+    // typing replay (and release.yml, through it), must keep them from being scaled by the load.
+    fun testCiKeepsTimingLimitsAsWritten() {
+        val build = File(root, ".github/workflows/build.yml").readText()
+        val job = build.substringAfter("\n  cuttlebone:\n").substringBefore("\n    steps:")
+        assertTrue("build.yml's Cuttlebone job must set ${TimingLimits.STRICT_VARIABLE}: '1'", "${TimingLimits.STRICT_VARIABLE}: '1'" in job)
+        if (TimingLimits.strict) assertEquals(1000L, TimingLimits.scaled(1000L)) else assertTrue(TimingLimits.scaled(1000L) >= 1000L)
+    }
+
     private companion object {
         const val THIS_FILE = "src/test/kotlin/com/setdef/parakeet/GuardrailsTest.kt"
 

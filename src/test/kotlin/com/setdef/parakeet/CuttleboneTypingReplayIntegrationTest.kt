@@ -379,7 +379,7 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
     }
 
     private fun waitFor(what: String, seconds: Int, condition: () -> Boolean) =
-        PlatformTestUtil.waitWithEventsDispatching({ "timed out waiting for $what: ${CuttleboneService.getInstance(project).status?.message}" }, condition, seconds)
+        PlatformTestUtil.waitWithEventsDispatching({ "timed out waiting for $what: ${CuttleboneService.getInstance(project).status?.message}" }, condition, TimingLimits.seconds(seconds))
 
     private fun <T> inBackground(action: () -> T): T {
         val future = com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread<T> {
@@ -455,7 +455,8 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
         /**
          * Fails if typing made Cuttlebone do more, or answer later, than the limits allow: each is a few times what
          * this session measured after its fixes, and well below what it measured before them, where that differed
-         * (docs/history/SESSION-typing-replay.md has both).
+         * (docs/history/SESSION-typing-replay.md has both). The timing limits are as written on CI, and scaled by
+         * the machine's load elsewhere ([TimingLimits]); the counts of requests and checks never are.
          */
         fun assertWithinLimits() {
             val keys = keystrokes.toDouble()
@@ -463,7 +464,8 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
                 assertTrue("$what per keystroke: $count for $keystrokes keystrokes, over $limit", count / keys <= limit)
             perKeystroke("requests", requests.size, MAX_REQUESTS_PER_KEYSTROKE)
             perKeystroke("checks", checks(requests), MAX_CHECKS_PER_KEYSTROKE)
-            perKeystroke("answers for text that had changed", outdated(requests), MAX_OUTDATED_PER_KEYSTROKE)
+            // How many answers arrive after their text changed depends on how long they take: a timing limit.
+            perKeystroke("answers for text that had changed", outdated(requests), TimingLimits.scaled(MAX_OUTDATED_PER_KEYSTROKE))
             val (cancelled, changed) = cancelledOfChanged()
             // A share of a handful says little (idoc's were 2 of 3); the answers per keystroke above cover those.
             if (changed >= 5) {
@@ -471,10 +473,12 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
             }
 
             val hints = latencies("textDocument/inlayHint")
-            assertTrue("inlay hints answered at ${hints.count { it != null }} of ${hints.size} pauses", hints.count { it != null } * 3 >= hints.size)
+            // Whether hints arrive before a pause ends is a timing limit too.
+            assertTrue("inlay hints answered at ${hints.count { it != null }} of ${hints.size} pauses", hints.count { it != null } * 3 * TimingLimits.factor() >= hints.size)
             fun within(what: String, sorted: List<Long>, p: Double, limit: Long) {
                 val value = percentile(sorted, p) ?: return
-                assertTrue("$what: ${(p * 100).toInt()}th percentile $value ms, over $limit ms (all: $sorted)", value <= limit)
+                val scaled = TimingLimits.scaled(limit)
+                assertTrue("$what: ${(p * 100).toInt()}th percentile $value ms, over $scaled ms (all: $sorted)", value <= scaled)
             }
             within("inlay hints at pauses", hints.filterNotNull().sorted(), 0.9, MAX_HINTS_AT_PAUSE_MS)
             within("usage highlighting at pauses", latencies("textDocument/documentHighlight").filterNotNull().sorted(), 0.9, MAX_USAGES_AT_PAUSE_MS)

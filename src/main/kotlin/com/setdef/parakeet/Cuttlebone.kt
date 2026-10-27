@@ -45,7 +45,7 @@ import com.intellij.platform.lsp.api.customization.LspDocumentSymbolDisabled
 import com.intellij.platform.lsp.api.customization.LspFindReferencesCustomizer
 import com.intellij.platform.lsp.api.customization.LspFindReferencesDisabled
 import com.intellij.platform.lsp.api.customization.LspFoldingRangeCustomizer
-import com.intellij.platform.lsp.api.customization.LspFoldingRangeDisabled
+import com.intellij.platform.lsp.api.customization.LspFoldingRangeSupport
 import com.intellij.platform.lsp.api.customization.LspFormattingCustomizer
 import com.intellij.platform.lsp.api.customization.LspFormattingDisabled
 import com.intellij.platform.lsp.api.customization.LspGoToDefinitionCustomizer
@@ -353,11 +353,12 @@ abstract class CuttleboneCustomization : LspCustomization() {
     override val signatureHelpCustomizer: LspSignatureHelpCustomizer get() = LspSignatureHelpDisabled
     // Parakeet's usage highlighting asks Cuttlebone's documentHighlight, and falls back to its own in broken code.
     override val documentHighlightsCustomizer: LspDocumentHighlightsCustomizer get() = LspDocumentHighlightsDisabled
-    // Parakeet's TextMate grammar highlights; the Structure view, folding and Go to Symbol are Parakeet's.
+    // Parakeet's TextMate grammar highlights; the Structure view and Go to Symbol are Parakeet's.
     override val semanticTokensCustomizer: LspSemanticTokensCustomizer get() = LspSemanticTokensDisabled
     override val documentSymbolCustomizer: LspDocumentSymbolCustomizer get() = LspDocumentSymbolDisabled
     override val workspaceSymbolCustomizer: LspWorkspaceSymbolCustomizer get() = LspWorkspaceSymbolDisabled
-    override val foldingRangeCustomizer: LspFoldingRangeCustomizer get() = LspFoldingRangeDisabled
+    // Cuttlebone's folding ranges: blocks, comment runs and imports, from the tokens, so also in code that doesn't parse.
+    override val foldingRangeCustomizer: LspFoldingRangeCustomizer get() = LspFoldingRangeSupport()
     // Only used for symbols, which are off.
     override val symbolKindCustomizer: LspSymbolKindCustomizer get() = LspSymbolKindCustomizer()
     // Parakeet's quick fixes and intentions; `inko fmt` formats.

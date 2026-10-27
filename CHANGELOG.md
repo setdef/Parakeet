@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Code folding is Cuttlebone's (`textDocument/foldingRange`, through IntelliJ's LSP support), so it also folds a call's arguments, arrays and other brackets over several lines, and folds as before in code that doesn't parse. Folds now show `...` as their placeholder.
 - Parakeet needs Cuttlebone 0.13.0 or newer. An older one on `PATH` or in Cargo's `bin` directory is skipped, as one that doesn't run is, and the download is offered as when there's none; one that old in the settings is refused, saying why; an older download is left unused. Older releases are no longer offered for download, and GitHub's releases API is no longer asked (every release from 0.13.0 on has an index).
 
 ### Fixed

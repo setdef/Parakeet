@@ -95,6 +95,39 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     private fun targets(text: String, marker: String): List<String> =
         inBackground { (nameAt(text, marker).reference as InkoReference).multiResolve(false).map { it.element!!.location() } }
 
+    /**
+     * The editor's folds once IntelliJ has Cuttlebone's answer ([until] holds), as first and last lines, with their
+     * placeholders. IntelliJ asks for folding ranges as it highlights, and folds from the answer it keeps.
+     */
+    private fun folds(until: (List<com.intellij.openapi.editor.FoldRegion>) -> Boolean): List<Triple<Int, Int, String>> {
+        val editor = myFixture.editor
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(TimingLimits.seconds(30).toLong())
+        while (true) {
+            myFixture.doHighlighting()
+            com.intellij.codeInsight.folding.CodeFoldingManager.getInstance(project).updateFoldRegions(editor)
+            if (until(editor.foldingModel.allFoldRegions.toList())) break
+            assertTrue("no folds from Cuttlebone: ${editor.foldingModel.allFoldRegions.toList()}", System.nanoTime() < deadline)
+            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+            Thread.sleep(200)
+        }
+        val document = editor.document
+        return editor.foldingModel.allFoldRegions.map { Triple(document.getLineNumber(it.startOffset), document.getLineNumber(it.endOffset), it.placeholderText) }
+            .sortedBy { it.first }
+    }
+
+    // Folding is Cuttlebone's (textDocument/foldingRange, through IntelliJ's LSP support): blocks, comment runs
+    // and imports, from the tokens, so it answers in code that doesn't parse, and a call's arguments over several
+    // lines fold too.
+    fun testFoldingIsCuttlebones() {
+        val text = "# One.\n# Two.\nimport app.util (A)\nimport app.util (B)\n\nfn pub run -> Int {\n  add(\n    1,\n    2,\n  )\n}\n\n" +
+            "fn add(a: Int, b: Int) -> Int {\n  a + b\n}\n\nfn broken( {\n"
+        open(text)
+        // A fold starts at the end of its first line: here, the call's `(`.
+        val arguments = text.indexOf("(\n    1") + 1
+        val folds = folds { regions -> regions.any { it.startOffset == arguments } }
+        assertEquals("comments, imports, run's body, add's arguments, add's body", listOf(0 to 1, 2 to 3, 5 to 9, 6 to 8, 12 to 13), folds.map { it.first to it.second })
+    }
+
     fun testResolvesAMemberCallToTheMethodTheCompilerCalls() {
         open()
         assertEquals(listOf("util.inko:8:size"), targets(main, "size(2.0)"))

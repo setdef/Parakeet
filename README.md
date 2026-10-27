@@ -82,7 +82,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   types, traits, methods, and constants
 - **Structure view**, breadcrumbs, and sticky lines for each file's
   declarations
-- **Code folding** for blocks, comment runs, and imports
+- **Code folding** for blocks, argument lists, comment runs, and imports, from
+  Cuttlebone (also in code that doesn't parse)
 - **Optimize Imports** (⌃⌥O / Ctrl+Alt+O): removes unused imports and sorts
   the rest
 - **Refactorings**: Change Signature (⌘F6 / Ctrl+F6), Extract Method (⌥⌘M /
@@ -287,7 +288,7 @@ compiler, so it always agrees with your installed Inko version.
   pasting adds the ones the target module lacks.
 - **Completing unimported names** only offers `pub` definitions, since Inko
   can't import private ones, and ranks them below names already in scope.
-- **The Structure view, breadcrumbs, folding, indentation, Extend
+- **The Structure view, breadcrumbs, indentation, Extend
   Selection, Unwrap, and postfix completion** come from
   the file's own tokens, so they follow unsaved edits and work without `inko`.
 
@@ -400,6 +401,7 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | Expression Type | hover's type, when its range is the expression | none, and it says why |
 | "Specify type explicitly" and "Remove explicit type" | hover's fresh type, of the variable or of a value that says its type itself | not offered |
 | Go to Type Declaration | `textDocument/typeDefinition`, through IntelliJ's LSP support | nothing |
+| Code folding | `textDocument/foldingRange`, through IntelliJ's LSP support | Cuttlebone's: it folds from the tokens |
 
 Where a search for what a refactoring changes has no fresh answer from
 Cuttlebone for a name that may be a use (its check crashed, it ran out of

@@ -47,7 +47,7 @@ import com.intellij.platform.lsp.api.customization.LspFindReferencesDisabled
 import com.intellij.platform.lsp.api.customization.LspFoldingRangeCustomizer
 import com.intellij.platform.lsp.api.customization.LspFoldingRangeSupport
 import com.intellij.platform.lsp.api.customization.LspFormattingCustomizer
-import com.intellij.platform.lsp.api.customization.LspFormattingDisabled
+import com.intellij.platform.lsp.api.customization.LspFormattingSupport
 import com.intellij.platform.lsp.api.customization.LspGoToDefinitionCustomizer
 import com.intellij.platform.lsp.api.customization.LspGoToDefinitionDisabled
 import com.intellij.platform.lsp.api.customization.LspGoToTypeDefinitionCustomizer
@@ -361,10 +361,14 @@ abstract class CuttleboneCustomization : LspCustomization() {
     override val foldingRangeCustomizer: LspFoldingRangeCustomizer get() = LspFoldingRangeSupport()
     // Only used for symbols, which are off.
     override val symbolKindCustomizer: LspSymbolKindCustomizer get() = LspSymbolKindCustomizer()
-    // Parakeet's quick fixes and intentions; `inko fmt` formats.
+    // Parakeet's quick fixes and intentions.
     override val codeActionsCustomizer: LspCodeActionsCustomizer get() = LspCodeActionsDisabled
     override val commandsCustomizer: LspCommandsCustomizer get() = LspCommandsDisabled
-    override val formattingCustomizer: LspFormattingCustomizer get() = LspFormattingDisabled
+    // Cuttlebone's formatting is exactly `inko fmt`'s, from the upstream formatter, on the unsaved text: it formats
+    // Inko files, though IntelliJ's own formatter would take any file it isn't told to leave.
+    override val formattingCustomizer: LspFormattingCustomizer get() = object : LspFormattingSupport() {
+        override fun shouldFormatThisFileExclusivelyByServer(file: VirtualFile, ideCanFormatThisFileItself: Boolean, serverExplicitlyWantsToFormatThisFile: Boolean) = true
+    }
     // Inko has no colors or links to show.
     override val documentColorCustomizer: LspDocumentColorCustomizer get() = LspDocumentColorDisabled
     override val documentLinkCustomizer: LspDocumentLinkCustomizer get() = LspDocumentLinkDisabled

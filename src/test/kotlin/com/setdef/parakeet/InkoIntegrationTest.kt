@@ -10,7 +10,6 @@ import com.intellij.execution.process.CapturingProcessAdapter
 import com.intellij.execution.process.ProcessOutput
 import com.intellij.execution.runners.ExecutionEnvironmentBuilder
 import com.intellij.lang.annotation.HighlightSeverity
-import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.psi.PsiElement
@@ -515,12 +514,6 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         val runnable = InkoImportOptimizer().processFile(myFixture.file)
         WriteCommandAction.runWriteCommandAction(project, runnable)
         myFixture.checkResult("import std.array (Array)\nimport std.stdio (Stdout)\n\nfn pub helper -> Array[Int] {\n  Stdout.new\n  []\n}\n")
-    }
-
-    fun testFormatsWithInkoFmt() {
-        open("src/main.inko", "fn   main   {\nlet a=1\n}\n")
-        myFixture.performEditorAction(IdeActions.ACTION_EDITOR_REFORMAT)
-        assertEquals("fn main {\n  let a = 1\n}\n", myFixture.editor.document.text)
     }
 
     fun testNavigatesWithInkoDoc() {

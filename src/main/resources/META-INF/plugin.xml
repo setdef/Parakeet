@@ -13,7 +13,7 @@
             <li>Errors across the whole project after saves, in the Project view, Problems, and Inspect Code</li>
             <li>Intentions: flip comparisons, invert <code>if</code>, <code>if</code> &#8644; <code>match</code>, add or remove argument names, and specify or remove a <code>let</code>'s type</li>
             <li>Inspections for Inko's style guide: naming, Bool methods ending in <code>?</code>, redundant argument names, and empty parentheses</li>
-            <li>Reformat Code (and format on save) with <code>inko fmt</code></li>
+            <li>Reformat Code (and format on save) as <code>inko fmt</code> formats, from Cuttlebone</li>
             <li>Go to definition, quick documentation, Go to Class/Symbol, and completion (including names from modules not yet imported, imported as you choose them), using the definitions <code>inko doc</code> reports, plus local variables and parameters</li>
             <li>Imports added when pasting Inko code, and Expression Type where the code states the type</li>
             <li>Find Usages and Rename across the project, and highlight usages</li>
@@ -108,7 +108,6 @@
         <codeInsight.implementMethod language="Inko" implementationClass="com.setdef.parakeet.InkoImplementMethodsHandler"/>
         <codeInsight.overrideMethod language="Inko" implementationClass="com.setdef.parakeet.InkoOverrideMethodsHandler"/>
         <lang.inspectionSuppressor language="Inko" implementationClass="com.setdef.parakeet.InkoInspectionSuppressor"/>
-        <formattingService implementation="com.setdef.parakeet.InkoFormattingService"/>
         <platform.backend.documentation.psiTargetProvider implementation="com.setdef.parakeet.InkoDocumentationTargetProvider"/>
         <gotoClassContributor implementation="com.setdef.parakeet.InkoGotoClassContributor"/>
         <gotoSymbolContributor implementation="com.setdef.parakeet.InkoGotoSymbolContributor"/>

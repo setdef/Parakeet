@@ -128,6 +128,15 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals("comments, imports, run's body, add's arguments, add's body", listOf(0 to 1, 2 to 3, 5 to 9, 6 to 8, 12 to 13), folds.map { it.first to it.second })
     }
 
+    // Reformat Code is Cuttlebone's (textDocument/formatting, through IntelliJ's LSP support): exactly `inko fmt`,
+    // from the upstream formatter, on the unsaved text, without running `inko`.
+    fun testReformatIsCuttlebones() {
+        open("fn pub run -> Int {\n      1 +   2\n}\n")
+        assertEquals("IntelliJ's LSP formatting", "LspFormattingService", com.intellij.formatting.service.FormattingServiceUtil.findService(myFixture.file, true, true)?.javaClass?.simpleName)
+        myFixture.performEditorAction(com.intellij.openapi.actionSystem.IdeActions.ACTION_EDITOR_REFORMAT)
+        PlatformTestUtil.waitWithEventsDispatching({ "not formatted: ${myFixture.editor.document.text}" }, { myFixture.editor.document.text == "fn pub run -> Int {\n  1 + 2\n}\n" }, TimingLimits.seconds(30))
+    }
+
     fun testResolvesAMemberCallToTheMethodTheCompilerCalls() {
         open()
         assertEquals(listOf("util.inko:8:size"), targets(main, "size(2.0)"))

@@ -47,7 +47,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   parentheses in calls like `pop()`. They're weak warnings, configurable in
   *Settings → Editor → Inspections → Inko*, and `# noinspection Name` on the
   line above suppresses one.
-- *Code → Reformat Code* (⌥⌘L / Ctrl+Alt+L) with `inko fmt`. To format on save,
+- *Code → Reformat Code* (⌥⌘L / Ctrl+Alt+L) as `inko fmt` formats, from
+  Cuttlebone (which runs Inko's own formatter on the unsaved text). To format on save,
   turn on *Settings → Tools → Actions on Save → Reformat code*.
 - **Go to definition** (⌘-click / Ctrl-click, ⌘B / Ctrl+B) for types, traits,
   constants, functions, methods, fields, modules, and local variables and
@@ -402,6 +403,7 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | "Specify type explicitly" and "Remove explicit type" | hover's fresh type, of the variable or of a value that says its type itself | not offered |
 | Go to Type Declaration | `textDocument/typeDefinition`, through IntelliJ's LSP support | nothing |
 | Code folding | `textDocument/foldingRange`, through IntelliJ's LSP support | Cuttlebone's: it folds from the tokens |
+| Reformat Code | `textDocument/formatting`, through IntelliJ's LSP support | none: `inko fmt` refuses code that doesn't parse too |
 
 Where a search for what a refactoring changes has no fresh answer from
 Cuttlebone for a name that may be a use (its check crashed, it ran out of

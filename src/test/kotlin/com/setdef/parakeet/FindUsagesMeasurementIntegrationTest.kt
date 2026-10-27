@@ -47,7 +47,7 @@ class FindUsagesMeasurementIntegrationTest : InkoTestCase(onDisk = true, realInk
 
     private fun <T> inBackground(action: () -> T): T {
         val future = ApplicationManager.getApplication().executeOnPooledThread<T> { ReadAction.compute<T, Throwable> { action() } }
-        PlatformTestUtil.waitWithEventsDispatching("background action", { future.isDone }, 600)
+        PlatformTestUtil.waitWithEventsDispatching("background action", { future.isDone }, TimingLimits.seconds(600))
         return future.get(1, TimeUnit.SECONDS)
     }
 
@@ -56,7 +56,7 @@ class FindUsagesMeasurementIntegrationTest : InkoTestCase(onDisk = true, realInk
         InkoProjectSettings.getInstance(project).cuttlebone = ""
         useCuttlebone(env("CUTTLEBONE") ?: Cuttlebone.executable(project)!!.toString())
         myFixture.configureFromExistingVirtualFile(myFixture.findFileInTempDir(path)!!)
-        PlatformTestUtil.waitWithEventsDispatching({ "no server: ${CuttleboneService.getInstance(project).status?.message}" }, { CuttleboneService.getInstance(project).server() != null }, 60)
+        PlatformTestUtil.waitWithEventsDispatching({ "no server: ${CuttleboneService.getInstance(project).status?.message}" }, { CuttleboneService.getInstance(project).server() != null }, TimingLimits.seconds(60))
     }
 
     /** Finds [declaration]'s usages [times] times, printing each run's time, what it found, and what it asked. */

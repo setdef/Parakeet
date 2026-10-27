@@ -124,7 +124,7 @@ abstract class RealWorldTestCase : InkoTestCase(onDisk = true, realInko = true) 
 
     protected fun <T> inBackground(timeoutSeconds: Int = 120, action: () -> T): T {
         val future = ApplicationManager.getApplication().executeOnPooledThread<T> { ReadAction.compute<T, Throwable> { action() } }
-        PlatformTestUtil.waitWithEventsDispatching("background action", { future.isDone }, timeoutSeconds)
+        PlatformTestUtil.waitWithEventsDispatching("background action", { future.isDone }, TimingLimits.seconds(timeoutSeconds))
         return future.get(1, TimeUnit.SECONDS)
     }
 

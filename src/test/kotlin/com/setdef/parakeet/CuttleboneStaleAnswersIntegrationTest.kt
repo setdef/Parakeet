@@ -85,7 +85,7 @@ class CuttleboneStaleAnswersIntegrationTest : InkoTestCase(onDisk = true, realIn
         PlatformTestUtil.waitWithEventsDispatching({ "Cuttlebone didn't get ${file.name}'s text: ${CuttleboneService.getInstance(project).status?.message}" }, {
             val server = CuttleboneService.getInstance(project).server()
             server != null && CuttleboneService.getInstance(project).isSynced(server, file, document(file))
-        }, 60)
+        }, TimingLimits.seconds(60))
     }
 
     private fun edit(file: VirtualFile, change: (Document) -> Unit) {
@@ -95,7 +95,7 @@ class CuttleboneStaleAnswersIntegrationTest : InkoTestCase(onDisk = true, realIn
 
     private fun <T> inBackground(action: () -> T): T {
         val future = ApplicationManager.getApplication().executeOnPooledThread<T> { ReadAction.compute<T, Throwable> { action() } }
-        PlatformTestUtil.waitWithEventsDispatching("background action", { future.isDone }, 120)
+        PlatformTestUtil.waitWithEventsDispatching("background action", { future.isDone }, TimingLimits.seconds(120))
         return future.get(1, TimeUnit.SECONDS)
     }
 

@@ -56,7 +56,7 @@ class RealWorldProjectsIntegrationTest : RealWorldTestCase() {
         wolf.setDelegate(WolfTheProblemSolverImpl.createTestInstance(project))
         try {
             val job = InkoProjectCheck.getInstance(project).launch(root, immediately = true)
-            PlatformTestUtil.waitWithEventsDispatching("the project check didn't finish", { job.isCompleted }, 600)
+            PlatformTestUtil.waitWithEventsDispatching("the project check didn't finish", { job.isCompleted }, TimingLimits.seconds(600))
             runBlocking { job.join() }
             val marked = InkoProjectCheck.getInstance(project).problemFiles(root)
             if (marked.isNotEmpty()) problems += "the project check found errors in ${marked.map { it.name }}, where inko check found none"
@@ -65,7 +65,7 @@ class RealWorldProjectsIntegrationTest : RealWorldTestCase() {
         }
         // Libraries, from a background thread as after a sync or a toolchain change.
         ApplicationManager.getApplication().executeOnPooledThread { InkoLibraries.getInstance(project).refresh() }
-        PlatformTestUtil.waitWithEventsDispatching("the libraries weren't found", { InkoLibraries.getInstance(project).libraries.isNotEmpty() }, 120)
+        PlatformTestUtil.waitWithEventsDispatching("the libraries weren't found", { InkoLibraries.getInstance(project).libraries.isNotEmpty() }, TimingLimits.seconds(120))
         val symbols = InkoDocIndex.getInstance(project).symbols(root)
         if (symbols == null) problems += "inko doc indexed nothing"
     }

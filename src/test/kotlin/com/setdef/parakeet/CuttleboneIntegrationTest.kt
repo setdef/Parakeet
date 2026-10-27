@@ -75,12 +75,12 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
             val server = CuttleboneService.getInstance(project).server()
             server != null && CuttleboneService.getInstance(project).sentVersions[server.getDocumentIdentifier(myFixture.file.virtualFile).uri] ==
                 server.getDocumentVersion(myFixture.editor.document)
-        }, 60)
+        }, TimingLimits.seconds(60))
     }
 
     private fun <T> inBackground(action: () -> T): T {
         val future = ApplicationManager.getApplication().executeOnPooledThread<T> { ReadAction.compute<T, Throwable> { action() } }
-        PlatformTestUtil.waitWithEventsDispatching("background action", { future.isDone }, 60)
+        PlatformTestUtil.waitWithEventsDispatching("background action", { future.isDone }, TimingLimits.seconds(60))
         return future.get(1, TimeUnit.SECONDS)
     }
 
@@ -253,7 +253,7 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         PlatformTestUtil.waitWithEventsDispatching("the edit to be sent", {
             val server = CuttleboneService.getInstance(project).server()
             server != null && CuttleboneService.getInstance(project).isSynced(server, myFixture.file.virtualFile, document)
-        }, 30)
+        }, TimingLimits.seconds(30))
         return document.text
     }
 
@@ -299,7 +299,7 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         PlatformTestUtil.waitWithEventsDispatching("the edit to be sent", {
             val server = CuttleboneService.getInstance(project).server()
             server != null && CuttleboneService.getInstance(project).isSynced(server, myFixture.file.virtualFile, document)
-        }, 30)
+        }, TimingLimits.seconds(30))
         val text = document.text
         val hints = inBackground { CuttleboneQueries.getInstance(project).inlayHints(myFixture.file) }!!
         assertTrue("fresh, from a repaired copy: ${hints.status}", hints.status!!.fresh && hints.repaired)
@@ -413,7 +413,7 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         myFixture.performEditorAction("GotoTypeDeclaration")
         PlatformTestUtil.waitWithEventsDispatching("navigation to util.inko", {
             com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).selectedTextEditor?.virtualFile?.name == "util.inko"
-        }, 30)
+        }, TimingLimits.seconds(30))
     }
 
     /** Client-side latency of each query, as Parakeet sees it, for the session report. */
@@ -471,13 +471,13 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
                 .filter { it.title == "Parakeet needs Cuttlebone" && !it.isExpired }
             offers().forEach { it.expire() }
             myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/main.inko", main).virtualFile)
-            PlatformTestUtil.waitWithEventsDispatching("no download offered", { offers().any { n -> n.actions.any { it.templateText == "Download Cuttlebone $version" } } }, 60)
+            PlatformTestUtil.waitWithEventsDispatching("no download offered", { offers().any { n -> n.actions.any { it.templateText == "Download Cuttlebone $version" } } }, TimingLimits.seconds(60))
             val offer = offers().single()
             com.intellij.notification.Notification.fire(offer, offer.actions.first { it.templateText == "Download Cuttlebone $version" }, null)
             val service = CuttleboneService.getInstance(project)
             PlatformTestUtil.waitWithEventsDispatching({ "the download didn't start: ${service.status?.message}" }, {
                 service.status is Cuttlebone.Status.Running && service.server() != null
-            }, 120)
+            }, TimingLimits.seconds(120))
             assertEquals(Cuttlebone.Source.DOWNLOADED, service.located?.source)
             assertTrue(service.located!!.path.startsWith(cuttleboneLocations.downloads))
             assertEquals(versionOutput, service.versionOutput)

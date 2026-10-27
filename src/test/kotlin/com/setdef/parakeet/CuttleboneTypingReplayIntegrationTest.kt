@@ -213,7 +213,7 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
             EditorTracker.getInstance(project).setActiveEditorsInTests(emptyList())
             daemon.setUpdateByTimerEnabled(timer)
             LookupManager.getInstance(project).hideActiveLookup()
-            PlatformTestUtil.waitWithEventsDispatching("the daemon to stop", { !daemon.isRunningOrPending }, 30)
+            PlatformTestUtil.waitWithEventsDispatching("the daemon to stop", { !daemon.isRunningOrPending }, TimingLimits.seconds(30))
         }
         return report!!
     }
@@ -385,7 +385,7 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
         val future = com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread<T> {
             com.intellij.openapi.application.ReadAction.compute<T, Throwable> { action() }
         }
-        PlatformTestUtil.waitWithEventsDispatching("background action", { future.isDone }, 600)
+        PlatformTestUtil.waitWithEventsDispatching("background action", { future.isDone }, TimingLimits.seconds(600))
         return future.get()
     }
 

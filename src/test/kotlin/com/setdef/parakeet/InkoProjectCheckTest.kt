@@ -77,7 +77,7 @@ class InkoProjectCheckTest : InkoTestCase(onDisk = true) {
 
     /** Waits for the job, running what it hands the EDT (where the test runs) meanwhile. */
     private fun Job.awaitDispatchingEvents() {
-        PlatformTestUtil.waitWithEventsDispatching("the project check didn't finish", { isCompleted }, 30)
+        PlatformTestUtil.waitWithEventsDispatching("the project check didn't finish", { isCompleted }, TimingLimits.seconds(30))
         runBlocking { join() }
     }
 

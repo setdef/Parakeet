@@ -56,7 +56,7 @@ abstract class CuttleboneTestCase : InkoTestCase(onDisk = true) {
             val states = com.intellij.platform.lsp.api.LspServerManager.getInstance(project)
                 .getServersForProvider(CuttleboneSupportProvider::class.java).map { it.state }
             "timed out waiting for $what (status: ${CuttleboneService.getInstance(project).status?.message}; servers: $states; launches: ${launches()})"
-        }, condition, timeoutSeconds)
+        }, condition, TimingLimits.seconds(timeoutSeconds))
     }
 
     /** Waits for the server to start, and to have the open file's text. */
@@ -83,7 +83,7 @@ abstract class CuttleboneTestCase : InkoTestCase(onDisk = true) {
     /** Runs [action] in a read action on a pooled thread, where Cuttlebone queries may wait, as IntelliJ's background work does. */
     protected fun <T> inBackground(action: () -> T): T {
         val future = ApplicationManager.getApplication().executeOnPooledThread<T> { ReadAction.compute<T, Throwable> { action() } }
-        PlatformTestUtil.waitWithEventsDispatching("background action", { future.isDone }, 30)
+        PlatformTestUtil.waitWithEventsDispatching("background action", { future.isDone }, TimingLimits.seconds(30))
         return future.get(1, TimeUnit.SECONDS)
     }
 

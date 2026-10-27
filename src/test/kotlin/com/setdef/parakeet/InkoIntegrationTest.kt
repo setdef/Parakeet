@@ -85,12 +85,12 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         FileDocumentManager.getInstance().saveAllDocuments()
         val service = CuttleboneService.getInstance(project)
         if (service.server() == null) myFixture.configureFromExistingVirtualFile(myFixture.findFileInTempDir(paths.first()))
-        com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("Cuttlebone to start (${service.status?.message})", { service.server() != null }, 60)
+        com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("Cuttlebone to start (${service.status?.message})", { service.server() != null }, TimingLimits.seconds(60))
         val files = paths.map { PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir(it))!! }
         com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("Cuttlebone to have the files", {
             val server = service.server()
             server != null && files.all { service.isSynced(server, it.virtualFile, it.viewProvider.document!!) }
-        }, 30)
+        }, TimingLimits.seconds(30))
         val queries = CuttleboneQueries.getInstance(project)
         val asked = com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
             com.intellij.openapi.application.ReadAction.run<Throwable> {
@@ -100,7 +100,7 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
                 }
             }
         }
-        com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("Cuttlebone's answers", { asked.isDone }, 120)
+        com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("Cuttlebone's answers", { asked.isDone }, TimingLimits.seconds(120))
         asked.get()
     }
 
@@ -378,7 +378,7 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
                 }.sorted()
             }
         }
-        com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("the search", { future.isDone }, 120)
+        com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("the search", { future.isDone }, TimingLimits.seconds(120))
         return future.get()
     }
 

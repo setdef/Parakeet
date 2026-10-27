@@ -52,7 +52,7 @@ class CuttleboneWhileTypingTest : InkoTestCase(onDisk = true) {
         type(text.length, "\n")
         val handler = handler()
         val future = inBackground(handler)
-        PlatformTestUtil.waitWithEventsDispatching("usage highlighting", { future.isDone }, 10)
+        PlatformTestUtil.waitWithEventsDispatching("usage highlighting", { future.isDone }, TimingLimits.seconds(10))
         val waitedMs = (System.nanoTime() - edited) / 1_000_000
         assertTrue("asked after $waitedMs ms", waitedMs >= DaemonCodeAnalyzerSettings.getInstance().autoReparseDelay)
         assertEquals("the highlights, then the caret's definition", listOf("documentHighlight", "definition"), requests())
@@ -65,7 +65,7 @@ class CuttleboneWhileTypingTest : InkoTestCase(onDisk = true) {
         Thread.sleep(100)
         // The next keystroke: the pass that's waiting has nothing to show for the text it was given.
         ApplicationManager.getApplication().invokeAndWait { type(myFixture.editor.document.textLength, "\n") }
-        PlatformTestUtil.waitWithEventsDispatching("usage highlighting", { future.isDone }, 10)
+        PlatformTestUtil.waitWithEventsDispatching("usage highlighting", { future.isDone }, TimingLimits.seconds(10))
         assertEquals(emptyList<String>(), requests())
     }
 
@@ -77,7 +77,7 @@ class CuttleboneWhileTypingTest : InkoTestCase(onDisk = true) {
         }
         val handler = handler()
         inBackground(handler).let { future ->
-            PlatformTestUtil.waitWithEventsDispatching("usage highlighting", { future.isDone }, 10)
+            PlatformTestUtil.waitWithEventsDispatching("usage highlighting", { future.isDone }, TimingLimits.seconds(10))
         }
         assertEquals("the highlights only", listOf("documentHighlight"), requests())
     }

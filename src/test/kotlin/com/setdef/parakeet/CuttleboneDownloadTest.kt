@@ -90,14 +90,14 @@ class CuttleboneDownloadTest : InkoTestCase() {
     // The manifest
 
     fun testReadsAManifest() {
-        server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1"), listOf(mac, CuttleboneReleaseServer.LINUX_AMD))
+        server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1"), listOf(mac, CuttleboneReleaseServer.LINUX_AMD))
         val builds = CuttleboneManifest.parse(String(server.let { java.net.URI(it.latestManifest).toURL().readBytes() }))
         assertEquals(listOf("aarch64-apple-darwin", "x86_64-unknown-linux-musl"), builds.map { it.target })
-        assertEquals(setOf("0.15.0"), builds.map { it.cuttlebone }.toSet())
+        assertEquals(setOf("0.16.0"), builds.map { it.cuttlebone }.toSet())
     }
 
     fun testRefusesAManifestOfAnotherSchema() {
-        server.respond("/releases/latest/download/manifest.json", CuttleboneReleaseServer.manifest("0.15.0", emptyList(), schema = 2))
+        server.respond("/releases/latest/download/manifest.json", CuttleboneReleaseServer.manifest("0.16.0", emptyList(), schema = 2))
         val lookup = find("0.21.1")
         assertTrue(lookup.toString(), lookup is CuttleboneLookup.Failed && lookup.reason.contains("schema is 2"))
     }
@@ -105,7 +105,7 @@ class CuttleboneDownloadTest : InkoTestCase() {
     // Finding the build
 
     fun testFindsTheLatestBuildForThisInkoAndPlatform() {
-        server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1"), listOf(mac, CuttleboneReleaseServer.LINUX_AMD))
+        server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1"), listOf(mac, CuttleboneReleaseServer.LINUX_AMD))
         val mac = find("0.21.1") as CuttleboneLookup.Found
         assertEquals("aarch64-apple-darwin", mac.build.target)
         val linux = find("0.21.1", CuttleboneReleaseServer.LINUX_AMD) as CuttleboneLookup.Found
@@ -114,68 +114,68 @@ class CuttleboneDownloadTest : InkoTestCase() {
     }
 
     fun testTheReleaseIndexFindsAnOlderReleaseForAnOlderInko() {
-        server.publish("0.14.0", listOf("0.20.0"), binary("0.14.0", "0.20.0"))
-        server.publish("0.14.5", listOf("0.20.0"), binary("0.14.5", "0.20.0"))
-        server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1"))
+        server.publish("0.15.0", listOf("0.20.0"), binary("0.15.0", "0.20.0"))
+        server.publish("0.15.5", listOf("0.20.0"), binary("0.15.5", "0.20.0"))
+        server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1"))
         server.serveIndex()
-        assertEquals("0.14.5", (find("0.20.0") as CuttleboneLookup.Found).build.cuttlebone)
+        assertEquals("0.15.5", (find("0.20.0") as CuttleboneLookup.Found).build.cuttlebone)
         assertEquals(
             "the index, then the one manifest it names: not GitHub's API",
-            listOf("/releases/latest/download/manifest.json", "/releases/latest/download/index.json", "/releases/download/v0.14.5/manifest.json"),
+            listOf("/releases/latest/download/manifest.json", "/releases/latest/download/index.json", "/releases/download/v0.15.5/manifest.json"),
             server.requests,
         )
     }
 
     fun testTheReleaseIndexSaysWhenNoReleaseHasThisInko() {
-        server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1"))
+        server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1"))
         server.serveIndex()
         assertTrue(find("0.19.0") is CuttleboneLookup.NoBuild)
     }
 
     fun testAReleaseInTheIndexWithoutThisPlatformLeadsToTheNext() {
-        server.publish("0.14.0", listOf("0.20.0"), binary("0.14.0", "0.20.0"), listOf(mac))
-        server.publish("0.14.5", listOf("0.20.0"), binary("0.14.5", "0.20.0"), listOf(CuttleboneReleaseServer.LINUX_AMD))
-        server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1"))
+        server.publish("0.15.0", listOf("0.20.0"), binary("0.15.0", "0.20.0"), listOf(mac))
+        server.publish("0.15.5", listOf("0.20.0"), binary("0.15.5", "0.20.0"), listOf(CuttleboneReleaseServer.LINUX_AMD))
+        server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1"))
         server.serveIndex()
-        assertEquals("0.14.0", (find("0.20.0") as CuttleboneLookup.Found).build.cuttlebone)
-        assertEquals("0.14.5", (find("0.20.0", CuttleboneReleaseServer.LINUX_AMD) as CuttleboneLookup.Found).build.cuttlebone)
+        assertEquals("0.15.0", (find("0.20.0") as CuttleboneLookup.Found).build.cuttlebone)
+        assertEquals("0.15.5", (find("0.20.0", CuttleboneReleaseServer.LINUX_AMD) as CuttleboneLookup.Found).build.cuttlebone)
     }
 
-    // Every release Parakeet uses (0.14.0 or newer) has an index: without one it can read, only the latest counts.
+    // Every release Parakeet uses (0.15.0 or newer) has an index: without one it can read, only the latest counts.
     fun testAnIndexOfAnotherSchemaLeavesOnlyTheLatest() {
-        server.publish("0.14.5", listOf("0.20.0"), binary("0.14.5", "0.20.0"))
-        server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1"))
+        server.publish("0.15.5", listOf("0.20.0"), binary("0.15.5", "0.20.0"))
+        server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1"))
         server.serveIndex(schema = 2)
         assertTrue(find("0.20.0") is CuttleboneLookup.NoBuild)
-        assertEquals("0.15.0", (find("0.21.1") as CuttleboneLookup.Found).build.cuttlebone)
+        assertEquals("0.16.0", (find("0.21.1") as CuttleboneLookup.Found).build.cuttlebone)
     }
 
-    // Parakeet needs Cuttlebone 0.14.0 or newer: an older release with a build for this Inko isn't one to offer.
+    // Parakeet needs Cuttlebone 0.15.0 or newer: an older release with a build for this Inko isn't one to offer.
     fun testAReleaseOlderThanTheMinimumIsntOffered() {
-        server.publish("0.13.0", listOf("0.20.0"), binary("0.13.0", "0.20.0"))
-        server.publish("0.14.0", listOf("0.21.1"), binary("0.14.0", "0.21.1"))
+        server.publish("0.14.0", listOf("0.20.0"), binary("0.14.0", "0.20.0"))
+        server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1"))
         server.serveIndex()
         val lookup = find("0.20.0")
         assertTrue(lookup.toString(), lookup is CuttleboneLookup.NoBuild)
-        assertFalse("/releases/download/v0.13.0/manifest.json" in server.requests)
+        assertFalse("/releases/download/v0.14.0/manifest.json" in server.requests)
     }
 
     fun testNoReleaseHasABuildForThisInko() {
-        server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1"))
+        server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1"))
         val lookup = find("0.19.0")
         assertTrue(lookup.toString(), lookup is CuttleboneLookup.NoBuild)
         assertTrue(lookup.message, lookup.message.contains("No release of Cuttlebone has a build for Inko 0.19.0 on macOS on ARM64"))
     }
 
     fun testNoBuildForThisPlatform() {
-        server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1"))
+        server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1"))
         val lookup = find("0.21.1", CuttlebonePlatform("freebsd", "amd64", "14.1"))
         assertTrue(lookup.toString(), lookup is CuttleboneLookup.NoBuild)
         assertTrue(lookup.message, lookup.message.contains("FreeBSD"))
     }
 
     fun testABuildForANewerOsIsntOffered() {
-        server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1"))
+        server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1"))
         val lookup = find("0.21.1", CuttlebonePlatform("macos", "arm64", "14.6"))
         assertTrue(lookup.toString(), lookup is CuttleboneLookup.NeedsNewerOs)
         assertTrue(lookup.message, lookup.message.contains("needs version 15.0 or newer, and this is 14.6"))
@@ -187,7 +187,7 @@ class CuttleboneDownloadTest : InkoTestCase() {
     }
 
     fun testOffline() {
-        server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1"))
+        server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1"))
         val source = server.releasesSource
         server.close()
         val lookup = source.find("0.21.1", mac, null)
@@ -204,31 +204,31 @@ class CuttleboneDownloadTest : InkoTestCase() {
     // Installing it
 
     fun testInstallsAVerifiedBuild() {
-        val build = server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1")).builds.single().first
+        val build = server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1")).builds.single().first
         val installed = install(build)
-        assertEquals(root.resolve("cuttlebone-0.15.0-inko-0.21.1").resolve("cuttlebone"), installed.executable)
+        assertEquals(root.resolve("cuttlebone-0.16.0-inko-0.21.1").resolve("cuttlebone"), installed.executable)
         assertTrue("made executable", Files.isExecutable(installed.executable))
         assertTrue("with its papers", Files.exists(installed.executable.resolveSibling("LICENSE-MPL-2.0")))
-        assertEquals("the installed one, and nothing else", listOf("cuttlebone-0.15.0-inko-0.21.1"), root.listDirectoryEntries().map { it.name })
+        assertEquals("the installed one, and nothing else", listOf("cuttlebone-0.16.0-inko-0.21.1"), root.listDirectoryEntries().map { it.name })
         assertEquals(installed, CuttleboneDownloads.installed("0.21.1", root))
         assertNull(CuttleboneDownloads.installed("0.20.0", root))
     }
 
     fun testTheNewestDownloadForAnInkoIsUsed() {
-        install(server.publish("0.14.0", listOf("0.21.1"), binary("0.14.0", "0.21.1")).builds.single().first)
         install(server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1")).builds.single().first)
-        install(server.publish("0.14.5", listOf("0.20.0"), binary("0.14.5", "0.20.0")).builds.single().first)
-        assertEquals("0.15.0", CuttleboneDownloads.installed("0.21.1", root)!!.cuttlebone)
-        assertEquals("0.14.5", CuttleboneDownloads.installed("0.20.0", root)!!.cuttlebone)
+        install(server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1")).builds.single().first)
+        install(server.publish("0.15.5", listOf("0.20.0"), binary("0.15.5", "0.20.0")).builds.single().first)
+        assertEquals("0.16.0", CuttleboneDownloads.installed("0.21.1", root)!!.cuttlebone)
+        assertEquals("0.15.5", CuttleboneDownloads.installed("0.20.0", root)!!.cuttlebone)
     }
 
     fun testAChecksumMismatchIsntInstalled() {
-        val build = server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1")).builds.single().first
+        val build = server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1")).builds.single().first
         installFails(build.copy(sha256 = "0".repeat(64)), "SHA-256")
     }
 
     fun testATruncatedDownloadIsntInstalled() {
-        val (build, archive) = server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1")).builds.single()
+        val (build, archive) = server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1")).builds.single()
         val path = java.net.URI(build.url).path
         // Cut off mid-body: the connection drops short of the length it announced.
         server.respond(path, CuttleboneReleaseServer.Response(200, archive, cutAt = archive.size / 2))
@@ -239,30 +239,30 @@ class CuttleboneDownloadTest : InkoTestCase() {
     }
 
     fun testAMissingArchiveIsntInstalled() {
-        val build = server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1")).builds.single().first
-        installFails(build.copy(url = "${server.base}/releases/download/v0.15.0/gone.tar.gz"), "HTTP 404")
+        val build = server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1")).builds.single().first
+        installFails(build.copy(url = "${server.base}/releases/download/v0.16.0/gone.tar.gz"), "HTTP 404")
     }
 
     fun testOfflineNothingIsInstalled() {
-        val build = server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1")).builds.single().first
+        val build = server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1")).builds.single().first
         server.close()
         installFails(build, "")
     }
 
     fun testABuildThatSaysAnotherInkoIsntInstalled() {
         // Its manifest says 0.21.1, but the binary links 0.20.0.
-        val build = server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.20.0")).builds.single().first
+        val build = server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.20.0")).builds.single().first
         installFails(build, "not a build for Inko 0.21.1")
     }
 
     fun testAnArchiveWithoutTheBinaryIsntInstalled() {
-        val build = server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1")).builds.single().first
+        val build = server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1")).builds.single().first
         installFails(build.copy(binary = "elsewhere/cuttlebone"), "has no elsewhere/cuttlebone")
         installFails(build.copy(binary = "../../cuttlebone"), "has no ../../cuttlebone")
     }
 
     fun testCancellingInstallsNothing() {
-        val build = server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1")).builds.single().first
+        val build = server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1")).builds.single().first
         val indicator = EmptyProgressIndicator().apply { cancel() }
         try {
             CuttleboneDownloads.install(build, indicator, root)
@@ -274,21 +274,21 @@ class CuttleboneDownloadTest : InkoTestCase() {
     }
 
     fun testADownloadInterruptedLongAgoIsCleanedUp() {
-        val build = server.publish("0.15.0", listOf("0.21.1"), binary("0.15.0", "0.21.1")).builds.single().first
+        val build = server.publish("0.16.0", listOf("0.21.1"), binary("0.16.0", "0.21.1")).builds.single().first
         Files.createDirectories(root)
         // The IDE was killed mid-download yesterday; another IDE is downloading now.
         val abandoned = Files.createDirectory(root.resolve(".download-1"))
         Files.setLastModifiedTime(abandoned, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() - 25 * 60 * 60 * 1000L))
         val current = Files.createDirectory(root.resolve(".download-2"))
         install(build)
-        assertEquals(listOf(".download-2", "cuttlebone-0.15.0-inko-0.21.1"), root.listDirectoryEntries().map { it.name }.sorted())
+        assertEquals(listOf(".download-2", "cuttlebone-0.16.0-inko-0.21.1"), root.listDirectoryEntries().map { it.name }.sorted())
         assertTrue(Files.isDirectory(current))
     }
 
     // Which Cuttlebone is used
 
     private val onPath = Path.of("/usr/local/bin/cuttlebone")
-    private val downloaded = Path.of("/downloads/cuttlebone-0.15.0-inko-0.21.1/cuttlebone")
+    private val downloaded = Path.of("/downloads/cuttlebone-0.16.0-inko-0.21.1/cuttlebone")
 
     private fun locate(setting: String, path: Boolean, download: Boolean, inko: String? = "0.21.1") = Cuttlebone.locate(
         setting,

@@ -34,7 +34,7 @@ abstract class CuttleboneTestCase : InkoTestCase(onDisk = true) {
     }
 
     /** Makes the fake the project's Cuttlebone. It starts when an Inko file opens. */
-    protected fun useFake(script: FakeCuttlebone.Script = FakeCuttlebone.Script(log = ""), version: String = "cuttlebone 0.14.0-fake (Inko 0.21.1)") {
+    protected fun useFake(script: FakeCuttlebone.Script = FakeCuttlebone.Script(log = ""), version: String = "cuttlebone 0.15.0-fake (Inko 0.21.1)") {
         val executable = FakeCuttleboneScript.write(fakeDirectory, script.copy(log = log.toString()), version)
         useCuttlebone(executable.toString())
     }

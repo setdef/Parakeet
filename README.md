@@ -315,7 +315,7 @@ compiler, so it always agrees with your installed Inko version.
   ivm-installed version or another executable for a project, use
   *Settings → Languages & Frameworks → Inko*.
 
-- [Cuttlebone](#cuttlebone) 0.14.0 or newer, for the compiler's types and
+- [Cuttlebone](#cuttlebone) 0.15.0 or newer, for the compiler's types and
   definitions: Parakeet offers to download it
 
 ## Installing
@@ -357,7 +357,7 @@ IntelliJ's own LSP support, and stops it when the project closes.
 Cuttlebone has builds for macOS 15 or newer and Linux, on ARM64 and
 x86-64. Each build works with one Inko version, the compiler it links. When
 the newest release has none for your Inko, Parakeet looks for an older
-release from 0.14.0 on that has one (in Cuttlebone's release index), and if
+release from 0.15.0 on that has one (in Cuttlebone's release index), and if
 none does, says so instead of offering a build that wouldn't run.
 
 - **Downloads** come from [Cuttlebone's GitHub
@@ -382,7 +382,7 @@ setting comes first, then `PATH`, and either takes precedence over a
 download. A `cuttlebone` on `PATH` or in Cargo's `bin` directory that
 doesn't run, or whose `--version` doesn't print a Cuttlebone version (a
 mise shim for a tool that isn't installed, say), or that's older than
-0.14.0, isn't counted: Parakeet skips it, goes on to the next one or a
+0.15.0, isn't counted: Parakeet skips it, goes on to the next one or a
 download, and says so on the settings page. One that old in the setting
 is refused, saying why, and an older download is left unused, with the
 newer one offered as for none. Building Cuttlebone yourself needs Rust and LLVM 18 (its README

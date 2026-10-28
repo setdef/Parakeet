@@ -193,10 +193,10 @@ object Cuttlebone {
 
     private val VERSION = Regex("""^cuttlebone (\d+\.\d+\S*)""")
 
-    /** The oldest Cuttlebone Parakeet uses: what it asks for (implementations, hierarchies, selection ranges, file renames, pull diagnostics, ...) is there since. */
-    const val MINIMUM = "0.14.0"
+    /** The oldest Cuttlebone Parakeet uses: what it asks for (quick fixes in code with other errors, names and keywords being typed, workspace symbols for an index, ...) is there since. */
+    const val MINIMUM = "0.15.0"
 
-    /** Whether Cuttlebone [version] (`0.14.0`, `0.14.0-fake`) is [MINIMUM] or newer. */
+    /** Whether Cuttlebone [version] (`0.15.0`, `0.15.0-fake`) is [MINIMUM] or newer. */
     fun supported(version: String): Boolean = Ivm.isAtLeast(version.substringBefore('-'), MINIMUM)
 
     private fun version(executable: Path): Version {

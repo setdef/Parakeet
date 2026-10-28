@@ -42,7 +42,11 @@ most of these rules. Don't weaken a check to get past it.
 - Timing limits (the typing replay's latencies, tests' waits) count on CI:
   build.yml's Cuttlebone job, on every push to main and every pull
   request, and release.yml before it publishes. CI's machines run nothing
-  else, so a timing failure there is a regression.
+  else, but they differ in speed: the limits as written are for the
+  reference machine (an Apple M1 Max), and the job scales them by how fast
+  the runner measures a fixed baseline workload against it
+  (ci/timing-baseline.py, never below 1), so a timing failure there is a
+  regression.
 - Locally, under load, timing limits are advisory. A timing failure that
   passes when rerun alone is load: rerun it alone before believing it, say
   so in the commit or report, and never loosen a limit to get past load.

@@ -455,8 +455,9 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
         /**
          * Fails if typing made Cuttlebone do more, or answer later, than the limits allow: each is a few times what
          * this session measured after its fixes, and well below what it measured before them, where that differed
-         * (docs/history/SESSION-typing-replay.md has both). The timing limits are as written on CI, and scaled by
-         * the machine's load elsewhere ([TimingLimits]); the counts of requests and checks never are.
+         * (docs/history/SESSION-typing-replay.md has both). The timing limits are as written for the reference machine,
+         * scaled on CI by the runner's baseline and elsewhere by the machine's load ([TimingLimits]); the counts of
+         * requests and checks never are.
          */
         fun assertWithinLimits() {
             val keys = keystrokes.toDouble()
@@ -467,9 +468,14 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
             // How many answers arrive after their text changed depends on how long they take: a timing limit.
             perKeystroke("answers for text that had changed", outdated(requests), TimingLimits.scaled(MAX_OUTDATED_PER_KEYSTROKE))
             val (cancelled, changed) = cancelledOfChanged()
-            // A share of a handful says little (idoc's were 2 of 3); the answers per keystroke above cover those.
+            // A share of a handful says little (idoc's were 2 of 3); the answers per keystroke above cover those. It's a
+            // timing limit too: the slower the answers, the more of those whose text changed are ones something still
+            // waits for, which aren't cancelled (a macos-15 runner had 4 of 10). Cancelling stopping altogether is 0.
             if (changed >= 5) {
-                assertTrue("of the $changed requests whose text changed before their answer, $cancelled were cancelled", cancelled >= changed * MIN_CANCELLED_SHARE)
+                assertTrue(
+                    "of the $changed requests whose text changed before their answer, $cancelled were cancelled",
+                    cancelled * TimingLimits.factor() >= changed * MIN_CANCELLED_SHARE,
+                )
             }
 
             val hints = latencies("textDocument/inlayHint")

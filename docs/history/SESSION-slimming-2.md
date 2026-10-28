@@ -346,11 +346,14 @@ Three commits there, each through the hook:
   be cancelled; with cancelling turned off, 0 of 37 and 0 of 39 were, and
   both replays failed.
 
-Pushing the branch was refused by this session's permissions, so it's
-neither pushed nor run on CI; the other session said it would review the
-diff, push it and run CI. It isn't merged into this branch: that was to
-follow CI. `a436307` is cherry-picked here (e28198f), since its flake kept
-failing this branch's hooks too.
+Pushing the branch was refused by this session's permissions; the other
+session reviewed the diff, pushed it and ran CI: build.yml with real-world
+passed every job (runner scales 1.09 and 1.23), and with `slow=1000` both
+Cuttlebone jobs failed on timing, as they should. Moving the `v0.14.0` tag
+was refused there as destructive, so it was released as 0.14.1 (d6f9359,
+"Prepare 0.14.1"); `v0.14.0` stays unpublished. `a436307` was cherry-picked
+here first (e28198f), since its flake kept failing this branch's hooks; then
+release/0.14 was merged in, its CHANGELOG's 0.14.0 section becoming 0.14.1's.
 
 ## The per-commit check under load
 

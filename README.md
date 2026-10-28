@@ -18,7 +18,7 @@ for you to review and submit.
 
 I use three words for how code comes to exist. Code I wrote, I typed by hand, with nothing generated. Code I wrought, an AI agent generated while I iterated with it, and I reviewed every change before committing it, so I own every diff. Code I requested, an agent built with little or no review from me, the way a dark factory runs without lights.
 
-**Versions 0.1.0 through 0.14.0 are requested.**
+**Versions 0.1.0 through 0.14.1 are requested.**
 
 ## Features
 
@@ -487,7 +487,7 @@ Tools are managed with [mise](https://mise.jdx.dev) (`mise install`).
 | `./gradlew runIde` | Launch a sandbox IDE with the plugin loaded |
 | `./gradlew test` | Run all headless IDE tests, including integration tests against your installed `inko` and `cuttlebone` (`-PnoCuttlebone` skips the latter) |
 | `./gradlew test -PunitOnly` | Run only the unit tests, which use a fake `inko` and a fake Cuttlebone and need nothing installed |
-| `./gradlew typingReplay` | Type code into a std module at a person's speed against your installed `inko` and `cuttlebone`, and fail if typing responsiveness regresses ([the limits](docs/history/SESSION-typing-replay.md), whose times are scaled by the machine's load unless `PARAKEET_TIMING_STRICT` is set, as CI sets it); `PARAKEET_REPLAY_PROJECT` adds a project of your own |
+| `./gradlew typingReplay` | Type code into a std module at a person's speed against your installed `inko` and `cuttlebone`, and fail if typing responsiveness regresses ([the limits](docs/history/SESSION-typing-replay.md), whose times are scaled by the machine's load unless `PARAKEET_TIMING_STRICT` is set, as CI sets it, and then by `PARAKEET_TIMING_SCALE`, the runner's baseline); `PARAKEET_REPLAY_PROJECT` adds a project of your own |
 | `./gradlew verifyPlugin` | Check compatibility with the oldest and newest supported IDEs |
 | `./gradlew buildPlugin` | Build the installable zip |
 | `scripts/check.sh [--full]` | Every check a commit must pass (`--full` adds the real-world projects' tests and the Plugin Verifier); see AGENTS.md. Cuttlebone's integration tests use `$CUTTLEBONE` or `cuttlebone` on PATH, and are skipped (with a message) without one; `--full` requires it |
@@ -517,7 +517,12 @@ GitHub Actions runs [`build.yml`](.github/workflows/build.yml) on every push to
   through its `manifest.json` and checked against its size and SHA-256 by
   [`ci/install-cuttlebone.sh`](ci/install-cuttlebone.sh), with the newest
   Inko it has a build for. It runs the integration tests against it and the
-  typing replay, whose timing limits count here (AGENTS.md). With
+  typing replay, whose timing limits count here (AGENTS.md): as written for
+  the reference machine, scaled by how fast the runner measures a fixed
+  baseline workload (`inko check` of std, by
+  [`ci/timing-baseline.py`](ci/timing-baseline.py), in the job's summary),
+  never below 1. Run by hand with `slow`, every answer from Cuttlebone is
+  held that many milliseconds, to see the limits fail. With
   `real-world` (every release, or run by hand) it also runs the real-world
   projects' sweeps on Linux, on the commits
   [`ci/real-world-projects.txt`](ci/real-world-projects.txt) pins, and

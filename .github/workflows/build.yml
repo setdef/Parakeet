@@ -16,6 +16,13 @@ on:
         description: Run the real-world projects' sweeps against Cuttlebone too
         type: boolean
         default: false
+      slow:
+        description: >-
+          A deliberate slowdown, to see the timing limits fail it: every
+          answer from Cuttlebone held this many milliseconds
+          (ci/slow-cuttlebone.py). Empty for none.
+        type: string
+        default: ''
   workflow_call:
     inputs:
       real-world:
@@ -161,7 +168,8 @@ jobs:
         os: [ubuntu-26.04, macos-15]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 150
-    # Timing limits count here (AGENTS.md): as written, not scaled by the load as they are elsewhere (TimingLimits).
+    # Timing limits count here (AGENTS.md): as written for the reference machine, scaled by this runner's baseline
+    # (the step below), not by the load as they are elsewhere (TimingLimits).
     env:
       PARAKEET_TIMING_STRICT: '1'
     steps:
@@ -198,10 +206,24 @@ jobs:
           key: ivm-${{ matrix.os }}-inko-${{ steps.inko.outputs.version }}
       - name: Install Inko
         run: ./ci/install-inko.sh "${{ steps.inko.outputs.version }}"
+      # How this runner compares with the reference machine, before anything else runs on it: every timing limit
+      # is scaled by it (PARAKEET_TIMING_SCALE), and it's in the job's summary.
+      - name: Measure the timing baseline (ci/timing-baseline.py)
+        run: ci/timing-baseline.py
       # Downloaded fresh each time, checked against the release's manifest (size and SHA-256).
       - name: Install Cuttlebone
         id: cuttlebone
-        run: echo "path=$(ci/install-cuttlebone.sh install "$RUNNER_TEMP/cuttlebone")" >> "$GITHUB_OUTPUT"
+        env:
+          SLOW: ${{ inputs.slow }}
+        run: |
+          path="$(ci/install-cuttlebone.sh install "$RUNNER_TEMP/cuttlebone")"
+          if [[ -n "$SLOW" ]]; then
+            echo "A deliberate slowdown: every answer from Cuttlebone held $SLOW ms"
+            echo "SLOW_CUTTLEBONE=$path" >> "$GITHUB_ENV"
+            echo "SLOW_MS=$SLOW" >> "$GITHUB_ENV"
+            path="$PWD/ci/slow-cuttlebone.py"
+          fi
+          echo "path=$path" >> "$GITHUB_OUTPUT"
       # Timing limits count here (AGENTS.md): CI's machines aren't shared with other work.
       - name: Run the integration tests against Cuttlebone
         env:

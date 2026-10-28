@@ -72,13 +72,30 @@ class GuardrailsTest : TestCase() {
         assertEquals("org.gradle.vfs.watch in gradle.properties", "false", properties.getProperty("org.gradle.vfs.watch"))
     }
 
-    // Timing limits count on CI as written (AGENTS.md, "Where checks count"): its Cuttlebone job, which runs the
-    // typing replay (and release.yml, through it), must keep them from being scaled by the load.
-    fun testCiKeepsTimingLimitsAsWritten() {
+    // Timing limits count on CI (AGENTS.md, "Where checks count"): its Cuttlebone job, which runs the typing replay
+    // (and release.yml, through it), must keep them from being scaled by the load, and scale them by the runner's
+    // baseline, measured before any test runs.
+    fun testCiScalesTimingLimitsByTheRunnersBaseline() {
         val build = File(root, ".github/workflows/build.yml").readText()
-        val job = build.substringAfter("\n  cuttlebone:\n").substringBefore("\n    steps:")
-        assertTrue("build.yml's Cuttlebone job must set ${TimingLimits.STRICT_VARIABLE}: '1'", "${TimingLimits.STRICT_VARIABLE}: '1'" in job)
-        if (TimingLimits.strict) assertEquals(1000L, TimingLimits.scaled(1000L)) else assertTrue(TimingLimits.scaled(1000L) >= 1000L)
+        // The file's last job: everything after its name.
+        val job = build.substringAfter("\n  cuttlebone:\n")
+        assertTrue("build.yml's Cuttlebone job must set ${TimingLimits.STRICT_VARIABLE}: '1'", "${TimingLimits.STRICT_VARIABLE}: '1'" in job.substringBefore("\n    steps:"))
+        val steps = job.substringAfter("\n    steps:")
+        val baseline = steps.indexOf("ci/timing-baseline.py")
+        assertTrue("build.yml's Cuttlebone job must measure the timing baseline (ci/timing-baseline.py)", baseline >= 0)
+        assertTrue("the baseline must come before the tests", steps.indexOf("./gradlew") > baseline)
+        val scale = System.getenv(TimingLimits.SCALE_VARIABLE)?.toDouble()
+        val expected = if (TimingLimits.strict) 1000.0 * (scale ?: 1.0).coerceAtLeast(1.0) else null
+        if (expected != null) assertEquals(expected.toLong(), TimingLimits.scaled(1000L)) else assertTrue(TimingLimits.scaled(1000L) >= 1000L)
+    }
+
+    // As Cuttlebone's tests/latency.rs: strict, the scale (never below 1); otherwise the load (never below 1).
+    fun testTimingLimitsScaleByTheBaselineWhenStrictAndTheLoadOtherwise() {
+        assertEquals(1.0, TimingLimits.factor(strict = true, scale = null) { 30.0 })
+        assertEquals(1.2, TimingLimits.factor(strict = true, scale = 1.2) { 30.0 })
+        assertEquals(1.0, TimingLimits.factor(strict = true, scale = 0.9) { 30.0 })
+        assertEquals(30.0, TimingLimits.factor(strict = false, scale = 1.2) { 30.0 })
+        assertEquals(1.0, TimingLimits.factor(strict = false, scale = null) { 0.5 })
     }
 
     private companion object {

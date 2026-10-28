@@ -125,8 +125,9 @@ tasks.test {
     exclude("**/$TYPING_REPLAY*")
     // Where check.sh found cuttlebone; the tests otherwise look on PATH.
     providers.environmentVariable("CUTTLEBONE").orNull?.let { environment("CUTTLEBONE", it) }
-    // CI's: timing limits as written, not scaled by the load (TimingLimits).
+    // CI's: timing limits as written, scaled by the runner's baseline rather than the load (TimingLimits).
     providers.environmentVariable("PARAKEET_TIMING_STRICT").orNull?.let { environment("PARAKEET_TIMING_STRICT", it) }
+    providers.environmentVariable("PARAKEET_TIMING_SCALE").orNull?.let { environment("PARAKEET_TIMING_SCALE", it) }
 }
 
 // The typing replay types for minutes, against the real `cuttlebone`, with the daemon on its timer and
@@ -147,6 +148,7 @@ val typingReplay by intellijPlatformTesting.testIde.registering {
         include("**/$TYPING_REPLAY.class")
         providers.environmentVariable("CUTTLEBONE").orNull?.let { environment("CUTTLEBONE", it) }
         providers.environmentVariable("PARAKEET_TIMING_STRICT").orNull?.let { environment("PARAKEET_TIMING_STRICT", it) }
+        providers.environmentVariable("PARAKEET_TIMING_SCALE").orNull?.let { environment("PARAKEET_TIMING_SCALE", it) }
     }
 }
 

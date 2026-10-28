@@ -468,14 +468,15 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
             // How many answers arrive after their text changed depends on how long they take: a timing limit.
             perKeystroke("answers for text that had changed", outdated(requests), TimingLimits.scaled(MAX_OUTDATED_PER_KEYSTROKE))
             val (cancelled, changed) = cancelledOfChanged()
-            // A share of a handful says little (idoc's were 2 of 3); the answers per keystroke above cover those. It's a
-            // timing limit too: the slower the answers, the more of those whose text changed are ones something still
-            // waits for, which aren't cancelled (a macos-15 runner had 4 of 10). Cancelling stopping altogether is 0.
-            if (changed >= 5) {
-                assertTrue(
-                    "of the $changed requests whose text changed before their answer, $cancelled were cancelled",
-                    cancelled * TimingLimits.factor() >= changed * MIN_CANCELLED_SHARE,
-                )
+            // Cancelling at all (MIN_CHANGED_FOR_ANY_CANCELLED): what this exists to catch is cancelling stopping
+            // altogether, when none is.
+            if (changed >= MIN_CHANGED_FOR_ANY_CANCELLED) {
+                assertTrue("of the $changed requests whose text changed before their answer, none was cancelled", cancelled > 0)
+            }
+            // The share (MIN_CHANGED_FOR_SHARE): only over enough of them that the handful something still waits for,
+            // which aren't cancelled, can't decide it alone. Not a timing limit, so never scaled.
+            if (changed >= MIN_CHANGED_FOR_SHARE) {
+                assertTrue("of the $changed requests whose text changed before their answer, $cancelled were cancelled", cancelled >= changed * MIN_CANCELLED_SHARE)
             }
 
             val hints = latencies("textDocument/inlayHint")
@@ -544,7 +545,18 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
         const val MAX_OUTDATED_PER_KEYSTROKE = 0.08
         // Of the requests whose text changed before their answer, 78 to 89% were cancelled after the fixes (the rest
         // had something still waiting for them); before them, and with the fixes but no cancelling, none.
+        //
+        // How many of them something still waits for (completion, an action), and so aren't cancelled, hardly
+        // depends on how many there are: over 20 replays of std's json.inko (18 here at load averages of 170 to 420
+        // on 10 cores, with 16 to 49 such requests each, and a macos-15 runner's two, with 22 and 10), 0 to 7 weren't
+        // cancelled. A faster machine has fewer requests whose text changed, but about as many waited for: of the
+        // runner's 10, 6 were, so the 4 cancelled made the share 40%. So the share means something only once there
+        // are well over twice the most that were waited for (7): at least 20. With cancelling turned off
+        // (CuttleboneQueries.cancelIfOutdated doing nothing), every one is left, 37 and 39 of them in the two
+        // replays, none cancelled: at least one of 5 or more must be.
         const val MIN_CANCELLED_SHARE = 0.5
+        const val MIN_CHANGED_FOR_SHARE = 20
+        const val MIN_CHANGED_FOR_ANY_CANCELLED = 5
         const val MAX_HINTS_AT_PAUSE_MS = 1200L
         const val MAX_USAGES_AT_PAUSE_MS = 1200L
         const val MAX_COMPLETION_MS = 800L

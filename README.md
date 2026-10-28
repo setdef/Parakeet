@@ -593,6 +593,7 @@ Audits and session reports, oldest first:
 - [0.13.1, and stale answers](docs/history/SESSION-0.13.1-and-stale-answers.md)
 - [Slimming Parakeet](docs/history/SESSION-slimming.md)
 - [Slimming Parakeet, part 2: Cuttlebone 0.14.0](docs/history/SESSION-slimming-2.md)
+- [Late edits, and slimming Parakeet, part 3: Cuttlebone 0.15.0](docs/history/SESSION-late-edits-and-slimming-3.md)
 
 ## Icon
 

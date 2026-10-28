@@ -45,7 +45,8 @@ object InkoCalls {
 
     /**
      * The parameters of what a call can invoke: from a method's signature, an
-     * enum constructor's arguments, or (for `Type(…)`) the type's fields.
+     * enum constructor's arguments, or (for `Type(…)`, which the intentions
+     * name arguments of) the type's fields.
      */
     fun parameters(definition: InkoDefinition, symbols: InkoSymbols?): List<String> = when (definition.kind) {
         Kind.TYPE -> symbols?.ownedBy(definition.name, Kind.FIELD).orEmpty().filter { it.module == definition.module }.map { field ->
@@ -81,9 +82,10 @@ object InkoCalls {
 
 /**
  * Parameter info (⌘P / Ctrl+P) inside a call's parentheses: Cuttlebone's
- * signature of the method the call resolves to, with the receiver's type
- * arguments filled in, else the definitions it may call. Each item
- * is a [CompiledSignature] or an [InkoDefinition].
+ * signature of the method (or the type's constructor, from its fields) the call
+ * resolves to, with the receiver's type arguments filled in, else, in code it
+ * can't check, the methods it may call. Each item is a [CompiledSignature]
+ * or an [InkoDefinition].
  */
 /** Cuttlebone's signature for a call, and whether it's from the last version that type checked ([stale]). */
 data class CompiledSignature(val signature: SignatureInformation, val stale: Boolean)
@@ -97,9 +99,8 @@ class InkoParameterInfoHandler : ParameterInfoHandler<InkoName, Any> {
             context.itemsToShow = arrayOf(CompiledSignature(signature, answer.stale))
             return call.callee
         }
-        // Cuttlebone has no signature for a type's constructor (`Point(x: 1)`), whose fields are shown instead;
-        // otherwise, only in code it can't check does Parakeet's own reading of the call stand in.
-        if (answer == null || (!answer.editing && !isConstructor(call.callee))) return null
+        // Only in code Cuttlebone can't check does Parakeet's own reading of the call stand in.
+        if (answer?.editing != true) return null
         val candidates = InkoResolver.resolveDefinitions(call.callee).map { it.first }
             .filter { it.kind in CALLABLE }
             .distinctBy { it.signature to it.owner }
@@ -137,10 +138,8 @@ class InkoParameterInfoHandler : ParameterInfoHandler<InkoName, Any> {
             context.setupUIComponentPresentation(text, range.first, range.second, false, false, false, context.defaultParameterColor)
             return
         }
-        val definition = item as InkoDefinition
-        val path = context.parameterOwner?.containingFile?.virtualFile?.let(Inko::pathOf)
-        val symbols = path?.let { InkoDefinitionIndex.getInstance(context.parameterOwner.project).symbols(Inko.projectRoot(path)) }
-        val parameters = InkoCalls.parameters(definition, symbols)
+        // Never a type's constructor (CALLABLE): its fields are Cuttlebone's to read.
+        val parameters = InkoCalls.parameters(item as InkoDefinition, null)
         if (parameters.isEmpty()) {
             context.setupUIComponentPresentation("<no parameters>", -1, -1, false, false, false, context.defaultParameterColor)
             return
@@ -152,9 +151,7 @@ class InkoParameterInfoHandler : ParameterInfoHandler<InkoName, Any> {
         context.setupUIComponentPresentation(text, highlightStart, highlightEnd, false, false, false, context.defaultParameterColor)
     }
 
-    private fun isConstructor(callee: InkoName): Boolean = callee.tokenType == InkoTokens.CONSTANT && !callee.previousToken().isToken(InkoTokens.DOT)
-
     private companion object {
-        val CALLABLE = setOf(Kind.MODULE_METHOD, Kind.STATIC_METHOD, Kind.INSTANCE_METHOD, Kind.CONSTRUCTOR, Kind.TYPE)
+        val CALLABLE = setOf(Kind.MODULE_METHOD, Kind.STATIC_METHOD, Kind.INSTANCE_METHOD, Kind.CONSTRUCTOR)
     }
 }

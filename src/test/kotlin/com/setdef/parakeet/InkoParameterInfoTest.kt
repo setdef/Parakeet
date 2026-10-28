@@ -65,8 +65,9 @@ class InkoParameterInfoTest : InkoTestCase(onDisk = true) {
         assertEquals(listOf("count: Int, [name: String]"), info("import app.util (Helper)\n\nfn a {\n  Helper.new(1, <caret>)\n}\n"))
     }
 
-    fun testConstructingATypeShowsItsFields() {
-        assertEquals(listOf("[count: Int], name: String"), info("import app.util (Helper)\n\nfn a {\n  Helper(<caret>)\n}\n"))
+    // A type's constructor's fields are Cuttlebone's to read (CuttleboneIntegrationTest): no stand-in for them here.
+    fun testNoStandInForAConstructor() {
+        assertEmpty(info("import app.util (Helper)\n\nfn a {\n  Helper(<caret>)\n}\n"))
     }
 
     fun testNothingOutsideACall() {

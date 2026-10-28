@@ -394,6 +394,17 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf("size"), myFixture.lookupElementStrings)
     }
 
+    // Since 0.15.0, Cuttlebone's signature help covers a type's constructor, from its fields in the order the type
+    // declares them, with the argument's parameter by name too.
+    fun testParameterInfoForAConstructorIsCuttlebones() {
+        val text = "type pub Point {\n  let @x: Int\n  let @y: Int\n}\n\nfn pub point -> Point {\n  Point(y: 2, x: 1)\n}\n"
+        open(text)
+        val help = inBackground { CuttleboneQueries.getInstance(project).signatureHelp(myFixture.file, text.indexOf("x: 1")) }!!.value!!
+        val signature = help.signatures.single()
+        assertEquals("Point(x: Int, y: Int)", signature.label)
+        assertEquals(0, signature.activeParameter ?: help.activeParameter)
+    }
+
     /** Completes at [marker] (the caret goes where it ends) in src/main.inko as [text], once Cuttlebone has answered. */
     private fun completeAt(text: String, marker: String): List<String> {
         open(text)

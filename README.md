@@ -420,7 +420,7 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | Quick fixes | `textDocument/codeAction`: each fix checked with its edits applied, which Parakeet asks for itself, for the errors it shows | Cuttlebone's: a fix is offered where it leaves fewer of its error and adds none |
 | Errors across the whole project (the Project view, Problems) | `workspace/diagnostic`, a long poll | Cuttlebone's |
 | Completion | `textDocument/completion` on the real buffer: members, names with what to import, keywords, fields, and an `import`'s modules and symbols | Parakeet's reading: locals and parameters, keywords, the file's fields, members by name |
-| Parameter info | `textDocument/signatureHelp`: the resolved method's signature, with the receiver's type arguments, and the argument's parameter (named ones too). For a type's constructor (`Point(x: 1)`), which it has none for, the type's fields | Parakeet's reading |
+| Parameter info | `textDocument/signatureHelp`: the resolved method's signature, or a type's constructor's (`Point(x: 1)`, from its fields), with the receiver's type arguments, and the argument's parameter (named ones too) | Parakeet's reading, for methods |
 | Parameter-name and type hints | `textDocument/inlayHint`, once for the whole file | none: hints only inform |
 | Highlight usages | `textDocument/documentHighlight`: the same symbol by the compiler's ids, with assignments as writes | Parakeet's reading |
 | Quick documentation | the resolved definition, plus hover's type at the caret | the definition resolved as for navigation (above) |

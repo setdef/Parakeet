@@ -257,6 +257,13 @@ object InkoExtractMethod {
             }
         }
 
+        // A borrow may be of what the selection makes (openflow's `Snapshot.of(state).rooms.get('bathroom')`), which
+        // the new method would drop when it returns, while what it returns still points into it. The enclosing method's
+        // own return type is as it was.
+        if (returnType != null && returnType != signature?.returnType && Regex("""(^|[\[(,\s])(ref|mut)\s""").containsMatchIn(returnType)) {
+            return fail("The value is a borrow (`$returnType`), which may borrow from what the selection makes: that would be dropped when the new method returns.")
+        }
+
         // The enclosing method's type parameters (`[A, B: Trait]`), when the new signature uses any of them.
         val typeParameters = signature?.typeParameters?.takeIf { declared ->
             val names = Regex("(?:\\[|,)\\s*([A-Z][A-Za-z0-9_]*)").findAll(declared).map { it.groupValues[1] }

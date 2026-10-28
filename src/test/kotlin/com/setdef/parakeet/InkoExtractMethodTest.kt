@@ -22,6 +22,23 @@ class InkoExtractMethodTest : InkoTestCase() {
         return InkoExtractMethod.plan(clean, TextRange(start, end)).exceptionOrNull()?.message
     }
 
+    // openflow's `Snapshot.of(state).rooms.get('bathroom').or_panic.status`, found by the sweep: extracted, the
+    // Snapshot made in the new method was dropped when it returned, while the `ref` into it that it returned was
+    // still used, so the tests panicked ("can't drop a value of type 'Status' as it still has 1 reference(s)"),
+    // though the code type checked. A value that borrows may borrow from what the selection makes.
+    fun testAValueThatBorrowsIsntExtracted() {
+        val text = "fn status(state: State) -> Int {\n  <selection>Snapshot.of(state).rooms.get('bathroom')</selection>.or_panic.status\n}\n"
+        val start = text.indexOf("<selection>")
+        val clean = text.replace("<selection>", "").replace("</selection>", "")
+        val end = text.indexOf("</selection>") - "<selection>".length
+        for (type in listOf("Result[ref RoomSnapshot, MissingKey[String]]", "mut Array[Int]", "ref String")) {
+            val message = InkoExtractMethod.plan(clean, TextRange(start, end), expressionType = { type }).exceptionOrNull()?.message
+            assertEquals(type, "The value is a borrow (`$type`), which may borrow from what the selection makes: that would be dropped when the new method returns.", message)
+        }
+        // An owned value is extracted as before.
+        assertNull(InkoExtractMethod.plan(clean, TextRange(start, end), expressionType = { "Result[RoomSnapshot, MissingKey[String]]" }).exceptionOrNull())
+    }
+
     fun testStatementsWithParametersAndAResult() {
         val result = extract(
             "fn total(items: Array[Int]) -> Int {\n  let mut sum = 0\n  <selection>let doubled = items.size * 2\n  let tripled = doubled + 1</selection>\n  tripled + sum\n}\n",

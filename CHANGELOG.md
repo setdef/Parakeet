@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## [0.14.0] - 2026-10-28
+## [0.14.1] - 2026-10-28
+
+The first release of these changes. 0.14.0 was tagged but never published: its release run failed on CI timing limits, which now scale with each runner's measured speed.
 
 ### Changed
 

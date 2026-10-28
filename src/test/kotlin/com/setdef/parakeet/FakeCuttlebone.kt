@@ -104,7 +104,7 @@ object FakeCuttlebone {
             "inlayHintProvider" to true,
             "experimental" to mapOf("cuttlebone" to mapOf("inko" to "0.21.1", "statusNotifications" to script.statusNotifications)),
         ),
-        "serverInfo" to mapOf("name" to "cuttlebone", "version" to "0.13.0-fake"),
+        "serverInfo" to mapOf("name" to "cuttlebone", "version" to "0.14.0-fake"),
     )
 
     private fun answer(script: Script, method: String, params: JsonObject, id: JsonElement, output: OutputStream) {
@@ -161,7 +161,7 @@ object FakeCuttlebone {
 
 /** Writes an executable `cuttlebone` that runs [FakeCuttlebone] with [script] (and answers `--version` itself). */
 object FakeCuttleboneScript {
-    fun write(directory: Path, script: FakeCuttlebone.Script, version: String = "cuttlebone 0.13.0-fake (Inko 0.21.1)"): Path {
+    fun write(directory: Path, script: FakeCuttlebone.Script, version: String = "cuttlebone 0.14.0-fake (Inko 0.21.1)"): Path {
         Files.createDirectories(directory)
         val json = directory.resolve("script.json")
         Files.writeString(json, Gson().toJson(script))

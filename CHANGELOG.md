@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Parakeet needs Cuttlebone 0.14.0 or newer. An older one on `PATH` or in Cargo's `bin` directory is skipped, as one that doesn't run is, and the download is offered as when there's none; one that old in the settings is refused, saying why; an older download is left unused. Releases older than 0.14.0 are no longer offered for download.
+
 ## [0.14.0] - 2026-10-28
 
 ### Changed

@@ -140,7 +140,7 @@ class CuttleboneClientTest : CuttleboneTestCase() {
     }
 
     fun testAVersionMismatchNeverStartsIt() {
-        useFake(answered(), version = "cuttlebone 0.13.0 (Inko 0.19.0)")
+        useFake(answered(), version = "cuttlebone 0.14.0 (Inko 0.19.0)")
         useFakeInko(FakeInkoCli { call -> if (call.args == listOf("--version")) FakeInkoCli.ok("inko 0.21.1\n") else FakeInkoCli.ok(stderr = "[]") })
         open("src/main.inko", text)
         waitFor("the precheck") { CuttleboneService.getInstance(project).status != null }

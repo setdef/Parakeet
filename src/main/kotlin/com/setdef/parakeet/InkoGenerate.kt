@@ -136,11 +136,11 @@ class InkoGenerateTraitImplAction : CodeInsightAction() {
 }
 
 object InkoTraitImpls {
-    /** Traits [type] could implement: public ones (or this module's), not already implemented here or per `inko doc`. */
+    /** Traits [type] could implement: public ones (or this module's), not already implemented here or elsewhere. */
     fun candidates(file: PsiFile, type: String): List<InkoDefinition> {
         val path = Inko.pathOf(file.virtualFile) ?: return emptyList()
         val root = Inko.projectRoot(path)
-        val symbols = InkoDocIndex.getInstance(file.project).symbols(root) ?: return emptyList()
+        val symbols = InkoDefinitionIndex.getInstance(file.project).symbols(root) ?: return emptyList()
         val module = symbols.moduleOf(path) ?: Inko.moduleName(path)
         val outline = InkoOutline.of(file.text)
         val implemented = outline.roots.filter { it.kind == InkoOutline.Kind.IMPL && outline.implTarget(it) == type }.mapNotNull(outline::implTrait).toSet() +
@@ -156,7 +156,7 @@ object InkoTraitImpls {
     fun add(project: Project, editor: Editor, file: PsiFile, type: String, trait: InkoDefinition) {
         val document = editor.document
         val path = Inko.pathOf(file.virtualFile)
-        val module = path?.let { InkoDocIndex.getInstance(project).symbols(Inko.projectRoot(it))?.moduleOf(it) ?: Inko.moduleName(it) }
+        val module = path?.let { InkoDefinitionIndex.getInstance(project).symbols(Inko.projectRoot(it))?.moduleOf(it) ?: Inko.moduleName(it) }
         var implStart = -1
         WriteCommandAction.runWriteCommandAction(project, "Implement Trait", null, {
             val imports = InkoImports.parse(document.charsSequence)

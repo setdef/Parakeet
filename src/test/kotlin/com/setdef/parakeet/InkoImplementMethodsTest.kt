@@ -14,21 +14,7 @@ class InkoImplementMethodsTest : InkoTestCase(onDisk = true) {
             "src/app/show.inko",
             "trait pub Show[T] {\n  fn pub show(value: T) -> String\n  fn pub name -> String\n\n  fn pub debug(value: T) -> String {\n    show(value)\n  }\n}\n",
         )
-        val doc = FakeInkoDoc.cli { mirror ->
-            val file = mirror.resolve("src/app/show.inko")
-            listOf(FakeInkoDoc.module(
-                "app.show", file,
-                traits = listOf(FakeInkoDoc.trait(
-                    "Show", 1,
-                    signature = "trait pub Show[T]",
-                    requiredMethods = listOf(
-                        FakeInkoDoc.member("show", file, 2, signature = "fn pub show(value: T) -> String"),
-                        FakeInkoDoc.member("name", file, 3, signature = "fn pub name -> String"),
-                    ),
-                    defaultMethods = listOf(FakeInkoDoc.member("debug", file, 5, signature = "fn pub debug(value: T) -> String")),
-                )),
-            ))
-        }
+        val doc = FakeInkoCli { FakeInkoCli.ok(stderr = "[]") }
         useFakeInko(FakeInkoCli { call ->
             if (call.args.first() != "check") return@FakeInkoCli doc.run(call.args, call.workingDirectory)!!
             if (reportMissingTrait) {

@@ -13,18 +13,7 @@ class InkoRequiredTraitsTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
         myFixture.addFileToProject("src/app/util.inko", util)
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val file = mirror.resolve("src/app/util.inko")
-            listOf(FakeInkoDoc.module(
-                "app.util", file,
-                // As inko doc writes them: line 1, column 1, and no requirements in the type.
-                traits = listOf(
-                    FakeInkoDoc.trait("Show", 1, implementations = listOf("app.util" to "Other"), signature = "trait pub Show"),
-                    FakeInkoDoc.trait("Debug", 1, implementations = listOf("app.util" to "Other"), signature = "trait pub Debug"),
-                ),
-                types = listOf(FakeInkoDoc.type("Other", 5, implementedTraits = listOf("app.util" to "Debug", "app.util" to "Show"))),
-            ))
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         myFixture.configureFromTempProjectFile("src/app/util.inko")
     }
 

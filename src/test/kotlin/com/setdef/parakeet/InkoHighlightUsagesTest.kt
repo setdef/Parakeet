@@ -9,9 +9,7 @@ class InkoHighlightUsagesTest : InkoTestCase(onDisk = true) {
         // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
         cuttleboneCantCheckTheCode()
         myFixture.addFileToProject("src/app/util.inko", "type pub Helper {}\n")
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            listOf(FakeInkoDoc.module("app.util", mirror.resolve("src/app/util.inko"), types = listOf(FakeInkoDoc.type("Helper", 1))))
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
     }
 
     /** [text] with highlights at <caret>'s name marked: «=declaration» and «read». */

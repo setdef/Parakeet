@@ -82,7 +82,7 @@ object InkoCalls {
 /**
  * Parameter info (⌘P / Ctrl+P) inside a call's parentheses: Cuttlebone's
  * signature of the method the call resolves to, with the receiver's type
- * arguments filled in, else the `inko doc` definitions it may call. Each item
+ * arguments filled in, else the definitions it may call. Each item
  * is a [CompiledSignature] or an [InkoDefinition].
  */
 /** Cuttlebone's signature for a call, and whether it's from the last version that type checked ([stale]). */
@@ -139,7 +139,7 @@ class InkoParameterInfoHandler : ParameterInfoHandler<InkoName, Any> {
         }
         val definition = item as InkoDefinition
         val path = context.parameterOwner?.containingFile?.virtualFile?.let(Inko::pathOf)
-        val symbols = path?.let { InkoDocIndex.getInstance(context.parameterOwner.project).symbols(Inko.projectRoot(path)) }
+        val symbols = path?.let { InkoDefinitionIndex.getInstance(context.parameterOwner.project).symbols(Inko.projectRoot(path)) }
         val parameters = InkoCalls.parameters(definition, symbols)
         if (parameters.isEmpty()) {
             context.setupUIComponentPresentation("<no parameters>", -1, -1, false, false, false, context.defaultParameterColor)

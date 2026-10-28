@@ -15,7 +15,7 @@
             <li>Inspections for Inko's style guide: naming, Bool methods ending in <code>?</code>, redundant argument names, and empty parentheses</li>
             <li>Reformat Code (and format on save) as <code>inko fmt</code> formats, from Cuttlebone</li>
             <li>Go to Class and Go to Symbol, from Cuttlebone</li>
-            <li>Go to definition, quick documentation, and completion (including names from modules not yet imported, imported as you choose them), using the definitions <code>inko doc</code> reports, plus local variables and parameters</li>
+            <li>Go to definition, quick documentation, and completion (including names from modules not yet imported, imported as you choose them), using the definitions read from the code, plus local variables and parameters</li>
             <li>Imports added when pasting Inko code, and Expression Type where the code states the type</li>
             <li>Find Usages and Rename across the project, and highlight usages</li>
             <li>Parameter info, parameter-name hints, trait gutter icons, Go to Implementation and Super Method, Implement/Override Methods, and Generate (constructor, trait implementation)</li>
@@ -257,7 +257,7 @@
     </applicationListeners>
 
     <projectListeners>
-        <listener class="com.setdef.parakeet.InkoDocIndexFileListener" topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
-        <listener class="com.setdef.parakeet.InkoDocIndexWarmer" topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
+        <listener class="com.setdef.parakeet.InkoDefinitionIndexFileListener" topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
+        <listener class="com.setdef.parakeet.InkoDefinitionIndexWarmer" topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
     </projectListeners>
 </idea-plugin>

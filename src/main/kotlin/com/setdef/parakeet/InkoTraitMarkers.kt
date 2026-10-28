@@ -9,7 +9,7 @@ import javax.swing.Icon
 import com.setdef.parakeet.InkoDefinitionKind as Kind
 
 /**
- * Gutter icons linking traits and their implementations, from the `inko doc`
+ * Gutter icons linking traits and their implementations, from the definition
  * index: `impl Trait for Type` and its methods point up to the trait; a
  * trait and its methods point down to implementations; a type points to the
  * traits it implements.
@@ -39,7 +39,7 @@ object InkoTraitLinks {
     fun of(token: PsiElement, symbols: InkoSymbols? = null): InkoTraitLink? {
         val file = token.containingFile ?: return null
         val path = Inko.pathOf(file.virtualFile) ?: return null
-        val symbols = symbols ?: InkoDocIndex.getInstance(file.project).symbols(Inko.projectRoot(path)) ?: return null
+        val symbols = symbols ?: InkoDefinitionIndex.getInstance(file.project).symbols(Inko.projectRoot(path)) ?: return null
         val imports = InkoImports.parse(file.text)
         val previous = token.previousToken()
         val name = token.text

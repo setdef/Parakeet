@@ -90,7 +90,7 @@ class InkoConfigurable(private val project: Project) : BoundConfigurable("Inko")
                 settings.cuttlebone = cuttlebone
                 settings.toolchain = if (selected is InkoToolchain.Custom) InkoToolchain.Custom(customPath.trim()) else selected
                 DaemonCodeAnalyzer.getInstance(project).settingsChanged()
-                InkoDocIndex.getInstance(project).invalidateAll()
+                InkoDefinitionIndex.getInstance(project).invalidateAll()
                 InkoIvm.toolchainsChanged()
                 // Cuttlebone checks with the toolchain's inko, so a new toolchain restarts it too.
                 if (cuttleboneChanged || toolchainChanged(current)) CuttleboneService.getInstance(project).settingsChanged()

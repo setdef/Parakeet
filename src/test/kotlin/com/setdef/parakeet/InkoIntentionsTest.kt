@@ -9,15 +9,7 @@ class InkoIntentionsTest : InkoTestCase(onDisk = true) {
         putTempDirInProjectContent()
         myFixture.addFileToProject("inko.pkg", "")
         myFixture.addFileToProject("src/app/util.inko", util)
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val util = mirror.resolve("src/app/util.inko")
-            listOf(
-                FakeInkoDoc.module("app.util", util, methods = listOf(
-                    FakeInkoDoc.member("resize", util, 1, 1, signature = "fn pub resize(width: Int, height: Int) -> Int"),
-                )),
-                FakeInkoDoc.module("std.int", mirror.resolve("std/int.inko"), types = listOf(FakeInkoDoc.type("Int", 1))),
-            )
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
     }
 
     private val util = "fn pub resize(width: Int, height: Int) -> Int {\n  width * height\n}\n"

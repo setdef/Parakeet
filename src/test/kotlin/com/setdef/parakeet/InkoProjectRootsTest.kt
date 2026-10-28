@@ -9,7 +9,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
-/** Finding the Inko projects, and indexing them at startup, with `inko doc` output supplied by a fake. */
+/** Finding the Inko projects, and indexing them at startup. */
 class InkoProjectRootsTest : InkoTestCase(onDisk = true) {
     private lateinit var std: Path
     private lateinit var contentRoot: VirtualFile
@@ -24,15 +24,7 @@ class InkoProjectRootsTest : InkoTestCase(onDisk = true) {
         std = Files.createDirectories(Path.of(myFixture.tempDirPath).parent.resolve("std-${name}")).resolve("string.inko")
         Files.writeString(std, "type builtin String {}\n")
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(std)
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val util = mirror.resolve("src/app/util.inko")
-            listOf(
-                FakeInkoDoc.module("app.util", util, types = listOf(
-                    FakeInkoDoc.type("Helper", 1, instanceMethods = listOf(FakeInkoDoc.member("value", util, 2))),
-                )),
-                FakeInkoDoc.module("std.string", std, types = listOf(FakeInkoDoc.type("String", 1))),
-            )
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
     }
 
     override fun tearDown() {
@@ -69,6 +61,6 @@ class InkoProjectRootsTest : InkoTestCase(onDisk = true) {
         ApplicationManager.getApplication().executeOnPooledThread {
             runBlocking { InkoIndexOnStartup().execute(project) }
         }.get(60, TimeUnit.SECONDS)
-        assertNotEmpty(InkoDocIndex.getInstance(project).symbols(Path.of(myFixture.tempDirPath))!!.named("Helper"))
+        assertNotEmpty(InkoDefinitionIndex.getInstance(project).symbols(Path.of(myFixture.tempDirPath))!!.named("Helper"))
     }
 }

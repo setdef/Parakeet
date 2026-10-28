@@ -35,7 +35,7 @@ class InkoIndexOnStartup : ProjectActivity {
     override suspend fun execute(project: Project) {
         // Finding projects uses the IDE's file name index, which needs a read action once indexing is done.
         val roots = smartReadAction(project) { InkoProjectRoots.find(project) }
-        val index = InkoDocIndex.getInstance(project)
+        val index = InkoDefinitionIndex.getInstance(project)
         roots.forEach { index.symbols(it) }
         InkoLibraries.getInstance(project).refresh()
     }

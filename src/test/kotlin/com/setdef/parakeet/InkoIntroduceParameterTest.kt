@@ -4,7 +4,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 
-/** Introduce Parameter, with `inko doc` output supplied by a fake. */
+/** Introduce Parameter. */
 class InkoIntroduceParameterTest : InkoTestCase(onDisk = true) {
     private val util = """
         |let LIMIT = 10
@@ -49,25 +49,7 @@ class InkoIntroduceParameterTest : InkoTestCase(onDisk = true) {
             .resolvesEvery("src/main.inko", main, "clamp(", At("src/app/util.inko", util, "clamp(value"))
             .install()
         putTempDirInProjectContent()
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val utilFile = mirror.resolve("src/app/util.inko")
-            val mainFile = mirror.resolve("src/main.inko")
-            listOf(
-                FakeInkoDoc.module(
-                    "app.util", utilFile,
-                    constants = listOf(
-                        mapOf("name" to "LIMIT", "location" to FakeInkoDoc.location(1), "type" to "let LIMIT", "documentation" to ""),
-                        mapOf("name" to "MAX", "location" to FakeInkoDoc.location(2), "type" to "let pub MAX", "documentation" to ""),
-                    ),
-                    methods = listOf(FakeInkoDoc.member("clamp", utilFile, line(util, "fn pub clamp"), 1)),
-                    types = listOf(FakeInkoDoc.type(
-                        "Box", line(util, "type pub Box"),
-                        instanceMethods = listOf(FakeInkoDoc.member("grow", utilFile, line(util, "fn pub grow")), FakeInkoDoc.member("extra", utilFile, line(util, "fn extra"))),
-                    )),
-                ),
-                FakeInkoDoc.module("main", mainFile, methods = listOf(FakeInkoDoc.member("run", mainFile, line(main, "fn run"), 1))),
-            )
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         myFixture.addFileToProject("src/app/util.inko", util)
         myFixture.addFileToProject("src/main.inko", main)
     }

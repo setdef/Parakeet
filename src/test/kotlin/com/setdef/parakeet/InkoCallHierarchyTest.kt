@@ -5,7 +5,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
 import com.intellij.psi.util.PsiTreeUtil
 
-/** Call Hierarchy and usage counts, with `inko doc` output supplied by a fake. */
+/** Call Hierarchy and usage counts. */
 class InkoCallHierarchyTest : InkoTestCase(onDisk = true) {
     private val util = """
         |type pub Helper {
@@ -56,18 +56,7 @@ class InkoCallHierarchyTest : InkoTestCase(onDisk = true) {
         putTempDirInProjectContent()
         myFixture.addFileToProject("src/app/util.inko", util)
         myFixture.addFileToProject("src/main.inko", main)
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val utilFile = mirror.resolve("src/app/util.inko")
-            val mainFile = mirror.resolve("src/main.inko")
-            listOf(
-                FakeInkoDoc.module(
-                    "app.util", utilFile,
-                    methods = listOf(FakeInkoDoc.member("helper", utilFile, 11, 1)),
-                    types = listOf(FakeInkoDoc.type("Helper", 1, staticMethods = listOf(FakeInkoDoc.member("new", utilFile, 2)), instanceMethods = listOf(FakeInkoDoc.member("value", utilFile, 6)))),
-                ),
-                FakeInkoDoc.module("main", mainFile, methods = listOf(FakeInkoDoc.member("run", mainFile, 3, 1), FakeInkoDoc.member("twice", mainFile, 7, 1))),
-            )
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
     }
 
     private fun declaration(path: String, name: String): InkoDeclaration {

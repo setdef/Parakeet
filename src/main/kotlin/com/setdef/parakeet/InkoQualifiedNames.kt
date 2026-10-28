@@ -44,7 +44,7 @@ object InkoQualifiedNames {
     private fun libraryModule(file: PsiFile, path: Path): String? {
         // Finding project roots needs the IDE's file index, which isn't usable while indexing.
         if (DumbService.isDumb(file.project)) return null
-        val index = InkoDocIndex.getInstance(file.project)
+        val index = InkoDefinitionIndex.getInstance(file.project)
         return InkoProjectRoots.find(file.project).firstNotNullOfOrNull { index.symbols(it)?.moduleOf(path) }
     }
 }

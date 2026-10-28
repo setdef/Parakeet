@@ -16,13 +16,7 @@ class InkoStyleInspectionsTest : InkoTestCase(onDisk = true) {
         myFixture.enableInspections(
             InkoNamingInspection(), InkoBooleanMethodNameInspection(), InkoRedundantNamedArgumentInspection(), InkoEmptyParenthesesInspection(),
         )
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val file = mirror.resolve("src/app/text.inko")
-            listOf(FakeInkoDoc.module(
-                "app.text", file,
-                methods = listOf(FakeInkoDoc.member("slice", file, 1, 1, signature = "fn pub slice(start: Int, chars: Int) -> Int")),
-            ))
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         myFixture.addFileToProject("src/app/text.inko", "fn pub slice(start: Int, chars: Int) -> Int {\n  start\n}\n")
     }
 

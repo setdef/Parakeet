@@ -10,12 +10,7 @@ class InkoMoveFileTest : InkoTestCase(onDisk = true) {
         myFixture.addFileToProject("src/app/util.inko", "fn pub helper -> Int {\n  42\n}\n")
         myFixture.addFileToProject("src/app/other/util.inko", "fn pub other -> Int {\n  1\n}\n")
         myFixture.addFileToProject("src/lib/.keep", "")
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            listOf(
-                FakeInkoDoc.module("app.util", mirror.resolve("src/app/util.inko"), methods = listOf(FakeInkoDoc.member("helper", mirror.resolve("src/app/util.inko"), 1, 1))),
-                FakeInkoDoc.module("app.other.util", mirror.resolve("src/app/other/util.inko"), methods = listOf(FakeInkoDoc.member("other", mirror.resolve("src/app/other/util.inko"), 1, 1))),
-            )
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
     }
 
     private fun text(path: String) = PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir(path))!!.text

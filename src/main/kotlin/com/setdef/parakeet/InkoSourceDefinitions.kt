@@ -5,10 +5,10 @@ import java.nio.file.Path
 import com.setdef.parakeet.InkoDefinitionKind as Kind
 
 /**
- * Definitions read straight from a file's tokens (via [InkoOutline]), for when
- * `inko doc` can't describe it: the file has unsaved edits, or the project
- * doesn't compile. Less complete than `inko doc` (no inherited trait methods),
- * but always current.
+ * Definitions read straight from a file's tokens (via [InkoOutline]), saved or
+ * not, whether the project compiles or not ([InkoDefinitionIndex]). A type's
+ * methods are those its own body and `impl` blocks write: a trait's default
+ * methods are the trait's.
  */
 object InkoSourceDefinitions {
     private val PUB = Regex("""\bpub\b""")
@@ -61,27 +61,16 @@ object InkoSourceDefinitions {
     }
 
     /**
-     * [definitions] with each trait's type taken from its declaration. `inko
-     * doc` writes `trait pub Debug`, leaving out what it requires
-     * (compiler/src/docs.rs, `traits`); the declaration has `: ToString`.
+     * The `impl Trait for Type` blocks in [text], the module [module], as (trait, type): each named by the module
+     * [text] imports it from, else as [module]'s own.
      */
-    fun withTraitHeaders(definitions: List<InkoDefinition>): List<InkoDefinition> {
-        val headers = mutableMapOf<Path, Map<String, String>>()
-        return definitions.map { definition ->
-            if (definition.kind != Kind.TRAIT) return@map definition
-            val byName = headers.getOrPut(definition.file) {
-                val text = runCatching { Files.readString(definition.file) }.getOrNull() ?: return@getOrPut emptyMap()
-                InkoOutline.of(text).roots.filter { it.kind == InkoOutline.Kind.TRAIT }.associate { it.label to header(text, it) }
-            }
-            byName[definition.name]?.let { definition.copy(signature = it) } ?: definition
+    fun implementations(module: String, text: CharSequence): List<Pair<InkoTypeRef, InkoTypeRef>> {
+        val outline = InkoOutline.of(text)
+        val imports = InkoImports.parse(text)
+        fun ref(name: String) = imports.symbol(name)?.let { (from, original) -> InkoTypeRef(from, original) } ?: InkoTypeRef(module, name)
+        return outline.roots.filter { it.kind == InkoOutline.Kind.IMPL }.mapNotNull { impl ->
+            ref(outline.implTrait(impl) ?: return@mapNotNull null) to ref(outline.implTarget(impl) ?: return@mapNotNull null)
         }
-    }
-
-    /** A declaration's text up to its body's `{`, on one line: `trait pub Debug: ToString + Format`. */
-    private fun header(text: CharSequence, node: InkoOutline.Node): String {
-        var end = node.nameOffset
-        while (end < node.range.endOffset && text[end] != '{') end++
-        return text.subSequence(node.range.startOffset, end).toString().replace(Regex("\\s+"), " ").trim()
     }
 
     private fun isStatic(text: CharSequence, node: InkoOutline.Node): Boolean =

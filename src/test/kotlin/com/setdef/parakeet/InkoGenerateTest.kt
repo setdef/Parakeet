@@ -4,25 +4,19 @@ import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.testFramework.TestActionEvent
 
-/** Generate (⌘N / Alt+Insert), with `inko doc` output supplied by a fake. */
+/** Generate (⌘N / Alt+Insert). */
 class InkoGenerateTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
         putTempDirInProjectContent()
         myFixture.addFileToProject("inko.pkg", "")
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val cmp = mirror.resolve("std/cmp.inko")
-            listOf(
-                FakeInkoDoc.module("std.cmp", cmp, traits = listOf(
-                    FakeInkoDoc.trait("Equal", 1, requiredMethods = listOf(FakeInkoDoc.member("==", cmp, 2, signature = "fn pub ==(other: ref Self) -> Bool"))),
-                )),
-                FakeInkoDoc.module("std.string", mirror.resolve("std/string.inko"), traits = listOf(
-                    FakeInkoDoc.trait("ToString", 3, requiredMethods = listOf(FakeInkoDoc.member("to_string", mirror.resolve("std/string.inko"), 4, signature = "fn pub to_string -> String"))),
-                ), types = listOf(FakeInkoDoc.type("String", 1))),
-                FakeInkoDoc.module("std.int", mirror.resolve("std/int.inko"), types = listOf(FakeInkoDoc.type("Int", 1))),
-                FakeInkoDoc.module("std.bool", mirror.resolve("std/bool.inko"), types = listOf(FakeInkoDoc.type("Bool", 1))),
-            )
-        })
+        val std = FakeStd.write(java.nio.file.Path.of(myFixture.tempDirPath).parent.resolve("std-$name"), mapOf(
+            "std.cmp" to "trait pub Equal {\n  fn pub ==(other: ref Self) -> Bool\n}\n",
+            "std.string" to "type builtin String {}\n\ntrait pub ToString {\n  fn pub to_string -> String\n}\n",
+            "std.int" to "type builtin Int {}\n",
+            "std.bool" to "type builtin Bool {}\n",
+        ))
+        useFakeInko(FakeStd.cli(std))
     }
 
     override fun tearDown() {

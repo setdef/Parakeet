@@ -349,7 +349,7 @@ abstract class CuttleboneCustomization : LspCustomization() {
     // Parakeet's hints ask Cuttlebone for the whole file, and have a switch for types and one for parameter
     // names (IntelliJ's have one for everything); parameter names fall back to the heuristic in broken code.
     override val inlayHintCustomizer: LspInlayHintCustomizer get() = LspInlayHintDisabled
-    // Parakeet's parameter info shows Cuttlebone's signature, and falls back to `inko doc`'s where it has none.
+    // Parakeet's parameter info shows Cuttlebone's signature, and falls back to the declaration's where it has none.
     override val signatureHelpCustomizer: LspSignatureHelpCustomizer get() = LspSignatureHelpDisabled
     // Parakeet's usage highlighting asks Cuttlebone's documentHighlight, and falls back to its own in broken code.
     override val documentHighlightsCustomizer: LspDocumentHighlightsCustomizer get() = LspDocumentHighlightsDisabled

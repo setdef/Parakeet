@@ -8,7 +8,7 @@ import com.intellij.refactoring.rename.RenamePsiElementProcessor
 import com.intellij.usageView.UsageInfo
 import java.nio.file.Files
 
-/** Find Usages and Rename, with `inko doc` output supplied by a fake. */
+/** Find Usages and Rename. */
 class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
     private val util = """
         |type pub Helper {
@@ -71,28 +71,7 @@ class InkoFindUsagesTest : InkoTestCase(onDisk = true) {
         putTempDirInProjectContent()
         myFixture.addFileToProject("src/app/util.inko", util)
         myFixture.addFileToProject("src/main.inko", main)
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val file = mirror.resolve("src/app/util.inko")
-            listOf(
-                FakeInkoDoc.module(
-                    "app.util", file,
-                    methods = listOf(FakeInkoDoc.member("helper", file, 21, 1)),
-                    types = listOf(
-                        FakeInkoDoc.type(
-                            "Helper", 1,
-                            fields = listOf(FakeInkoDoc.member("count", file, 2)),
-                            staticMethods = listOf(FakeInkoDoc.member("new", file, 4)),
-                            instanceMethods = listOf(FakeInkoDoc.member("value", file, 8)),
-                        ),
-                        FakeInkoDoc.type(
-                            "Other", 13,
-                            fields = listOf(FakeInkoDoc.member("count", file, 14)),
-                            instanceMethods = listOf(FakeInkoDoc.member("value", file, 16)),
-                        ),
-                    ),
-                ),
-            )
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
     }
 
     private fun open(path: String) = myFixture.configureFromTempProjectFile(path)

@@ -54,9 +54,7 @@ class InkoExtractMethodTypesTest : InkoTestCase(onDisk = true) {
     fun testATypeTheModuleDoesntImportIsImported() {
         withPath()
         putTempDirInProjectContent()
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            listOf(FakeInkoDoc.module("std.fs.path", mirror.resolve("src/main.inko"), types = listOf(FakeInkoDoc.type("Path", 1))))
-        })
+        useFakeInko(FakeStd.cli(FakeStd.write(java.nio.file.Path.of(myFixture.tempDirPath).parent.resolve("std-$name"), mapOf("std.fs.path" to "type pub Path {}\n"))))
         assertEquals(
             "import std.fs.path (Path)\n\nfn total -> Int {\n  let p = make\n  extracted(p)\n}\n\nfn extracted(p: mut Path) -> Int {\n  p.size\n}\n",
             extract(pathCode),

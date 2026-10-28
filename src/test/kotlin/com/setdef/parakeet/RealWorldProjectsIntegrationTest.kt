@@ -66,8 +66,8 @@ class RealWorldProjectsIntegrationTest : RealWorldTestCase() {
         // Libraries, from a background thread as after a sync or a toolchain change.
         ApplicationManager.getApplication().executeOnPooledThread { InkoLibraries.getInstance(project).refresh() }
         PlatformTestUtil.waitWithEventsDispatching("the libraries weren't found", { InkoLibraries.getInstance(project).libraries.isNotEmpty() }, TimingLimits.seconds(120))
-        val symbols = InkoDocIndex.getInstance(project).symbols(root)
-        if (symbols == null) problems += "inko doc indexed nothing"
+        val symbols = InkoDefinitionIndex.getInstance(project).symbols(root)
+        if (symbols == null) problems += "the definition index has nothing"
     }
 
     /** Up to three of the project's source files with member calls, spread through them by path, and a test's. */

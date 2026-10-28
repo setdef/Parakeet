@@ -97,7 +97,7 @@ class InkoImportFix(private val name: String, private val module: String) : Inte
             val name = UNDEFINED.find(diagnostic.message)?.groupValues?.get(1) ?: return emptyList()
             val path = Inko.pathOf(file.virtualFile) ?: return emptyList()
             val root = Inko.projectRoot(path)
-            val symbols = InkoDocIndex.getInstance(file.project).symbols(root) ?: return emptyList()
+            val symbols = InkoDefinitionIndex.getInstance(file.project).symbols(root) ?: return emptyList()
             val module = symbols.moduleOf(path) ?: Inko.moduleName(path)
             return symbols.named(name, Kind.TYPE, Kind.TRAIT, Kind.CONSTANT, Kind.MODULE_METHOD)
                 .filter { it.module != module }

@@ -167,7 +167,7 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
 
         waitFor("Cuttlebone to start", 60) { CuttleboneService.getInstance(project).server() != null }
         // The definitions index (inko doc), as it's built in the background when a project opens.
-        inBackground { InkoDocIndex.getInstance(project).symbols(Path.of(myFixture.tempDirPath)) }
+        inBackground { InkoDefinitionIndex.getInstance(project).symbols(Path.of(myFixture.tempDirPath)) }
 
         // The IDE as it is when a person types: the daemon on its timer (with the IDE's own delays), for the editor
         // in front of them.

@@ -37,20 +37,7 @@ class InkoBareCallsTest : InkoTestCase(onDisk = true) {
         // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
         cuttleboneCantCheckTheCode()
         // The fake first: opening the file indexes the project.
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val path = mirror.resolve("src/app/counter.inko")
-            listOf(
-                FakeInkoDoc.module(
-                    "app.counter", path,
-                    methods = listOf(FakeInkoDoc.member("helper", path, 1, 1), FakeInkoDoc.member("twice", path, 23, 1)),
-                    types = listOf(FakeInkoDoc.type(
-                        "Counter", 5,
-                        staticMethods = listOf(FakeInkoDoc.member("zero", path, 6), FakeInkoDoc.member("base", path, 10)),
-                        instanceMethods = listOf(FakeInkoDoc.member("helper", path, 14), FakeInkoDoc.member("quad", path, 18)),
-                    )),
-                ),
-            )
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         val file = myFixture.addFileToProject("src/app/counter.inko", counter)
         myFixture.configureFromExistingVirtualFile(file.virtualFile)
     }

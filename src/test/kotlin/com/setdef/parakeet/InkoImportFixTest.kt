@@ -3,28 +3,17 @@ package com.setdef.parakeet
 import java.nio.file.Files
 import java.nio.file.Path
 
-/** Auto-import: fixes on "the symbol 'X' is undefined", from the inko doc index. */
+/** Auto-import: fixes on "the symbol 'X' is undefined", from the definition index. */
 class InkoImportFixTest : InkoTestCase(onDisk = true) {
     private val root: Path get() = Path.of(myFixture.tempDirPath)
 
     override fun setUp() {
         super.setUp()
-        myFixture.addFileToProject("src/app/util.inko", "type pub Helper {}\n\nfn pub helper -> Int {\n  1\n}\n")
-        val std = Files.createDirectories(root.resolve("std")).resolve("map.inko")
-        Files.writeString(std, "type pub Map {}\n")
+        myFixture.addFileToProject("src/app/util.inko", "type pub Helper {}\n\ntype pub Map {}\n\nfn pub helper -> Int {\n  1\n}\n")
+        val std = FakeStd.write(root.parent.resolve("std-$name"), mapOf("std.map" to "type pub Map {}\n"))
         useFakeInko(FakeInkoCli { call ->
             when (call.args.first()) {
-                "doc" -> {
-                    val docs = Files.createDirectories(call.workingDirectory!!.resolve("build/docs"))
-                    val util = call.workingDirectory.resolve("src/app/util.inko")
-                    Files.writeString(docs.resolve("app_util.json"), FakeInkoDoc.module(
-                        "app.util", util,
-                        methods = listOf(FakeInkoDoc.member("helper", util, 3, 1)),
-                        types = listOf(FakeInkoDoc.type("Helper", 1), FakeInkoDoc.type("Map", 1)),
-                    ))
-                    Files.writeString(docs.resolve("std_map.json"), FakeInkoDoc.module("std.map", std, types = listOf(FakeInkoDoc.type("Map", 1))))
-                    FakeInkoCli.ok()
-                }
+                "print" -> FakeInkoCli.ok(stdout = "$std\n")
                 "check" -> {
                     // Reports each of Helper, Map, and Nowhere as undefined wherever it appears in the file.
                     val copy = Path.of(call.args.last())

@@ -68,7 +68,7 @@ object InkoDependencies {
     /** After inko.pkg or dep/ changed: refresh files, definitions, libraries, and banners. */
     fun changed(project: Project, root: Path) {
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(root)?.let { VfsUtil.markDirtyAndRefresh(true, true, true, it) }
-        InkoDocIndex.getInstance(project).invalidate(root.resolve(Inko.MANIFEST))
+        InkoDefinitionIndex.getInstance(project).invalidate(root.resolve(Inko.MANIFEST))
         InkoLibraries.getInstance(project).refresh()
         EditorNotifications.getInstance(project).updateAllNotifications()
     }

@@ -21,22 +21,7 @@ class InkoTraitMarkersTest : InkoTestCase(onDisk = true) {
     override fun setUp() {
         super.setUp()
         myFixture.addFileToProject("src/app/util.inko", util)
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val file = mirror.resolve("src/app/util.inko")
-            listOf(FakeInkoDoc.module(
-                "app.util", file,
-                types = listOf(FakeInkoDoc.type(
-                    "Helper", 5,
-                    instanceMethods = listOf(FakeInkoDoc.member("show", file, 8)),
-                    implementedTraits = listOf("app.util" to "Show"),
-                )),
-                traits = listOf(FakeInkoDoc.trait(
-                    "Show", 1,
-                    requiredMethods = listOf(FakeInkoDoc.member("show", file, 2)),
-                    implementations = listOf("app.util" to "Helper"),
-                )),
-            ))
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         myFixture.configureFromExistingVirtualFile(myFixture.findFileInTempDir("src/app/util.inko"))
     }
 

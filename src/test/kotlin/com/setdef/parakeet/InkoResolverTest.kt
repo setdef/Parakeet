@@ -7,7 +7,7 @@ import com.intellij.psi.util.PsiTreeUtil
 import java.nio.file.Files
 import java.nio.file.Path
 
-/** Go to definition, with `inko doc` output supplied by a fake. */
+/** Go to definition. */
 class InkoResolverTest : InkoTestCase(onDisk = true) {
     private val util = """
         |type pub Helper {
@@ -46,35 +46,13 @@ class InkoResolverTest : InkoTestCase(onDisk = true) {
         super.setUp()
         // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
         cuttleboneCantCheckTheCode()
-        val root = Path.of(myFixture.tempDirPath)
         myFixture.addFileToProject("src/app/util.inko", util)
-        // Like the real std: a doc comment first, and a location (1:1) that isn't where the name is.
-        val std = Files.createDirectories(root.resolve("std")).resolve("string.inko")
-        Files.writeString(std, "# A string.\nimport std.cmp (Equal)\n\ntype builtin String {}\n")
-        LocalFileSystem.getInstance().refreshAndFindFileByNioFile(std)
-
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val utilFile = mirror.resolve("src/app/util.inko")
-            listOf(
-                FakeInkoDoc.module(
-                    "app.util", utilFile,
-                    methods = listOf(FakeInkoDoc.member("helper", utilFile, 13, 1)),
-                    types = listOf(FakeInkoDoc.type(
-                        "Helper", 1,
-                        fields = listOf(FakeInkoDoc.member("count", utilFile, 2)),
-                        staticMethods = listOf(FakeInkoDoc.member("new", utilFile, 4)),
-                        instanceMethods = listOf(FakeInkoDoc.member("value", utilFile, 8)),
-                    )),
-                ),
-                FakeInkoDoc.module(
-                    "std.string", std,
-                    types = listOf(
-                        FakeInkoDoc.type("String", 1),
-                        FakeInkoDoc.type("Unmentioned", 1, instanceMethods = listOf(FakeInkoDoc.member("value", std, 1))),
-                    ),
-                ),
-            )
-        })
+        // Like the real std: a doc comment and imports before the name. And a type no file mentions.
+        val std = FakeStd.write(Path.of(myFixture.tempDirPath).parent.resolve("std-$name"), mapOf(
+            "std.string" to "# A string.\nimport std.cmp (Equal)\n\ntype builtin String {}\n\ntype pub Unmentioned {\n  fn pub value -> Int {\n    1\n  }\n}\n",
+        ))
+        LocalFileSystem.getInstance().refreshAndFindFileByNioFile(std.resolve("std/string.inko"))
+        useFakeInko(FakeStd.cli(std))
     }
 
     private fun targetsAt(marker: String, nth: Int = 0): List<String> {

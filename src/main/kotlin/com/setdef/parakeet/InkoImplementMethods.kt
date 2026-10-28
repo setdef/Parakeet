@@ -46,7 +46,7 @@ class InkoTraitImpl(val impl: InkoOutline.Node, val trait: InkoDefinition, priva
             val outline = InkoOutline.of(text)
             val impl = outline.enclosing(offset).lastOrNull { it.kind == InkoOutline.Kind.IMPL } ?: return null
             val traitName = outline.implTrait(impl) ?: return null
-            val symbols = InkoDocIndex.getInstance(file.project).symbols(Inko.projectRoot(path)) ?: return null
+            val symbols = InkoDefinitionIndex.getInstance(file.project).symbols(Inko.projectRoot(path)) ?: return null
             val trait = InkoTraitLinks.trait(symbols, InkoImports.parse(text), traitName) ?: return null
             return InkoTraitImpl(impl, trait, substitutions(trait, impl), symbols)
         }

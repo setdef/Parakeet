@@ -12,15 +12,14 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Tests with a [FakeCuttlebone] as the project's Cuttlebone, run through
- * IntelliJ's real LSP client. [fakeInko] stands in for `inko` (Cuttlebone only
- * starts when there is one), answering `inko doc` with [docModules].
+ * IntelliJ's real LSP client. A fake stands in for `inko` (Cuttlebone only
+ * starts when there is one).
  */
 abstract class CuttleboneTestCase : InkoTestCase(onDisk = true) {
     protected val fakeDirectory: Path get() = Path.of(myFixture.tempDirPath).resolve("fake-cuttlebone")
     protected val log: Path get() = fakeDirectory.resolve("log.jsonl")
 
     protected open val inkoVersion: String? = null
-    protected open fun docModules(mirror: Path): List<String> = emptyList()
 
     override fun setUp() {
         super.setUp()
@@ -29,12 +28,6 @@ abstract class CuttleboneTestCase : InkoTestCase(onDisk = true) {
         useFakeInko(FakeInkoCli { call ->
             when (call.args.firstOrNull()) {
                 "--version" -> FakeInkoCli.ok(stdout = inkoVersion?.let { "inko $it\n" }.orEmpty())
-                "doc" -> {
-                    val docs = Files.createDirectories(call.workingDirectory!!.resolve("build/docs"))
-                    docModules(call.workingDirectory).forEachIndexed { index, json -> Files.writeString(docs.resolve("module_$index.json"), json) }
-                    Files.writeString(docs.resolve("\$meta.json"), """{"readme": ""}""")
-                    FakeInkoCli.ok(stderr = "[]")
-                }
                 else -> FakeInkoCli.ok(stderr = "[]")
             }
         })

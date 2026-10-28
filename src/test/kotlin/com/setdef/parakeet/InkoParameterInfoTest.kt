@@ -14,21 +14,7 @@ class InkoParameterInfoTest : InkoTestCase(onDisk = true) {
         cuttleboneCantCheckTheCode()
         val util = "type pub Helper {\n  let pub @count: Int\n  let pub @name: String\n\n  fn pub static new(count: Int, name: String) -> Helper {\n    Helper(count: count, name: name)\n  }\n}\n\nfn pub greet(name: String, times: Array[Int]) {}\n"
         myFixture.addFileToProject("src/app/util.inko", util)
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val file = mirror.resolve("src/app/util.inko")
-            listOf(FakeInkoDoc.module(
-                "app.util", file,
-                methods = listOf(FakeInkoDoc.member("greet", file, 10, 1, signature = "fn pub greet(name: String, times: Array[Int])")),
-                types = listOf(FakeInkoDoc.type(
-                    "Helper", 1,
-                    fields = listOf(
-                        FakeInkoDoc.member("count", file, 2, signature = "let pub @count: Int"),
-                        FakeInkoDoc.member("name", file, 3, signature = "let pub @name: String"),
-                    ),
-                    staticMethods = listOf(FakeInkoDoc.member("new", file, 5, signature = "fn pub static new(count: Int, name: String) -> Helper")),
-                )),
-            ))
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
     }
 
     /** A stand-in for the IDE's contexts: getters answer from [values], setters record into it. */

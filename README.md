@@ -152,11 +152,12 @@ compiler, so it always agrees with your installed Inko version.
   both directions and dependencies resolve.
 - **Go to definition, quick documentation, completion,
   parameter info and hints, and trait gutter icons** use the definitions
-  `inko doc --private --dependencies` reports, rebuilt in the background when
-  you save. `inko doc` only works on saved files in a project that compiles,
-  so files you've edited since (saved or not) are read from source, and when
-  the project doesn't compile, the standard library and dependencies are still
-  documented while your own files are read from source.
+  Parakeet reads from the code: the project's `src/` and `test/`, its
+  dependencies in `dep/`, and the standard library (`inko print std`), with
+  unsaved text in place of a file's, each file read again when it changes.
+  Nothing is compiled for it, so it follows unsaved edits and code that
+  doesn't compile. A trait's implementations are the `impl Trait for Type`
+  blocks naming it, by the module each file imports it from.
 - **Cuttlebone** answers with the compiler's own types and definitions; see
   [Cuttlebone](#cuttlebone) for which features ask it. Parakeet requires
   it: without it, what needs the compiler's types (go to definition of
@@ -218,8 +219,8 @@ compiler, so it always agrees with your installed Inko version.
   build on the same search (usage counts stop at 99+), and like Rename use
   fresh answers only. **Moving files** rewrites the import paths of the
   modules that move.
-- **Type Hierarchy** uses the trait implementations `inko doc` reports, and the
-  traits each trait requires in its signature.
+- **Type Hierarchy** uses the `impl` blocks (above), and the traits each trait
+  requires in its signature.
 - **Dependencies need syncing** when `dep/hash` isn't the BLAKE3 hash of
   `inko.pkg`, which is how `inko` itself decides. Errors, indexing, and test
   runs never sync (`inko` would otherwise sync, and need the network, in
@@ -252,9 +253,9 @@ compiler, so it always agrees with your installed Inko version.
 - **Quick fixes** act on the diagnostic IDs `inko check` reports
   (`invalid-symbol`, `unused-symbol`, `unused-result`, `missing-field`,
   `invalid-implementation`, `missing-trait`, `unreachable`); auto-import finds
-  candidates in the `inko doc` definitions.
-- **Implement and Override Methods** stub the methods `inko doc` lists as a
-  trait's required or default ones, with bodies that call
+  candidates in those definitions.
+- **Implement and Override Methods** stub a trait's required methods (those
+  without a body) or default ones, with bodies that call
   `panic('not implemented')` (in Inko's prelude), which compiles for any
   return type. **Go to Implementation and Super Method** follow the same
   trait links as the gutter icons.

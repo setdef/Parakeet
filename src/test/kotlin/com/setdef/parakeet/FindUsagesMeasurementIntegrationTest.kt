@@ -75,7 +75,7 @@ class FindUsagesMeasurementIntegrationTest : InkoTestCase(onDisk = true, realInk
     /** Both ways, each with a Cuttlebone of its own, the first run of each from no kept checks. */
     private fun measureBothWays(label: String, open: String, declaration: () -> InkoDeclaration) {
         // The definitions index (inko doc) is built first, as it would be in the background.
-        inBackground { InkoDocIndex.getInstance(project).symbols(Path.of(myFixture.tempDirPath)) }
+        inBackground { InkoDefinitionIndex.getInstance(project).symbols(Path.of(myFixture.tempDirPath)) }
         startCuttlebone(open)
         measure("$label, references once", declaration)
         startCuttlebone(open)

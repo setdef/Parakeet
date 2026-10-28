@@ -84,7 +84,7 @@ class InkoDependencySyncIntegrationTest : InkoTestCase(onDisk = true, realInko =
         Files.writeString(root.resolve("inko.pkg"), "# edited\n$manifest")
         installDependency(syncedManifest = manifest)
         myFixture.addFileToProject("src/main.inko", "import greet (hello)\n\nfn pub a -> String {\n  hello\n}\n")
-        val symbols = InkoDocIndex.getInstance(project).symbols(root)!!
+        val symbols = InkoDefinitionIndex.getInstance(project).symbols(root)!!
         assertEquals(emptyList<String>(), gitCalls())
         assertEquals(listOf("greet"), symbols.named("hello").map { it.module })
     }

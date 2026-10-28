@@ -4,7 +4,7 @@ import com.intellij.psi.PsiManager
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.BaseRefactoringProcessor
 
-/** Change Signature, with `inko doc` output supplied by a fake. */
+/** Change Signature. */
 class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
     private val util = """
         |type pub Greeter {
@@ -99,30 +99,7 @@ class InkoChangeSignatureTest : InkoTestCase(onDisk = true) {
         super.setUp()
         compiler().install()
         putTempDirInProjectContent()
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val utilFile = mirror.resolve("src/app/util.inko")
-            val mainFile = mirror.resolve("src/main.inko")
-            fun member(name: String, marker: String, column: Int = 3) = FakeInkoDoc.member(name, utilFile, line(util, marker), column)
-            listOf(
-                FakeInkoDoc.module(
-                    "app.util", utilFile,
-                    methods = listOf(member("add", "fn pub add", 1), member("twice", "fn pub twice", 1), member("log", "fn pub log", 1), member("ping", "fn pub ping", 1), member("hello", "fn pub hello", 1), member("greeting", "fn pub greeting", 1)),
-                    types = listOf(FakeInkoDoc.type(
-                        "Greeter", 1,
-                        staticMethods = listOf(member("new", "fn pub static new")),
-                        instanceMethods = listOf(member("greet", "fn pub greet")),
-                    ), FakeInkoDoc.type(
-                        "Parrot", line(util, "type pub Parrot"),
-                        instanceMethods = listOf(FakeInkoDoc.member("greet", utilFile, line(util, "  fn pub greet(greeting: String, punctuation: String) -> String {\n    greeting"), 3)),
-                    )),
-                    traits = listOf(FakeInkoDoc.trait("Shape", line(util, "trait pub Shape"), requiredMethods = listOf(member("area", "fn area")))),
-                ),
-                FakeInkoDoc.module("main", mainFile, methods = listOf(
-                    FakeInkoDoc.member("run", mainFile, line(main, "fn run"), 1),
-                    FakeInkoDoc.member("sum", mainFile, line(main, "fn sum"), 1),
-                )),
-            )
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         myFixture.addFileToProject("src/app/util.inko", util)
         myFixture.addFileToProject("src/main.inko", main)
     }

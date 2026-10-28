@@ -114,7 +114,7 @@ object InkoArgumentNames {
         // `fn name(…)` declares parameters; it isn't a call.
         if (generateSequence(call.callee.previousToken()) { it.previousToken() }.takeWhile { it.isToken(InkoTokens.KEYWORD) }.any { it.text == "fn" }) return null
         val path = Inko.pathOf(file.virtualFile) ?: return null
-        val symbols = InkoDocIndex.getInstance(file.project).symbols(Inko.projectRoot(path))
+        val symbols = InkoDefinitionIndex.getInstance(file.project).symbols(Inko.projectRoot(path))
         val parameters = InkoResolver.resolveDefinitions(call.callee, exact = true).map { InkoCalls.parameters(it.first, symbols) }.distinct().singleOrNull()
             ?.map { it.substringBefore(':').trim().split(' ').last() } ?: return null
         val open = tokens.indexOfFirst { it.start == call.openParen }.takeIf { it >= 0 } ?: return null

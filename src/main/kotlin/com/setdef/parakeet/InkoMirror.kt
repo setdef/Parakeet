@@ -33,12 +33,11 @@ class InkoMirror private constructor(val root: Path, val directory: Path, privat
 
         /**
          * A temporary mirror of [root], replacing [file] (if given) with [text].
-         * Without [sources], only the manifest and dependencies are linked.
          */
-        fun create(root: Path, file: Path? = null, text: String? = null, sources: Boolean = true): InkoMirror {
+        fun create(root: Path, file: Path? = null, text: String? = null): InkoMirror {
             val mirror = InkoMirror(root, Files.createTempDirectory("parakeet").toRealPath(), temporary = true)
             try {
-                mirror.populate(file, text, sources)
+                mirror.populate(file, text)
                 return mirror
             } catch (e: Exception) {
                 mirror.close()
@@ -51,7 +50,7 @@ class InkoMirror private constructor(val root: Path, val directory: Path, privat
             Files.createDirectories(directory)
             val mirror = InkoMirror(root, directory.toRealPath(), temporary = false)
             LINKED.map(mirror.directory::resolve).forEach(::deleteWithoutFollowingLinks)
-            mirror.populate(null, null, sources = true)
+            mirror.populate(null, null)
             return mirror
         }
 
@@ -68,8 +67,8 @@ class InkoMirror private constructor(val root: Path, val directory: Path, privat
         }
     }
 
-    private fun populate(file: Path?, text: String?, sources: Boolean) {
-        for (dir in Inko.SOURCE_DIRECTORIES.map(root::resolve).filter(Files::isDirectory).takeIf { sources }.orEmpty()) {
+    private fun populate(file: Path?, text: String?) {
+        for (dir in Inko.SOURCE_DIRECTORIES.map(root::resolve).filter(Files::isDirectory)) {
             Files.walk(dir).use { paths ->
                 paths.filter { it.isRegularFile() && it.extension == Inko.EXTENSION }.forEach(::link)
             }

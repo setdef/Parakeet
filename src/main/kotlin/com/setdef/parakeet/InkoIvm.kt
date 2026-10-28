@@ -111,7 +111,7 @@ object InkoIvm {
             for (project in ProjectManager.getInstance().openProjects) {
                 if (project.isDisposed) continue
                 DaemonCodeAnalyzer.getInstance(project).settingsChanged()
-                InkoDocIndex.getInstance(project).invalidateAll()
+                InkoDefinitionIndex.getInstance(project).invalidateAll()
                 InkoLibraries.getInstance(project).refresh()
                 EditorNotifications.getInstance(project).updateAllNotifications()
                 // ivm may have changed the default Inko, which needs its own Cuttlebone.

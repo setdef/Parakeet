@@ -3,7 +3,7 @@ package com.setdef.parakeet
 import com.intellij.codeInsight.CodeInsightSettings
 import com.intellij.codeInsight.lookup.LookupElementPresentation
 
-/** Completion, with `inko doc` output supplied by a fake. */
+/** Completion. */
 class InkoCompletionTest : InkoTestCase(onDisk = true) {
     private var autocomplete = true
 
@@ -16,30 +16,9 @@ class InkoCompletionTest : InkoTestCase(onDisk = true) {
         CodeInsightSettings.getInstance().AUTOCOMPLETE_ON_CODE_COMPLETION = false
         myFixture.addFileToProject("inko.pkg", "")
         myFixture.addFileToProject("src/app/util.inko", "type pub Helper {\n  fn pub static new -> Helper {\n    Helper()\n  }\n\n  fn pub value -> Int {\n    42\n  }\n}\n\nfn pub helper -> Int {\n  1\n}\n")
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val util = mirror.resolve("src/app/util.inko")
-            listOf(
-                FakeInkoDoc.module(
-                    "app.util", util,
-                    methods = listOf(FakeInkoDoc.member("helper", util, 11, 1, signature = "fn pub helper -> Int")),
-                    types = listOf(FakeInkoDoc.type(
-                        "Helper", 1,
-                        staticMethods = listOf(FakeInkoDoc.member("new", util, 2, signature = "fn pub static new -> Helper")),
-                        instanceMethods = listOf(FakeInkoDoc.member("value", util, 6, signature = "fn pub value -> Int")),
-                    )),
-                ),
-                FakeInkoDoc.module(
-                    "app.other", mirror.resolve("src/app/other.inko"),
-                    types = listOf(FakeInkoDoc.type(
-                        "Other", 1, instanceMethods = listOf(FakeInkoDoc.member("size", mirror.resolve("src/app/other.inko"), 2)),
-                    )),
-                    constants = listOf(
-                        FakeInkoDoc.member("LIMIT", mirror.resolve("src/app/other.inko"), 5, 1, signature = "let pub LIMIT = 10"),
-                        FakeInkoDoc.member("SECRET", mirror.resolve("src/app/other.inko"), 6, 1, signature = "let SECRET = 1") + ("public" to false),
-                    ),
-                ),
-            )
-        })
+        // Definitions are read from the code: app.other's too.
+        myFixture.addFileToProject("src/app/other.inko", "type pub Other {\n  fn pub size -> Int {\n    1\n  }\n}\n\nlet pub LIMIT = 10\nlet SECRET = 1\n")
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
     }
 
     override fun tearDown() {

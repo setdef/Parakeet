@@ -33,21 +33,7 @@ class InkoTraitNavigationTest : InkoTestCase(onDisk = true) {
         // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
         cuttleboneCantCheckTheCode()
         myFixture.addFileToProject("src/app/util.inko", util)
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val file = mirror.resolve("src/app/util.inko")
-            listOf(FakeInkoDoc.module(
-                "app.util", file,
-                types = listOf(
-                    FakeInkoDoc.type("Helper", 5, instanceMethods = listOf(FakeInkoDoc.member("show", file, 8)), implementedTraits = listOf("app.util" to "Show")),
-                    FakeInkoDoc.type("Other", 13, instanceMethods = listOf(FakeInkoDoc.member("show", file, 16)), implementedTraits = listOf("app.util" to "Show")),
-                ),
-                traits = listOf(FakeInkoDoc.trait(
-                    "Show", 1,
-                    requiredMethods = listOf(FakeInkoDoc.member("show", file, 2)),
-                    implementations = listOf("app.util" to "Helper", "app.util" to "Other"),
-                )),
-            ))
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         myFixture.configureFromExistingVirtualFile(myFixture.findFileInTempDir("src/app/util.inko"))
     }
 

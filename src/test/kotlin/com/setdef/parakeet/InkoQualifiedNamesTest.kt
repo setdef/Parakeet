@@ -55,11 +55,11 @@ class InkoQualifiedNamesTest : InkoTestCase(onDisk = true) {
 
     // A standard library file isn't under a project's src/, so its module name comes from the index.
     fun testStandardLibraryNamesComeFromTheIndex() {
-        val std = java.nio.file.Files.createDirectories(java.nio.file.Path.of(myFixture.tempDirPath, "std")).resolve("string.inko")
-        java.nio.file.Files.writeString(std, "type pub String {}\n")
+        val stdDirectory = FakeStd.write(java.nio.file.Path.of(myFixture.tempDirPath).parent.resolve("std-$name"), mapOf("std.string" to "type pub String {}\n"))
+        val std = stdDirectory.resolve("std/string.inko")
         myFixture.addFileToProject("src/main.inko", "fn main {}\n")
         PsiTestUtil.addContentRoot(module, myFixture.tempDirFixture.getFile("")!!)
-        useFakeInko(FakeInkoDoc.cli { listOf(FakeInkoDoc.module("std.string", std, types = listOf(FakeInkoDoc.type("String", 1)))) })
+        useFakeInko(FakeStd.cli(stdDirectory))
         val file = myFixture.psiManager.findFile(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(std)!!)!!
         // Adding the content root (and the libraries the index finds) starts indexing; Copy Reference waits it out.
         com.intellij.testFramework.IndexingTestUtil.waitUntilIndexesAreReady(project)

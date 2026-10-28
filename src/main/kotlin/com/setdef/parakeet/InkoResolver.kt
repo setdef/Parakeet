@@ -54,7 +54,7 @@ class InkoReference(element: InkoName) :
 }
 
 /**
- * Resolves names to definitions from the `inko doc` index (locals come from the
+ * Resolves names to definitions from the definition index (locals come from the
  * file itself). Locations are exact. Types aren't inferred, so a method call
  * resolves to the receiver type's method when that type is written or obvious
  * (a typed local, or `self`), and otherwise to every candidate it can't rule out.
@@ -192,14 +192,14 @@ class InkoResolver private constructor(
             localDeclaration(name)?.let { return Resolution(listOf(null to it), exact = true) }
             val file = name.containingFile ?: return NOTHING
             val path = Inko.pathOf(file.virtualFile) ?: return NOTHING
-            val symbols = InkoDocIndex.getInstance(name.project).symbols(Inko.projectRoot(path))
+            val symbols = InkoDefinitionIndex.getInstance(name.project).symbols(Inko.projectRoot(path))
             val imports = InkoImports.parse(file.text)
             val context = InkoNameContext.of(name, imports)
             if (!isGuessed(context)) return Resolution(symbols?.let { heuristic(name, file, path, it, imports, context) }.orEmpty(), exact = true)
             val queries = CuttleboneQueries.getInstance(name.project)
             val answer = queries.definition(file, name.textRange.startOffset, stale = !exact) ?: return NOTHING
             if (!answer.editing) {
-                // Where Parakeet doesn't know a definition (one `inko doc` hasn't seen yet), the target still counts.
+                // Where Parakeet doesn't know a definition (one the index hasn't read), the target still counts.
                 val targets = answer.value.orEmpty().take(1).mapNotNull(queries::target).map { target -> symbols?.let { definitionAt(target, it) } to target }
                 return Resolution(targets, exact = !answer.stale)
             }
@@ -227,7 +227,7 @@ class InkoResolver private constructor(
             val context = InkoNameContext.of(name, imports) as? InkoNameContext.InstanceMember ?: return emptyList()
             if (!context.compound) return emptyList()
             val path = Inko.pathOf(file.virtualFile) ?: return emptyList()
-            val symbols = InkoDocIndex.getInstance(name.project).symbols(Inko.projectRoot(path)) ?: return emptyList()
+            val symbols = InkoDefinitionIndex.getInstance(name.project).symbols(Inko.projectRoot(path)) ?: return emptyList()
             val resolver = InkoResolver(symbols, symbols.moduleOf(path) ?: Inko.moduleName(path), imports, file, name.textRange.startOffset)
             return setters.flatMap { setter ->
                 // Without a setter, it assigns the field, which it also reads.
@@ -270,9 +270,7 @@ class InkoResolver private constructor(
 }
 
 /**
- * Finds where a definition's name is written. `inko doc` locations can start
- * at a doc comment, or (for built-in types like `String`) at the top of the
- * file, so search from the location for the name right after a defining
+ * Finds where a definition's name is written: the name right after a defining
  * keyword (`type`, `trait`, `fn`, `let`, `case`, with any modifiers between).
  */
 object InkoDefinitionSite {

@@ -66,8 +66,8 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
     private fun project(owner: String, name: String) {
         root = open(owner, name) ?: return
         projectName = name
-        // inko doc's definitions (for traits and their implementations), as built in the background.
-        inBackground(600) { InkoDocIndex.getInstance(project).symbols(root) }
+        // The definitions (for traits and their implementations), read before the first site.
+        inBackground(600) { InkoDefinitionIndex.getInstance(project).symbols(root) }
         openInEditor(files().first())
 
         if (picked("Find Usages")) findUsages()

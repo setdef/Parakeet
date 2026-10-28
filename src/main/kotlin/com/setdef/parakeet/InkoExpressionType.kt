@@ -82,7 +82,7 @@ object InkoCompilerTypes {
             // A type parameter of the type or method it's in (`[T]`, `[K: Hash, V]`).
             if (Regex("[\\[,]\\s*$name\\s*[:\\],]").containsMatchIn(text)) continue
             val path = Inko.pathOf(file.virtualFile) ?: return null
-            val symbols = InkoDocIndex.getInstance(file.project).symbols(Inko.projectRoot(path)) ?: return null
+            val symbols = InkoDefinitionIndex.getInstance(file.project).symbols(Inko.projectRoot(path)) ?: return null
             val module = symbols.named(name, InkoDefinitionKind.TYPE, InkoDefinitionKind.TRAIT).map { it.module }.distinct().singleOrNull() ?: return null
             needed += module to name
         }

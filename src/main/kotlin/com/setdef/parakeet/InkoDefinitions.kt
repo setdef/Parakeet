@@ -1,14 +1,11 @@
 package com.setdef.parakeet
 
-import com.google.gson.JsonArray
-import com.google.gson.JsonObject
-import com.google.gson.JsonParser
 import java.nio.file.Path
 
 enum class InkoDefinitionKind { MODULE, TYPE, TRAIT, CONSTANT, MODULE_METHOD, STATIC_METHOD, INSTANCE_METHOD, CONSTRUCTOR, FIELD }
 
 /**
- * A definition reported by `inko doc`. [owner] is the type or trait it belongs
+ * A definition in an Inko module. [owner] is the type or trait it belongs
  * to, if any; [signature] is its declaration (e.g. `fn pub value -> Int`), and
  * [documentation] its doc comment, in Markdown.
  */
@@ -67,56 +64,4 @@ class InkoSymbols(definitions: List<InkoDefinition>) {
 
     /** Definitions whose name is written in [file], for finding a definition from its own declaration. */
     fun definedIn(file: Path, name: String): List<InkoDefinition> = named(name).filter { it.file == file }
-}
-
-/** Reads one module's JSON from `inko doc`; [toReal] maps paths out of the mirror it ran in. */
-object InkoDocParser {
-    fun parse(json: String, toReal: (Path) -> Path = { it }): List<InkoDefinition> {
-        val root = JsonParser.parseString(json).takeIf { it.isJsonObject }?.asJsonObject ?: return emptyList()
-        val module = root.string("name") ?: return emptyList()
-        val moduleFile = toReal(Path.of(root.string("file") ?: return emptyList()))
-        val result = mutableListOf(
-            InkoDefinition(InkoDefinitionKind.MODULE, module, module, null, moduleFile, 1, 1, "import $module", root.string("documentation").orEmpty()),
-        )
-
-        fun add(kind: InkoDefinitionKind, obj: JsonObject, owner: String?, related: List<InkoTypeRef> = emptyList(), required: Boolean = false) {
-            val name = obj.string("name") ?: return
-            val location = obj.getAsJsonObject("location") ?: return
-            // Methods carry their own file: default trait methods live in the trait's module.
-            val file = obj.string("file")?.let { toReal(Path.of(it)) } ?: moduleFile
-            val line = location.getAsJsonObject("lines")?.get("start")?.asInt ?: 1
-            val column = location.getAsJsonObject("columns")?.get("start")?.asInt ?: 1
-            val public = obj.get("public")?.takeIf { it.isJsonPrimitive }?.asBoolean ?: true
-            result += InkoDefinition(kind, name, module, owner, file, line, column, obj.string("type"), obj.string("documentation").orEmpty(), related, required, public)
-        }
-
-        root.objects("constants").forEach { add(InkoDefinitionKind.CONSTANT, it, null) }
-        root.objects("methods").forEach { add(InkoDefinitionKind.MODULE_METHOD, it, null) }
-        for (type in root.objects("types")) {
-            add(InkoDefinitionKind.TYPE, type, null, type.typeRefs("implemented_traits"))
-            val owner = type.string("name")
-            type.objects("constructors").forEach { add(InkoDefinitionKind.CONSTRUCTOR, it, owner) }
-            // An enum can't define fields; under --private, inko doc lists the compiler's own (`@tag`, `@1`, …).
-            val isEnum = type.objects("constructors").isNotEmpty()
-            if (!isEnum) type.objects("fields").forEach { add(InkoDefinitionKind.FIELD, it, owner) }
-            type.objects("static_methods").forEach { add(InkoDefinitionKind.STATIC_METHOD, it, owner) }
-            type.objects("instance_methods").forEach { add(InkoDefinitionKind.INSTANCE_METHOD, it, owner) }
-        }
-        for (trait in root.objects("traits")) {
-            add(InkoDefinitionKind.TRAIT, trait, null, trait.typeRefs("implementations"))
-            val owner = trait.string("name")
-            trait.objects("required_methods").forEach { add(InkoDefinitionKind.INSTANCE_METHOD, it, owner, required = true) }
-            trait.objects("default_methods").forEach { add(InkoDefinitionKind.INSTANCE_METHOD, it, owner) }
-        }
-        return result
-    }
-
-    private fun JsonObject.string(key: String): String? = get(key)?.takeIf { it.isJsonPrimitive }?.asString
-
-    private fun JsonObject.typeRefs(key: String): List<InkoTypeRef> = objects(key).mapNotNull { ref ->
-        InkoTypeRef(ref.string("module") ?: return@mapNotNull null, ref.string("name") ?: return@mapNotNull null)
-    }
-
-    private fun JsonObject.objects(key: String): List<JsonObject> =
-        (get(key) as? JsonArray)?.mapNotNull { it.takeIf { e -> e.isJsonObject }?.asJsonObject }.orEmpty()
 }

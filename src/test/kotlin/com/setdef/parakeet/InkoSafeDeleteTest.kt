@@ -40,10 +40,7 @@ class InkoSafeDeleteTest : InkoTestCase(onDisk = true) {
         // Usages resolve through the inko doc index, as in a real project.
         putTempDirInProjectContent()
         val source = "fn helper -> Int {\n  1\n}\n\nfn a -> Int {\n  helper\n}\n"
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val file = mirror.resolve("src/main.inko")
-            listOf(FakeInkoDoc.module("main", file, methods = listOf(FakeInkoDoc.member("helper", file, 1, 1), FakeInkoDoc.member("a", file, 5, 1))))
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/main.inko", source).virtualFile)
         Compiler().resolves(At("src/main.inko", source, "helper\n}"), At("src/main.inko", source, "helper ->")).install()
         try {
@@ -59,10 +56,7 @@ class InkoSafeDeleteTest : InkoTestCase(onDisk = true) {
     fun testWithNoAnswerForAPossibleUseItRefuses() {
         putTempDirInProjectContent()
         val source = "fn helper -> Int {\n  1\n}\n\nfn a -> Int {\n  helper\n}\n"
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val file = mirror.resolve("src/main.inko")
-            listOf(FakeInkoDoc.module("main", file, methods = listOf(FakeInkoDoc.member("helper", file, 1, 1), FakeInkoDoc.member("a", file, 5, 1))))
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/main.inko", source).virtualFile)
         Compiler().crashed().install()
         try {

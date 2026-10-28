@@ -73,7 +73,7 @@ sealed class InkoCompletionContext {
  * Basic completion: keywords, local variables, and names in scope, module paths
  * and symbols in imports, members after `.` (narrowed to the receiver's type
  * when it's known), and fields after `@`. Names come from the file's own tokens
- * (so unsaved declarations count) and the `inko doc` index.
+ * (so unsaved declarations count) and the definition index.
  */
 class InkoCompletionContributor : CompletionContributor() {
     override fun fillCompletionVariants(parameters: CompletionParameters, result: CompletionResultSet) {
@@ -96,7 +96,7 @@ private class InkoCompletions(private val file: PsiFile) {
     private val path = Inko.pathOf(file.virtualFile)
     private val symbols: InkoSymbols? = path?.let(Inko::projectRoot)
         ?.takeIf { Files.isDirectory(it.resolve("src")) || Files.isRegularFile(it.resolve(Inko.MANIFEST)) }
-        ?.let { InkoDocIndex.getInstance(file.project).symbols(it) }
+        ?.let { InkoDefinitionIndex.getInstance(file.project).symbols(it) }
     private val module: String? = path?.let { symbols?.moduleOf(it) ?: Inko.moduleName(it) }
     private val imports = InkoImports.parse(file.text)
     private val outline = file.inkoOutline

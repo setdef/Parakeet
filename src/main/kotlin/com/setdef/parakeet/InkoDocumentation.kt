@@ -17,7 +17,7 @@ import java.nio.file.Files
 import javax.swing.Icon
 import com.setdef.parakeet.InkoDefinitionKind as Kind
 
-/** Quick documentation (F1, or hovering) for Inko names, from the doc comments `inko doc` reports. */
+/** Quick documentation (F1, or hovering) for Inko names, from the doc comments above declarations. */
 class InkoDocumentationTargetProvider : PsiDocumentationTargetProvider {
     override fun documentationTarget(element: PsiElement, originalElement: PsiElement?): DocumentationTarget? {
         val definition = definitionFor(element, originalElement) ?: return null
@@ -43,7 +43,7 @@ class InkoDocumentationTargetProvider : PsiDocumentationTargetProvider {
         val root = Inko.projectRoot(path)
         // Only index real projects; a file elsewhere (e.g. the standard library) is reached by resolving instead.
         if (!Files.isDirectory(root.resolve("src"))) return null
-        val symbols = InkoDocIndex.getInstance(element.project).symbols(root) ?: return null
+        val symbols = InkoDefinitionIndex.getInstance(element.project).symbols(root) ?: return null
         val document = name.containingFile.viewProvider.document ?: return null
         val line = document.getLineNumber(name.textOffset) + 1
         return symbols.definedIn(path, name.text.removePrefix("@")).filter { it.line <= line }.maxByOrNull { it.line }

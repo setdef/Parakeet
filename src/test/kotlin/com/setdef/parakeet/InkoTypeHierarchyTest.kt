@@ -6,7 +6,7 @@ import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
 
-/** The type hierarchy (traits, what requires them, and what implements them), from a fake `inko doc`. */
+/** The type hierarchy (traits, what requires them, and what implements them), from the definition index. */
 class InkoTypeHierarchyTest : InkoTestCase(onDisk = true) {
     private val util = """
         |trait pub Show {}
@@ -20,6 +20,9 @@ class InkoTypeHierarchyTest : InkoTestCase(onDisk = true) {
         |type pub Other {}
         |
         |impl Debug for Other {}
+        |
+        |# Debug requires Show, so Other implements it too, as the compiler requires.
+        |impl Show for Other {}
         |""".trimMargin()
 
     override fun setUp() {
@@ -27,22 +30,7 @@ class InkoTypeHierarchyTest : InkoTestCase(onDisk = true) {
         // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
         cuttleboneCantCheckTheCode()
         myFixture.addFileToProject("src/app/util.inko", util)
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val file = mirror.resolve("src/app/util.inko")
-            listOf(
-                FakeInkoDoc.module(
-                    "app.util", file,
-                    traits = listOf(
-                        FakeInkoDoc.trait("Show", 1, implementations = listOf("app.util" to "Helper")),
-                        FakeInkoDoc.trait("Debug", 3, implementations = listOf("app.util" to "Other"), signature = "trait pub Debug: Show"),
-                    ),
-                    types = listOf(
-                        FakeInkoDoc.type("Helper", 5, implementedTraits = listOf("app.util" to "Show")),
-                        FakeInkoDoc.type("Other", 9, implementedTraits = listOf("app.util" to "Debug", "app.util" to "Show")),
-                    ),
-                ),
-            )
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         myFixture.configureFromTempProjectFile("src/app/util.inko")
     }
 
@@ -58,7 +46,7 @@ class InkoTypeHierarchyTest : InkoTestCase(onDisk = true) {
         assertEquals(listOf("Show"), names(InkoTypeHierarchy.related(declaration("Debug"), supertypes = true)))
 
     fun testATraitsSubtypesAreRequiringTraitsAndImplementingTypes() =
-        assertEquals(listOf("Debug", "Helper"), names(InkoTypeHierarchy.related(declaration("Show"), supertypes = false)))
+        assertEquals(listOf("Debug", "Helper", "Other"), names(InkoTypeHierarchy.related(declaration("Show"), supertypes = false)))
 
     fun testReadsRequiredTraitsFromTheSignature() {
         val trait = InkoDefinition(InkoDefinitionKind.TRAIT, "Debug", "m", null, java.nio.file.Path.of("/m.inko"), 1, 1, "trait pub Debug: ToString + Format[T]")
@@ -77,7 +65,7 @@ class InkoTypeHierarchyTest : InkoTestCase(onDisk = true) {
     }
 
     fun testSubtypesTree() = assertEquals(
-        "Show (app.util)\n  Debug (app.util)\n    Other (app.util)\n  Helper (app.util)\n",
+        "Show (app.util)\n  Debug (app.util)\n    Other (app.util)\n  Helper (app.util)\n  Other (app.util)\n",
         tree(declaration("Show"), supertypes = false),
     )
 

@@ -2,7 +2,6 @@ package com.setdef.parakeet
 
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
-import java.nio.file.Path
 
 /**
  * Parakeet's features with Cuttlebone's answers (from a fake), and without
@@ -36,17 +35,6 @@ class CuttleboneFeaturesTest : CuttleboneTestCase() {
         |  x.size(2.0)
         |}
         |""".trimMargin()
-
-    override fun docModules(mirror: Path): List<String> {
-        val file = mirror.resolve("src/app/util.inko")
-        return listOf(FakeInkoDoc.module(
-            "app.util", file,
-            types = listOf(
-                FakeInkoDoc.type("A", 1, instanceMethods = listOf(FakeInkoDoc.member("size", file, 2, signature = "fn pub size(unit: Int) -> Int"))),
-                FakeInkoDoc.type("B", 7, instanceMethods = listOf(FakeInkoDoc.member("size", file, 8, signature = "fn pub size(scale: Float) -> Int"))),
-            ),
-        ))
-    }
 
     private val bSize get() = locationAt("src/app/util.inko", util, "size(scale")
 

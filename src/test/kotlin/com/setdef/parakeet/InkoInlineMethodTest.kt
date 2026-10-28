@@ -5,7 +5,7 @@ import com.intellij.psi.PsiManager
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.BaseRefactoringProcessor
 
-/** Inline Method, with `inko doc` output supplied by a fake. */
+/** Inline Method. */
 class InkoInlineMethodTest : InkoTestCase(onDisk = true) {
     private val util = """
         |let pub SCALE = 3
@@ -87,24 +87,7 @@ class InkoInlineMethodTest : InkoTestCase(onDisk = true) {
         super.setUp()
         compiler().install()
         putTempDirInProjectContent()
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val utilFile = mirror.resolve("src/app/util.inko")
-            val mainFile = mirror.resolve("src/main.inko")
-            fun function(name: String) = FakeInkoDoc.member(name, utilFile, line(util, "fn pub $name"), 1)
-            listOf(
-                FakeInkoDoc.module(
-                    "app.util", utilFile,
-                    constants = listOf(mapOf("name" to "SCALE", "location" to FakeInkoDoc.location(1), "type" to "let pub SCALE", "documentation" to "")),
-                    methods = listOf("double", "area", "log", "repeat", "countdown").map(::function),
-                    types = listOf(FakeInkoDoc.type(
-                        "Box", line(util, "type pub Box"),
-                        fields = listOf(FakeInkoDoc.member("size", utilFile, line(util, "let @size"))),
-                        instanceMethods = listOf(FakeInkoDoc.member("grow", utilFile, line(util, "fn pub grow")), FakeInkoDoc.member("twice", utilFile, line(util, "fn pub twice"))),
-                    )),
-                ),
-                FakeInkoDoc.module("main", mainFile, methods = listOf(FakeInkoDoc.member("run", mainFile, line(main, "fn run"), 1))),
-            )
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         myFixture.addFileToProject("src/app/util.inko", util)
         myFixture.addFileToProject("src/main.inko", main)
     }
@@ -183,14 +166,7 @@ class InkoInlineMethodTest : InkoTestCase(onDisk = true) {
         myFixture.addFileToProject("src/app/things.inko", things)
         myFixture.addFileToProject("src/user.inko", user)
         fun inThings(marker: String) = At("src/app/things.inko", things, marker)
-        useFakeInko(FakeInkoDoc.cli { mirror ->
-            val thingsFile = mirror.resolve("src/app/things.inko")
-            listOf(FakeInkoDoc.module(
-                "app.things", thingsFile,
-                methods = listOf(FakeInkoDoc.member("run", thingsFile, line(things, "fn pub run"), 1)),
-                types = listOf(FakeInkoDoc.type("Thing", line(things, "type pub Thing"), staticMethods = listOf(FakeInkoDoc.member("new", thingsFile, line(things, "fn pub static new"))))),
-            ))
-        })
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         compiler()
             .resolves(inThings("Self()"), inThings("Thing {"))
             .resolves(At("src/user.inko", user, "new\n"), inThings("new -> Self"))

@@ -19,7 +19,7 @@ import javax.swing.JTree
 import com.setdef.parakeet.InkoDefinitionKind as Kind
 
 /**
- * Inko's type hierarchy (from `inko doc`): there's no inheritance, only traits.
+ * Inko's type hierarchy (from the definition index): there's no inheritance, only traits.
  * A type's supertypes are the traits it implements; a trait's are the traits it
  * requires (`trait Debug: ToString`). A trait's subtypes are the types
  * implementing it and the traits requiring it.
@@ -38,7 +38,7 @@ object InkoTypeHierarchy {
 
     private fun symbols(context: PsiElement): InkoSymbols? {
         val path = Inko.pathOf(context.containingFile?.virtualFile) ?: return null
-        return InkoDocIndex.getInstance(context.project).symbols(Inko.projectRoot(path))
+        return InkoDefinitionIndex.getInstance(context.project).symbols(Inko.projectRoot(path))
     }
 
     /** The traits a trait's signature requires: `Debug: ToString + Format[T]` gives ToString and Format. */

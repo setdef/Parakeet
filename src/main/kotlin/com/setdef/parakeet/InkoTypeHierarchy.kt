@@ -16,73 +16,33 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
 import javax.swing.JPanel
 import javax.swing.JTree
-import com.setdef.parakeet.InkoDefinitionKind as Kind
 
 /**
- * Inko's type hierarchy (from the definition index): there's no inheritance, only traits.
- * A type's supertypes are the traits it implements; a trait's are the traits it
- * requires (`trait Debug: ToString`). A trait's subtypes are the types
- * implementing it and the traits requiring it.
+ * Inko's type hierarchy, from Cuttlebone's (from the type database): there's no inheritance, only traits. A type's
+ * supertypes are the traits it implements; a trait's are the traits it requires (`trait Debug: ToString`). A
+ * trait's subtypes are the traits requiring it and the types implementing it.
  */
 object InkoTypeHierarchy {
-    /** The type or trait [element] declares or refers to. */
-    fun definition(element: PsiElement): InkoDefinition? {
+    /** The declaration of the type or trait [element] declares or refers to. */
+    fun declaration(element: PsiElement): InkoDeclaration? {
         val name = element as? InkoName ?: PsiTreeUtil.getParentOfType(element, InkoName::class.java, false) ?: return null
-        if (name is InkoDeclaration) {
-            val path = Inko.pathOf(name.containingFile.virtualFile) ?: return null
-            val symbols = symbols(name) ?: return null
-            return symbols.definedIn(path, name.name).firstOrNull { it.kind == Kind.TYPE || it.kind == Kind.TRAIT }
-        }
-        return InkoResolver.resolveDefinitions(name).map { it.first }.firstOrNull { it.kind == Kind.TYPE || it.kind == Kind.TRAIT }
+        val declaration = name as? InkoDeclaration ?: InkoResolver.resolve(name).filterIsInstance<InkoDeclaration>().firstOrNull() ?: return null
+        return declaration.takeIf { InkoDeclarations.kindOf(it) in setOf("type", "trait") }
     }
 
-    private fun symbols(context: PsiElement): InkoSymbols? {
-        val path = Inko.pathOf(context.containingFile?.virtualFile) ?: return null
-        return InkoDefinitionIndex.getInstance(context.project).symbols(Inko.projectRoot(path))
+    fun related(element: PsiElement, supertypes: Boolean): List<InkoDeclaration> {
+        val declaration = declaration(element) ?: return emptyList()
+        val queries = CuttleboneQueries.getInstance(element.project)
+        val file = declaration.containingFile
+        val offset = declaration.textRange.startOffset
+        val answer = if (supertypes) queries.supertypes(file, offset) else queries.subtypes(file, offset)
+        return answer?.value.orEmpty().mapNotNull { queries.target(it) as? InkoDeclaration }.distinct()
     }
 
-    /** The traits a trait's signature requires: `Debug: ToString + Format[T]` gives ToString and Format. */
-    fun requiredTraitNames(trait: InkoDefinition): List<String> {
-        val signature = trait.signature ?: return emptyList()
-        // After the name and its type parameters (`Debug[T: Show]: Format`), whose bounds aren't requirements.
-        val afterParameters = signature.substringAfter(trait.name).let { rest ->
-            if (!rest.trimStart().startsWith("[")) rest else {
-                var depth = 0
-                val close = rest.indexOfFirst { c -> if (c == '[') depth++ else if (c == ']') depth--; c == ']' && depth == 0 }
-                if (close < 0) rest else rest.substring(close + 1)
-            }
-        }
-        val requirements = afterParameters.substringAfter(':', "").substringBefore('{').trim()
-        if (requirements.isEmpty()) return emptyList()
-        return requirements.split('+').map { it.trim().substringBefore('[').trim() }.filter { it.isNotEmpty() && it.first().isUpperCase() }
-    }
+    fun isTrait(element: PsiElement): Boolean = declaration(element)?.let(InkoDeclarations::kindOf) == "trait"
 
-    fun supertypes(symbols: InkoSymbols, definition: InkoDefinition): List<InkoDefinition> = when (definition.kind) {
-        Kind.TYPE -> definition.related.flatMap { ref -> symbols.named(ref.name, Kind.TRAIT).filter { it.module == ref.module } }
-        Kind.TRAIT -> requiredTraitNames(definition).flatMap { name ->
-            symbols.named(name, Kind.TRAIT).let { traits -> traits.filter { it.module == definition.module }.ifEmpty { traits } }.take(1)
-        }
-        else -> emptyList()
-    }
-
-    fun subtypes(symbols: InkoSymbols, definition: InkoDefinition): List<InkoDefinition> {
-        if (definition.kind != Kind.TRAIT) return emptyList()
-        val types = definition.related.flatMap { ref -> symbols.named(ref.name, Kind.TYPE).filter { it.module == ref.module } }
-        val traits = symbols.ofKind(Kind.TRAIT).filter { trait -> supertypes(symbols, trait).any { it == definition } }
-        return traits + types
-    }
-
-    fun elementOf(context: PsiElement, definition: InkoDefinition): PsiElement? =
-        InkoResolver.toPsi(context.containingFile, definition)
-
-    fun related(element: PsiElement, supertypes: Boolean): List<PsiElement> {
-        val definition = definition(element) ?: return emptyList()
-        val symbols = symbols(element) ?: return emptyList()
-        val related = if (supertypes) supertypes(symbols, definition) else subtypes(symbols, definition)
-        return related.mapNotNull { elementOf(element, it) }
-    }
-
-    fun isTrait(element: PsiElement): Boolean = definition(element)?.kind == Kind.TRAIT
+    /** The module [element] is declared in. */
+    fun module(element: PsiElement): String? = Inko.pathOf(element.containingFile?.virtualFile)?.let(Inko::moduleName)
 }
 
 class InkoHierarchyNodeDescriptor(project: Project, parent: NodeDescriptor<*>?, element: PsiElement, isBase: Boolean) :
@@ -90,12 +50,11 @@ class InkoHierarchyNodeDescriptor(project: Project, parent: NodeDescriptor<*>?, 
     override fun update(): Boolean {
         val changed = super.update()
         val element = psiElement ?: return changed
-        val definition = InkoTypeHierarchy.definition(element)
         val text = CompositeAppearance()
-        text.ending.addText(definition?.name ?: element.text)
-        definition?.module?.let { text.ending.addComment(it) }
+        text.ending.addText(element.text)
+        InkoTypeHierarchy.module(element)?.let { text.ending.addComment(it) }
         myHighlightedText = text
-        icon = definition?.icon
+        icon = (if (InkoTypeHierarchy.isTrait(element)) InkoOutline.Kind.TRAIT else InkoOutline.Kind.TYPE).icon
         return changed
     }
 }
@@ -121,7 +80,7 @@ class InkoTypeHierarchyBrowser(project: Project, element: PsiElement) : TypeHier
     override fun canBeDeleted(element: PsiElement): Boolean = false
 
     override fun getQualifiedName(element: PsiElement): String =
-        InkoTypeHierarchy.definition(element)?.let { "${it.module}.${it.name}" } ?: element.text
+        listOfNotNull(InkoTypeHierarchy.module(element), element.text).joinToString(".")
 
     override fun getElementFromDescriptor(descriptor: HierarchyNodeDescriptor): PsiElement? = descriptor.psiElement
 
@@ -130,7 +89,7 @@ class InkoTypeHierarchyBrowser(project: Project, element: PsiElement) : TypeHier
 
     override fun createLegendPanel(): JPanel? = null
 
-    override fun isApplicableElement(element: PsiElement): Boolean = InkoTypeHierarchy.definition(element) != null
+    override fun isApplicableElement(element: PsiElement): Boolean = InkoTypeHierarchy.declaration(element) != null
 
     override fun createHierarchyTreeStructure(type: String, element: PsiElement): HierarchyTreeStructure? = when (type) {
         getSupertypesHierarchyType() -> InkoTypeHierarchyTreeStructure(myProject, element, supertypes = true)
@@ -147,9 +106,7 @@ class InkoTypeHierarchyProvider : HierarchyProvider {
         val editor = CommonDataKeys.EDITOR.getData(dataContext) ?: return null
         val file = CommonDataKeys.PSI_FILE.getData(dataContext) as? InkoFile ?: return null
         val name = PsiTreeUtil.getParentOfType(file.findElementAt(editor.caretModel.offset), InkoName::class.java, false) ?: return null
-        if (name is InkoDeclaration) return name.takeIf { InkoTypeHierarchy.definition(it) != null }
-        val definition = InkoTypeHierarchy.definition(name) ?: return null
-        return InkoTypeHierarchy.elementOf(name, definition)
+        return InkoTypeHierarchy.declaration(name)
     }
 
     override fun createHierarchyBrowser(target: PsiElement): HierarchyBrowser = InkoTypeHierarchyBrowser(target.project, target)

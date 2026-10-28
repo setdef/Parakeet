@@ -219,8 +219,8 @@ compiler, so it always agrees with your installed Inko version.
   build on the same search (usage counts stop at 99+), and like Rename use
   fresh answers only. **Moving files** rewrites the import paths of the
   modules that move.
-- **Type Hierarchy** uses the `impl` blocks (above), and the traits each trait
-  requires in its signature.
+- **Type Hierarchy** is Cuttlebone's, from the type database: the traits a type
+  implements, the traits a trait requires, and what requires or implements it.
 - **Dependencies need syncing** when `dep/hash` isn't the BLAKE3 hash of
   `inko.pkg`, which is how `inko` itself decides. Errors, indexing, and test
   runs never sync (`inko` would otherwise sync, and need the network, in
@@ -398,6 +398,10 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | Go to definition, and what's built on resolving a name (quick documentation, hierarchies, inspections, intentions, refactorings, …) | `textDocument/definition`: the declaration the compiler resolves | for navigation, documentation and hierarchies, a stale answer, else Parakeet's reading of the code; for what changes code (refactorings, intentions, quick fixes, imports), nothing |
 | Find Usages, Rename, usage counts, and the refactorings built on them | `textDocument/references`, once per search, for the whole project; a trait's method with its implementations' | each candidate's `textDocument/definition`, a file's at once; Find Usages alone adds Parakeet's reading, as possible usages, and Rename lists them as conflicts |
 | Call Hierarchy | `callHierarchy/incomingCalls` (from one check of the whole project, by the compiler's ids) and `outgoingCalls`, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | a stale answer for callees; none for callers |
+| Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
+| Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
+| Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
+| Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
 | Completion after `.` | `textDocument/completion` on the real buffer | Parakeet's reading |
 | Parameter info | `textDocument/signatureHelp`: the resolved method's signature, with the receiver's type arguments, and the argument's parameter (named ones too). For a type's constructor (`Point(x: 1)`), which it has none for, the type's fields | Parakeet's reading |
 | Parameter-name and type hints | `textDocument/inlayHint`, once for the whole file | none: hints only inform |

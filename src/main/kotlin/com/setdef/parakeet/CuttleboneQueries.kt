@@ -261,6 +261,25 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
             server.textDocumentService.callHierarchyOutgoingCalls(org.eclipse.lsp4j.CallHierarchyOutgoingCallsParams(item(document, position)))
         }
 
+    /**
+     * The traits the type whose name is at [offset] implements, or the traits the trait there requires, as their
+     * names: from the type database, checking the whole project, complete or none. Only Type Hierarchy shows it.
+     */
+    fun supertypes(file: PsiFile, offset: Int, budgetMs: Long = SEARCH_BUDGET_MS): Answer<List<Location>>? =
+        query(file, offset, "typeHierarchy/supertypes", budgetMs, { items: List<org.eclipse.lsp4j.TypeHierarchyItem>? ->
+            items?.map { Location(it.uri, it.selectionRange) }
+        }, stale = true) { server, document, position ->
+            server.textDocumentService.typeHierarchySupertypes(org.eclipse.lsp4j.TypeHierarchySupertypesParams(typeItem(document, position)))
+        }
+
+    /** The traits requiring the trait whose name is at [offset], then the types implementing it, as [supertypes] has them. */
+    fun subtypes(file: PsiFile, offset: Int, budgetMs: Long = SEARCH_BUDGET_MS): Answer<List<Location>>? =
+        query(file, offset, "typeHierarchy/subtypes", budgetMs, { items: List<org.eclipse.lsp4j.TypeHierarchyItem>? ->
+            items?.map { Location(it.uri, it.selectionRange) }
+        }, stale = true) { server, document, position ->
+            server.textDocumentService.typeHierarchySubtypes(org.eclipse.lsp4j.TypeHierarchySubtypesParams(typeItem(document, position)))
+        }
+
     fun typeDefinition(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<List<Location>>? =
         query(file, offset, "textDocument/typeDefinition", budgetMs, ::locations) { server, document, position ->
             server.textDocumentService.typeDefinition(TypeDefinitionParams(document, position))
@@ -518,6 +537,9 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
          */
         private fun item(document: TextDocumentIdentifier, position: Position) =
             org.eclipse.lsp4j.CallHierarchyItem("", org.eclipse.lsp4j.SymbolKind.Method, document.uri, Range(position, position), Range(position, position))
+
+        private fun typeItem(document: TextDocumentIdentifier, position: Position) =
+            org.eclipse.lsp4j.TypeHierarchyItem("", org.eclipse.lsp4j.SymbolKind.Class, document.uri, Range(position, position), Range(position, position))
 
         fun position(document: Document, offset: Int): Position {
             val line = document.getLineNumber(offset)

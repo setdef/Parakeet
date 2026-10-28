@@ -193,6 +193,19 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertTrue(callees.toString(), "main.inko:3:make" in callees && "util.inko:8:size" in callees && callees.any { it.endsWith(":get") })
     }
 
+    // Type Hierarchy is Cuttlebone's (typeHierarchy/supertypes and subtypes, from the type database): a trait's
+    // requirements, the traits requiring it and the types implementing it, std's included (AUDIT.md finding 1.10).
+    fun testTypeHierarchyIsCuttlebones() {
+        myFixture.addFileToProject("src/app/traits.inko", "import std.string (ToString)\n\ntrait pub Show {}\n\ntrait pub Debug: Show {}\n\ntype pub Thing {}\n\nimpl Show for Thing {}\n\n" +
+            "impl Debug for Thing {}\n\nimpl ToString for Thing {\n  fn pub to_string -> String {\n    ''\n  }\n}\n")
+        open("import app.traits (Thing)\n\nfn pub run -> Thing {\n  Thing()\n}\n")
+        val traits = "src/app/traits.inko"
+        fun names(element: PsiElement, supertypes: Boolean) = inBackground { InkoTypeHierarchy.related(element, supertypes).map { it.text } }
+        assertEquals(listOf("Show"), names(declaration(traits, "Debug"), supertypes = true))
+        assertEquals(listOf("Debug", "Thing"), names(declaration(traits, "Show"), supertypes = false))
+        assertEquals(listOf("Debug", "Show", "ToString"), names(declaration(traits, "Thing"), supertypes = true).sorted())
+    }
+
     /** What IntelliJ's LSP Go to Class or Go to Symbol ([classes]) lists for [pattern]: each item's name and location. */
     private fun goTo(classes: Boolean, pattern: String, libraries: Boolean): List<String> = inBackground {
         // Under a progress indicator, as Go to Class and Search Everywhere ask.

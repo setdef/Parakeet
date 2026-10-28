@@ -452,14 +452,6 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertCompiles()
     }
 
-    // AUDIT.md finding 1.10: inko doc leaves a trait's requirements out of its type, so they come from source.
-    fun testTypeHierarchyShowsRequiredTraitsFromInkoDoc() {
-        open("src/app/traits.inko", "trait pub Show {}\n\ntrait pub Debug: Show {}\n\ntype pub Thing {}\n\nimpl Show for Thing {}\n\nimpl Debug for Thing {}\n")
-        FileDocumentManager.getInstance().saveAllDocuments()
-        val debug = declaration("src/app/traits.inko", "Debug")
-        assertEquals(listOf("Show"), InkoTypeHierarchy.related(debug, supertypes = true).map { InkoTypeHierarchy.definition(it)!!.name })
-    }
-
     // AUDIT.md section 3: the Code Style preview must be valid Inko.
     fun testTheCodeStyleSampleCompiles() {
         val sample = InkoCodeStyleSettingsProvider().getCodeSample(com.intellij.psi.codeStyle.LanguageCodeStyleSettingsProvider.SettingsType.INDENT_SETTINGS)

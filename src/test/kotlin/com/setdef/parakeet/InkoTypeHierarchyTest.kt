@@ -6,7 +6,7 @@ import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
 
-/** The type hierarchy (traits, what requires them, and what implements them), from the definition index. */
+/** The type hierarchy (traits, what requires them, and what implements them), from Cuttlebone's. */
 class InkoTypeHierarchyTest : InkoTestCase(onDisk = true) {
     private val util = """
         |trait pub Show {}
@@ -25,10 +25,19 @@ class InkoTypeHierarchyTest : InkoTestCase(onDisk = true) {
         |impl Show for Other {}
         |""".trimMargin()
 
+    private fun at(marker: String) = At("src/app/util.inko", util, marker)
+
     override fun setUp() {
         super.setUp()
-        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
-        cuttleboneCantCheckTheCode()
+        // Cuttlebone's answers for this code, as its type database has them.
+        Compiler()
+            .resolves(at("Show for Helper"), at("Show {}"))
+            .related("typeHierarchy/supertypes", at("Helper {}"), at("Show {}"))
+            .related("typeHierarchy/supertypes", at("Debug:"), at("Show {}"))
+            .related("typeHierarchy/supertypes", at("Other {}"), at("Debug:"), at("Show {}"))
+            .related("typeHierarchy/subtypes", at("Show {}"), at("Debug:"), at("Helper {}"), at("Other {}"))
+            .related("typeHierarchy/subtypes", at("Debug:"), at("Other {}"))
+            .install()
         myFixture.addFileToProject("src/app/util.inko", util)
         useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         myFixture.configureFromTempProjectFile("src/app/util.inko")
@@ -37,7 +46,9 @@ class InkoTypeHierarchyTest : InkoTestCase(onDisk = true) {
     private fun declaration(name: String): InkoDeclaration =
         PsiTreeUtil.findChildrenOfType(myFixture.file, InkoDeclaration::class.java).first { it.name == name }
 
-    private fun names(elements: List<PsiElement>) = elements.map { InkoTypeHierarchy.definition(it)!!.name }
+    private fun Compiler.related(method: String, to: At, vararg related: At) = answers(method, to) { related.map(::location) }
+
+    private fun names(elements: List<PsiElement>) = elements.map { it.text }
 
     fun testATypesSupertypesAreTheTraitsItImplements() =
         assertEquals(listOf("Show"), names(InkoTypeHierarchy.related(declaration("Helper"), supertypes = true)))
@@ -47,11 +58,6 @@ class InkoTypeHierarchyTest : InkoTestCase(onDisk = true) {
 
     fun testATraitsSubtypesAreRequiringTraitsAndImplementingTypes() =
         assertEquals(listOf("Debug", "Helper", "Other"), names(InkoTypeHierarchy.related(declaration("Show"), supertypes = false)))
-
-    fun testReadsRequiredTraitsFromTheSignature() {
-        val trait = InkoDefinition(InkoDefinitionKind.TRAIT, "Debug", "m", null, java.nio.file.Path.of("/m.inko"), 1, 1, "trait pub Debug: ToString + Format[T]")
-        assertEquals(listOf("ToString", "Format"), InkoTypeHierarchy.requiredTraitNames(trait))
-    }
 
     /** The tree under [element], indented, as the hierarchy view would show it. */
     private fun tree(element: PsiElement, supertypes: Boolean): String {

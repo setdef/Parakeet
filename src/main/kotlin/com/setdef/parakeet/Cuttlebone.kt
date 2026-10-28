@@ -392,7 +392,8 @@ abstract class CuttleboneCustomization : LspCustomization() {
  * in 2025.3 these classes don't exist, and neither do the features.
  */
 abstract class CuttleboneCustomization261 : CuttleboneCustomization() {
-    // Parakeet's Rename, Call and Type Hierarchy, Extend Selection and Optimize Imports.
+    // Parakeet's Rename and Optimize Imports. Call and Type Hierarchy and Extend Selection are Cuttlebone's, which
+    // Parakeet asks for itself, as 2025.3 has no LSP support for them.
     override val renameCustomizer: LspRenameCustomizer get() = LspRenameDisabled
     override val callHierarchyCustomizer: LspCallHierarchyCustomizer get() = LspCallHierarchyDisabled
     override val typeHierarchyCustomizer: LspTypeHierarchyCustomizer get() = LspTypeHierarchyDisabled

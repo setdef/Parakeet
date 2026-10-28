@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Call Hierarchy is Cuttlebone's (`callHierarchy/incomingCalls` and `outgoingCalls`), by the compiler's ids: a method's callers from one check of the whole project, and its callees as the compiler resolves them. Where Cuttlebone has no answer (code that doesn't type check), the hierarchy is empty, where it showed Find Usages' possible usages.
 - Extend Selection is Cuttlebone's (`textDocument/selectionRange`), from the tokens and declarations, also in code that doesn't parse: a call's chain (`a.b` in `a.b.c(x)`), an argument, a string's contents, a bracket's contents and the brackets, the statement, each declaration, and the file. A declaration no longer has a step with the comment above it. Without Cuttlebone, only IntelliJ's own steps (the word, the line) are left.
 - Parakeet needs Cuttlebone 0.14.0 or newer. An older one on `PATH` or in Cargo's `bin` directory is skipped, as one that doesn't run is, and the download is offered as when there's none; one that old in the settings is refused, saying why; an older download is left unused. Releases older than 0.14.0 are no longer offered for download.
 

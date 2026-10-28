@@ -242,6 +242,25 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
             server.textDocumentService.selectionRange(org.eclipse.lsp4j.SelectionRangeParams(document, listOf(position)))
         }
 
+    /**
+     * The methods calling the method whose name is at [offset], as their names: every call by the compiler's ids,
+     * from one check of the whole project, complete or none. Only Call Hierarchy shows it.
+     */
+    fun callers(file: PsiFile, offset: Int, budgetMs: Long = SEARCH_BUDGET_MS): Answer<List<Location>>? =
+        query(file, offset, "callHierarchy/incomingCalls", budgetMs, { calls: List<org.eclipse.lsp4j.CallHierarchyIncomingCall>? ->
+            calls?.map { Location(it.from.uri, it.from.selectionRange) }
+        }, stale = true) { server, document, position ->
+            server.textDocumentService.callHierarchyIncomingCalls(org.eclipse.lsp4j.CallHierarchyIncomingCallsParams(item(document, position)))
+        }
+
+    /** The methods the method whose name is at [offset] calls, as their declarations' names. Only Call Hierarchy shows it. */
+    fun callees(file: PsiFile, offset: Int, budgetMs: Long = SEARCH_BUDGET_MS): Answer<List<Location>>? =
+        query(file, offset, "callHierarchy/outgoingCalls", budgetMs, { calls: List<org.eclipse.lsp4j.CallHierarchyOutgoingCall>? ->
+            calls?.map { Location(it.to.uri, it.to.selectionRange) }
+        }, stale = true) { server, document, position ->
+            server.textDocumentService.callHierarchyOutgoingCalls(org.eclipse.lsp4j.CallHierarchyOutgoingCallsParams(item(document, position)))
+        }
+
     fun typeDefinition(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<List<Location>>? =
         query(file, offset, "textDocument/typeDefinition", budgetMs, ::locations) { server, document, position ->
             server.textDocumentService.typeDefinition(TypeDefinitionParams(document, position))
@@ -492,6 +511,13 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         private fun locations(result: Either<List<Location>, List<LocationLink>>?): List<Location>? = result?.let {
             if (it.isLeft) it.left else it.right.map { link -> Location(link.targetUri, link.targetSelectionRange) }
         }
+
+        /**
+         * A hierarchy item for the declaration whose name is at [position]: Cuttlebone finds it again there (its
+         * `selectionRange.start`), and reads nothing else of it.
+         */
+        private fun item(document: TextDocumentIdentifier, position: Position) =
+            org.eclipse.lsp4j.CallHierarchyItem("", org.eclipse.lsp4j.SymbolKind.Method, document.uri, Range(position, position), Range(position, position))
 
         fun position(document: Document, offset: Int): Position {
             val line = document.getLineNumber(offset)

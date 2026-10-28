@@ -23,9 +23,11 @@ import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.ui.PopupHandler
 import com.intellij.util.Processor
 import javax.swing.JTree
-import com.setdef.parakeet.InkoDefinitionKind as Kind
 
-/** Who calls a method (its usages, by the method they're in), and what it calls (resolved from its body). */
+/**
+ * Who calls a method, by the method each call is in, and what it calls: Cuttlebone's call hierarchy, by the
+ * compiler's ids (callers from one check of the whole project, complete or none).
+ */
 object InkoCallHierarchy {
     /** The method (or function) declared at [declaration], if that's what it declares. */
     fun isMethod(declaration: InkoDeclaration): Boolean = InkoDeclarations.kindOf(declaration) in setOf("method", "function")
@@ -37,19 +39,14 @@ object InkoCallHierarchy {
         return PsiTreeUtil.getParentOfType(file.findElementAt(node.nameOffset), InkoDeclaration::class.java, false)
     }
 
-    fun callers(method: InkoDeclaration): List<InkoDeclaration> =
-        ReferencesSearch.search(method).findAll().mapNotNull { enclosingMethod(it.element) }.distinct()
+    fun callers(method: InkoDeclaration): List<InkoDeclaration> = related(method) { file, offset -> callers(file, offset) }
 
-    fun callees(method: InkoDeclaration): List<PsiElement> {
-        val file = method.containingFile
-        val body = file.inkoOutline.enclosing(method.textRange.startOffset).lastOrNull { it.nameOffset == method.textRange.startOffset }?.range
-            ?: return emptyList()
-        return PsiTreeUtil.findChildrenOfType(file, InkoName::class.java)
-            .filter { it !is InkoDeclaration && body.contains(it.textRange) && it.textRange.startOffset > method.textRange.endOffset }
-            .flatMap { name -> InkoResolver.resolveDefinitions(name) }
-            .filter { (definition, _) -> definition.kind in setOf(Kind.MODULE_METHOD, Kind.STATIC_METHOD, Kind.INSTANCE_METHOD) }
-            .map { it.second }
-            .distinct()
+    fun callees(method: InkoDeclaration): List<InkoDeclaration> = related(method) { file, offset -> callees(file, offset) }
+
+    private fun related(method: InkoDeclaration, ask: CuttleboneQueries.(PsiFile, Int) -> CuttleboneQueries.Answer<List<org.eclipse.lsp4j.Location>>?): List<InkoDeclaration> {
+        val queries = CuttleboneQueries.getInstance(method.project)
+        val locations = queries.ask(method.containingFile, method.textRange.startOffset)?.value.orEmpty()
+        return locations.mapNotNull { queries.target(it) as? InkoDeclaration }.distinct()
     }
 
     /** "Owner.name" for a method in a type, trait, or impl; just the name for a function. */
@@ -116,7 +113,6 @@ class InkoCallHierarchyProvider : HierarchyProvider {
         val file = CommonDataKeys.PSI_FILE.getData(dataContext) as? InkoFile ?: return null
         val name = PsiTreeUtil.getParentOfType(file.findElementAt(editor.caretModel.offset), InkoName::class.java, false)
         // A method's name (declared or called), else the method the caret is in.
-        // Callers are found as Find Usages finds them.
         if (CuttleboneService.getInstance(file.project).unavailable) return null
         if (name is InkoDeclaration && InkoCallHierarchy.isMethod(name)) return name
         if (name != null) {

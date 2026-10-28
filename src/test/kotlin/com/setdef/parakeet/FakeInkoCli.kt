@@ -87,6 +87,10 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
         CuttleboneQueries.Answer<Any>(null, CuttleboneStatus(method, file.url, "unavailable", reason, 1.0))
     }
 
+    /** Where [at] is, as Cuttlebone names it: its file's URL, and the marker's range. */
+    protected fun location(at: At) = org.eclipse.lsp4j.Location(myFixture.findFileInTempDir(at.path)!!.url, org.eclipse.lsp4j.Range(
+        org.eclipse.lsp4j.Position(at.line, at.character), org.eclipse.lsp4j.Position(at.line, at.character + at.marker.length - at.shift)))
+
     /**
      * A place in this test's code: the [nth] [marker]'s position (plus [shift]) in the project file [path],
      * whose text is [text]. What's there runs to the marker's end.
@@ -138,6 +142,11 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
          */
         fun answersReferences(declaration: At) = apply { answeredReferences += declaration }
 
+        private val answers = mutableListOf<Triple<String, At, () -> Any?>>()
+
+        /** Cuttlebone's fresh answer to [method] at [at]: [value]'s, made when it's asked (once the files exist). */
+        fun answers(method: String, at: At, value: () -> Any?) = apply { answers += Triple(method, at, value) }
+
         private fun matches(at: At, file: com.intellij.openapi.vfs.VirtualFile, offset: Int) = file.path.endsWith("/${at.path}") && at.offset == offset
 
         private fun range(at: At, length: Int) = org.eclipse.lsp4j.Range(
@@ -148,6 +157,7 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
             if (crashed) return@stubCuttlebone CuttleboneQueries.Answer<Any>(null, status("unavailable", "checkCrashed"))
             val known = definitions.any { matches(it.first, file, offset) } || hovers.any { matches(it.first, file, offset) }
             if (editing.any { matches(it, file, offset) } || (otherwiseEditing && !known)) return@stubCuttlebone CuttleboneQueries.Answer<Any>(null, status("unavailable", "declarationErrors"))
+            answers.firstOrNull { it.first == method && matches(it.second, file, offset) }?.let { return@stubCuttlebone CuttleboneQueries.Answer(it.third(), status("fresh")) }
             val value: Any? = when (method) {
                 "textDocument/definition" -> definitions.firstOrNull { matches(it.first, file, offset) }?.second?.let { declaration ->
                     val target = myFixture.findFileInTempDir(declaration.path) ?: error("no ${declaration.path}")

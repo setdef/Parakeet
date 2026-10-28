@@ -178,6 +178,21 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(steps.toString(), wanted, steps.filter { it in wanted })
     }
 
+    private fun declaration(path: String, name: String): InkoDeclaration {
+        val file = com.intellij.psi.PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir(path))!!
+        return PsiTreeUtil.findChildrenOfType(file, InkoDeclaration::class.java).first { it.name == name }
+    }
+
+    // Call Hierarchy is Cuttlebone's (callHierarchy/incomingCalls and outgoingCalls), by the compiler's ids: the
+    // callee is the method the compiler calls (B's size, not A's), and std's methods are there too.
+    fun testCallHierarchyIsCuttlebones() {
+        open()
+        val run = declaration("src/main.inko", "run")
+        assertEquals(listOf("run"), inBackground { InkoCallHierarchy.callers(declaration("src/main.inko", "make")).map(InkoCallHierarchy::label) })
+        val callees = inBackground { InkoCallHierarchy.callees(run).map { it.location() } }
+        assertTrue(callees.toString(), "main.inko:3:make" in callees && "util.inko:8:size" in callees && callees.any { it.endsWith(":get") })
+    }
+
     /** What IntelliJ's LSP Go to Class or Go to Symbol ([classes]) lists for [pattern]: each item's name and location. */
     private fun goTo(classes: Boolean, pattern: String, libraries: Boolean): List<String> = inBackground {
         // Under a progress indicator, as Go to Class and Search Everywhere ask.

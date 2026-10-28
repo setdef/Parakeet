@@ -49,6 +49,17 @@ class InkoCallHierarchyTest : InkoTestCase(onDisk = true) {
         .resolves(inMain("helper\n}"), inUtil("helper -> Int"))
         .resolvesEvery("src/main.inko", main, "run +", At("src/main.inko", main, "run -> Int"))
         .resolves(inMain("twice\n}"), At("src/main.inko", main, "twice -> Int"))
+        // Cuttlebone's call hierarchy: the methods each call is in, and the methods a body calls.
+        .callers(inUtil("helper -> Int"), inUtil("value -> Int"), inMain("run -> Int"))
+        .callers(inUtil("value -> Int"), inMain("run -> Int"))
+        .callers(inUtil("new -> Helper"), inMain("run -> Int"))
+        .callers(inMain("run -> Int"), inMain("twice -> Int"))
+        .callers(inMain("twice -> Int"), inMain("twice -> Int"))
+        .callees(inMain("run -> Int"), inUtil("new -> Helper"), inUtil("value -> Int"), inUtil("helper -> Int"))
+
+    private fun Compiler.callers(method: At, vararg callers: At) = answers("callHierarchy/incomingCalls", method) { callers.map(::location) }
+
+    private fun Compiler.callees(method: At, vararg callees: At) = answers("callHierarchy/outgoingCalls", method) { callees.map(::location) }
 
     override fun setUp() {
         super.setUp()

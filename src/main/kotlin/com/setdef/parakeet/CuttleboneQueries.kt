@@ -231,6 +231,17 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
             server.textDocumentService.foldingRange(org.eclipse.lsp4j.FoldingRangeRequestParams(document))
         }
 
+    /**
+     * The ranges around [offset], innermost first, from [file]'s tokens and declarations: Cuttlebone answers at
+     * once, without a check, also in code that doesn't parse. Extend Selection asks on the EDT, so this one waits there.
+     */
+    fun selectionRanges(file: PsiFile, offset: Int, budgetMs: Long = SELECTION_BUDGET_MS): Answer<List<Range>>? =
+        query(file, offset, "textDocument/selectionRange", budgetMs, { ranges: List<org.eclipse.lsp4j.SelectionRange>? ->
+            ranges?.firstOrNull()?.let { innermost -> generateSequence(innermost) { it.parent }.map { it.range }.toList() }
+        }, onEdt = true) { server, document, position ->
+            server.textDocumentService.selectionRange(org.eclipse.lsp4j.SelectionRangeParams(document, listOf(position)))
+        }
+
     fun typeDefinition(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<List<Location>>? =
         query(file, offset, "textDocument/typeDefinition", budgetMs, ::locations) { server, document, position ->
             server.textDocumentService.typeDefinition(TypeDefinitionParams(document, position))
@@ -308,11 +319,12 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         convert: (R?) -> T?,
         waitInHighlighting: Boolean = false,
         stale: Boolean = false,
+        onEdt: Boolean = false,
         send: (LanguageServer, TextDocumentIdentifier, Position) -> CompletableFuture<R>,
     ): Answer<T>? {
         val pending = start(file, offset, method, convert, send) ?: return null
         @Suppress("UNCHECKED_CAST")
-        val answer = await(pending, budgetMs, wait = mayWait(waitInHighlighting)) as Answer<T>?
+        val answer = await(pending, budgetMs, wait = mayWait(waitInHighlighting, onEdt)) as Answer<T>?
         // Parakeet opts in to status notifications: without a `fresh` one (or a `stale` one, where it counts), there's
         // no usable answer. Any other status, including ones added later, is none.
         if (answer?.editing == true) return answer
@@ -469,6 +481,8 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         const val HIGHLIGHT_BUDGET_MS = 2000L
         /** How long the inlay hints pass waits for a file's hints. */
         const val HINTS_BUDGET_MS = 2000L
+        /** How long Extend Selection waits, on the EDT: Cuttlebone answers from the tokens, in tens of milliseconds. */
+        const val SELECTION_BUDGET_MS = 500L
         private const val POLL_MS = 10L
         /** Cuttlebone stops a check after 5 s (`checkTimeoutMs`); this only guards against a server that stopped answering. */
         private const val REQUEST_TIMEOUT_MS = 30_000
@@ -490,10 +504,14 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
             return (start + position.character).coerceAtMost(document.getLineEndOffset(position.line))
         }
 
-        /** Highlighting passes (unless [inHighlighting]), the EDT, and write actions use cached answers only. */
-        private fun mayWait(inHighlighting: Boolean = false): Boolean {
+        /**
+         * Highlighting passes (unless [inHighlighting]), the EDT (unless [onEdt]: a question Cuttlebone answers
+         * without a check), and write actions use cached answers only.
+         */
+        private fun mayWait(inHighlighting: Boolean = false, onEdt: Boolean = false): Boolean {
             val application = ApplicationManager.getApplication()
-            if (application.isDispatchThread || application.isWriteAccessAllowed) return false
+            if (application.isDispatchThread) return onEdt
+            if (application.isWriteAccessAllowed) return false
             if (inHighlighting) return true
             val indicator = ProgressManager.getGlobalProgressIndicator()?.let(ProgressWrapper::unwrapAll)
             return indicator !is DaemonProgressIndicator

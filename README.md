@@ -102,8 +102,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **Surround With** (⌥⌘T / Ctrl+Alt+T) and **Unwrap/Remove** (⌘⇧⌫ /
   Ctrl+Shift+Delete), **Move Statement** (⇧⌘↑/↓ / Ctrl+Shift+↑/↓),
   **Complete Current Statement** (⇧⌘⏎ / Ctrl+Shift+Enter), and **Extend
-  Selection** (⌥↑ / Ctrl+W) through strings, arguments, brackets, statements,
-  and blocks
+  Selection** (⌥↑ / Ctrl+W) through calls, arguments, strings, brackets,
+  statements, and declarations, from Cuttlebone (also in code that doesn't parse)
 - **Copy Reference** (⌥⇧⌘C / Ctrl+Alt+Shift+C), like `app.util.Helper.new`
 - **New Inko File** (*File → New → Inko File*): a module, a test, or a program
 - Inko highlighting in Markdown ```` ```inko ```` code fences
@@ -292,8 +292,8 @@ compiler, so it always agrees with your installed Inko version.
   pasting adds the ones the target module lacks.
 - **Completing unimported names** only offers `pub` definitions, since Inko
   can't import private ones, and ranks them below names already in scope.
-- **The Structure view, breadcrumbs, indentation, Extend
-  Selection, Unwrap, and postfix completion** come from
+- **The Structure view, breadcrumbs, indentation, Unwrap, and postfix
+  completion** come from
   the file's own tokens, so they follow unsaved edits and work without `inko`.
 
 ## Requirements
@@ -408,6 +408,7 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | Go to Class and Go to Symbol | `workspace/symbol`, through IntelliJ's LSP support | Cuttlebone's: it reads declarations from the syntax |
 | Code folding | `textDocument/foldingRange`, which Parakeet's folding asks for (IntelliJ's own would restart all highlighting, `inko check` too, at each answer) | Cuttlebone's: it folds from the tokens |
 | Reformat Code | `textDocument/formatting`, through IntelliJ's LSP support | none: `inko fmt` refuses code that doesn't parse too |
+| Extend Selection | `textDocument/selectionRange`, which Parakeet's selection asks for (IntelliJ 2025.3's LSP support has none), waiting on the EDT up to 0.5 s: Cuttlebone answers from the tokens, without a check | Cuttlebone's: it reads the tokens |
 
 Where a search for what a refactoring changes has no fresh answer from
 Cuttlebone for a name that may be a use (its check crashed, it ran out of

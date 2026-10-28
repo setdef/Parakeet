@@ -77,15 +77,6 @@ class InkoInterpolationTest : InkoTestCase() {
         assertEquals(listOf("'\${x} items'", "'\${x} items'.size"), candidates.map { it.substring(text) })
     }
 
-    fun testExtendSelectionGrowsFromTheCodeToTheString() {
-        myFixture.configureByText("main.inko", "fn a(name: String) -> String {\n  'hi \${na<caret>me}!'\n}\n")
-        val steps = (1..3).map {
-            myFixture.performEditorAction(com.intellij.openapi.actionSystem.IdeActions.ACTION_EDITOR_SELECT_WORD_AT_CARET)
-            myFixture.editor.selectionModel.selectedText
-        }
-        assertEquals(listOf("name", "hi \${name}!", "'hi \${name}!'"), steps)
-    }
-
     fun testTypingTheClosingQuoteOfAnInterpolatedStringStepsOverIt() {
         myFixture.configureByText("main.inko", "let a = <caret>\n")
         myFixture.type("'\${b}'")

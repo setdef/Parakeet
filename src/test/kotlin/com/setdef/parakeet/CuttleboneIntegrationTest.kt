@@ -137,6 +137,47 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         PlatformTestUtil.waitWithEventsDispatching({ "not formatted: ${myFixture.editor.document.text}" }, { myFixture.editor.document.text == "fn pub run -> Int {\n  1 + 2\n}\n" }, TimingLimits.seconds(30))
     }
 
+    /** The selected text after each press of Extend Selection, from the caret before [at] in [text]. */
+    private fun selections(text: String, at: String, presses: Int): List<String> {
+        open(text)
+        myFixture.editor.caretModel.moveToOffset(text.indexOf(at))
+        return (1..presses).map {
+            myFixture.performEditorAction(com.intellij.openapi.actionSystem.IdeActions.ACTION_EDITOR_SELECT_WORD_AT_CARET)
+            myFixture.editor.selectionModel.selectedText.orEmpty()
+        }
+    }
+
+    // Extend Selection is Cuttlebone's (textDocument/selectionRange): what Parakeet's own steps were (an argument,
+    // a bracket's contents, the brackets, the call, the block, the statement, the method), from the tokens.
+    fun testExtendSelectionIsCuttlebones() {
+        val text = "# Greets.\nfn greet(name: String) {\n  if ready? {\n    print('hi \${name}', count + 1)\n  }\n}\n"
+        val steps = selections(text, "count", 11)
+        assertEquals(
+            listOf(
+                "count",
+                "count + 1",
+                "'hi \${name}', count + 1",
+                "('hi \${name}', count + 1)",
+                "print('hi \${name}', count + 1)",
+                "{\n    print('hi \${name}', count + 1)\n  }",
+                "if ready? {\n    print('hi \${name}', count + 1)\n  }",
+            ),
+            steps.map { it.trim() }.distinct().take(7),
+        )
+        assertTrue(steps.toString(), steps.any { it.startsWith("fn greet") && it.endsWith("}") })
+    }
+
+    // A string's contents, then the string (from the code in it too, below); and in code that doesn't parse, as elsewhere.
+    fun testExtendSelectionInAStringAndInCodeThatDoesntParse() {
+        assertEquals(listOf("world", "hello world", "'hello world'"), selections("fn main {\n  print('hello world')\n}\n\nfn broken( {\n", "orld", 3))
+    }
+
+    fun testExtendSelectionGrowsFromTheCodeInAStringToTheString() {
+        val steps = selections("fn a(name: String) -> String {\n  'hi \${name}!'\n}\n", "ame}", 4)
+        val wanted = listOf("name", "hi \${name}!", "'hi \${name}!'")
+        assertEquals(steps.toString(), wanted, steps.filter { it in wanted })
+    }
+
     /** What IntelliJ's LSP Go to Class or Go to Symbol ([classes]) lists for [pattern]: each item's name and location. */
     private fun goTo(classes: Boolean, pattern: String, libraries: Boolean): List<String> = inBackground {
         // Under a progress indicator, as Go to Class and Search Everywhere ask.

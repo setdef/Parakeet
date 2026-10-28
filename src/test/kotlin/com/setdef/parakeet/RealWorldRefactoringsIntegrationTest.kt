@@ -223,9 +223,15 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
     private fun failures(output: String): Set<String> =
         Regex("""^\s*\d+\. Test: (.+)$""", RegexOption.MULTILINE).findAll(withoutColors(output).orEmpty()).map { it.groupValues[1].trim() }.toSet()
 
+    /**
+     * Saves every document, and waits until the disk has them: IntelliJ 2026.2 returns from a save before the disk has
+     * it (`vfs.async-content-write`), and the sweep reads the copy from disk. Without the wait, a site's edits landed
+     * during the next site: "changed nothing", then "refused, but changed the code" (SESSION-late-edits-and-slimming-3.md).
+     */
     private fun saveAll() {
         PsiDocumentManager.getInstance(project).commitAllDocuments()
         FileDocumentManager.getInstance().saveAllDocuments()
+        com.intellij.openapi.vfs.newvfs.ManagingFS.getInstance().flushPendingUpdates()
         recordDisk()
     }
 
@@ -281,6 +287,7 @@ class RealWorldRefactoringsIntegrationTest : RealWorldTestCase() {
                 // Through the file, so the disk has it even where its document already did (and the document follows).
                 FileDocumentManager.getInstance().getDocument(file)!!.setText(text)
                 FileDocumentManager.getInstance().saveDocument(FileDocumentManager.getInstance().getDocument(file)!!)
+                com.intellij.openapi.vfs.newvfs.ManagingFS.getInstance().flushPendingUpdates(file)
                 if (Files.readString(target) != text) VfsUtil.saveText(file, text)
             }
         }

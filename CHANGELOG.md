@@ -12,6 +12,10 @@
 - Extend Selection is Cuttlebone's (`textDocument/selectionRange`), from the tokens and declarations, also in code that doesn't parse: a call's chain (`a.b` in `a.b.c(x)`), an argument, a string's contents, a bracket's contents and the brackets, the statement, each declaration, and the file. A declaration no longer has a step with the comment above it. Without Cuttlebone, only IntelliJ's own steps (the word, the line) are left.
 - Parakeet needs Cuttlebone 0.14.0 or newer. An older one on `PATH` or in Cargo's `bin` directory is skipped, as one that doesn't run is, and the download is offered as when there's none; one that old in the settings is refused, saying why; an older download is left unused. Releases older than 0.14.0 are no longer offered for download.
 
+### Fixed
+
+- In IntelliJ 2026.2, which writes a saved file to disk after the save returns, Find Usages, Rename and everything else built on Cuttlebone's answers wait for what was saved to reach the disk before they ask: Cuttlebone reads the files no editor has from disk, so right after a refactoring changed such a file, it could answer for the text before the change, as if it were current.
+
 ## [0.14.1] - 2026-10-28
 
 The first release of these changes. 0.14.0 was tagged but never published: its release run failed on CI timing limits, which now scale with each runner's measured speed.

@@ -73,6 +73,38 @@ class CuttleboneClientTest : CuttleboneTestCase() {
         assertTrue(methods.toString(), methods.lastIndexOf("textDocument/didChange") in 0 until methods.indexOf(definition))
     }
 
+    // IntelliJ 2026.2 writes a saved document to disk after the save returns (vfs.async-content-write), and Cuttlebone
+    // reads the files no editor has from disk: a refactoring's edits there must be on disk before the next question.
+    fun testASavedFileIsOnDiskBeforeTheNextQuery() {
+        val other = myFixture.addFileToProject("src/other.inko", "# 0\n" + "# padding\n".repeat(400_000)).virtualFile
+        useFake(answered())
+        open("src/main.inko", text)
+        runningServer()
+        val document = com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getDocument(other)!!
+        var edit = 0
+        val stale = java.util.Collections.synchronizedList(mutableListOf<Int>())
+        val queries = CuttleboneQueries.getInstance(project)
+        queries.trace = object : CuttleboneQueries.Trace {
+            override fun sent(request: Long, method: String, document: com.intellij.openapi.editor.Document) {
+                if (!java.nio.file.Files.readString(java.nio.file.Path.of(other.path)).startsWith("# $edit\n")) stale += edit
+            }
+            override fun answered(request: Long, status: CuttleboneStatus?) {}
+            override fun failed(request: Long, error: Throwable) {}
+        }
+        try {
+            for (next in 1..20) {
+                edit = next
+                com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) { document.replaceString(0, document.text.indexOf('\n'), "# $next") }
+                com.intellij.psi.PsiDocumentManager.getInstance(project).commitAllDocuments()
+                com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().saveDocument(document)
+                assertNotNull("edit $next: no answer", query())
+            }
+        } finally {
+            queries.trace = null
+        }
+        assertEquals("the edits Cuttlebone was asked after with an older file on disk", emptyList<Int>(), stale)
+    }
+
     fun testAnEditedFileIsAskedAboutAsSoonAsItsTextIsSent() {
         useFake(answered())
         open("src/main.inko", text)

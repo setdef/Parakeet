@@ -446,6 +446,7 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
             return null
         }
         if (offset < 0 || offset > document.textLength) return null
+        awaitWrites()
         val identifier = server.getDocumentIdentifier(virtualFile)
         val position = position(document, offset)
 
@@ -493,6 +494,21 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
             }
         }
         return pending
+    }
+
+    /**
+     * Waits until what IntelliJ saved is on disk, where Cuttlebone reads the files no editor has. IntelliJ 2026.2
+     * returns from a save before the disk has it (`vfs.async-content-write`), so a refactoring's edits to such files,
+     * saved, could otherwise be asked about with the text before them on disk. 2025.3 writes before it returns, and
+     * has no such method: hence reflection, which also keeps the Plugin Verifier from finding an experimental API.
+     */
+    private fun awaitWrites() {
+        val flush = FLUSH ?: return
+        try {
+            flush.invoke(com.intellij.openapi.vfs.newvfs.ManagingFS.getInstance())
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            LOG.warn("couldn't wait for IntelliJ's writes to disk", e.targetException)
+        }
     }
 
     /** A request: its answer, the indicator it's sent under, and how many [edits] there had been when it was sent. */
@@ -554,6 +570,9 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
 
     companion object {
         private val LOG = logger<CuttleboneQueries>()
+
+        private val FLUSH: java.lang.reflect.Method? =
+            runCatching { com.intellij.openapi.vfs.newvfs.ManagingFS::class.java.getMethod("flushPendingUpdates") }.getOrNull()
         const val FILE_RENAMES = "workspace/willRenameFiles"
 
         /** The reasons Cuttlebone gives for no answer in code being edited ([Answer.editing]). */

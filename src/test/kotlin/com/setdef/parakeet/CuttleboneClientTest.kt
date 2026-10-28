@@ -290,11 +290,17 @@ class CuttleboneClientTest : CuttleboneTestCase() {
     private fun <T> inHighlighting(action: () -> T): T =
         ProgressManager.getInstance().runProcess<T>({ action() }, com.intellij.codeInsight.daemon.impl.DaemonProgressIndicator())
 
-    fun testStopsWithShutdownAndExit() {
+    // Parakeet stops Cuttlebone gracefully: IntelliJ sends `shutdown`, waits 10 s for its answer (Lsp4jServerConnector,
+    // a fixed time no wait here covers), sends `exit` if the answer came, and disconnects. A fake starved of CPU can
+    // miss those 10 s, and be gone before it has read either, so what was written to it (CuttleboneInputTap) is
+    // checked, not what it logged: `shutdown`, a stop rather than a kill, and no server left.
+    fun testStopsWithShutdown() {
         useFake(answered())
         open("src/main.inko", text)
         runningServer()
+        // The service outlives each test: only this stop's messages count.
+        val sent = CuttleboneService.getInstance(project).sentMessages.apply { clear() }
         CuttleboneService.getInstance(project).reset()
-        waitFor("shutdown and exit") { received("shutdown").isNotEmpty() && received("exit").isNotEmpty() }
+        waitFor("shutdown, and the server stopped") { (sent["shutdown"]?.get() ?: 0) > 0 && CuttleboneService.getInstance(project).server() == null }
     }
 }

@@ -230,21 +230,45 @@ class InkoInstanceMethodRenameProcessor : RenamePsiElementProcessor() {
         return other.takeIf { it.name == wanted && InkoDeclarations.isInstanceMethod(it) }
     }
 
+    /**
+     * The methods renamed with [method]: the trait's method it implements (by Cuttlebone's fresh declaration), or
+     * [method], and every method implementing that (its fresh implementations), and what Cuttlebone had no answer
+     * for, if anything (for the conflicts).
+     */
+    private class TraitMethods(val trait: List<InkoDeclaration>, val all: List<PsiElement>, val unanswered: String?)
+
+    private fun traitMethods(method: InkoDeclaration): TraitMethods = CuttleboneQueries.offTheEdt(method.project, "Finding Trait Methods") {
+        val file = method.containingFile
+        val offset = method.textRange.startOffset
+        val outline = file.inkoOutline
+        val container = outline.enclosing(offset).dropLast(1).lastOrNull()
+        val queries = CuttleboneQueries.getInstance(method.project)
+        val trait = if (container?.kind == InkoOutline.Kind.IMPL && outline.implTrait(container) != null) {
+            val answer = queries.declaration(file, offset)?.takeIf { !it.editing }
+                ?: return@offTheEdt TraitMethods(emptyList(), listOf(method), "which trait's method `${method.name}` implements")
+            answer.value.orEmpty().mapNotNull(queries::target).filterIsInstance<InkoDeclaration>().filter { it != method }
+        } else emptyList()
+        val all = mutableListOf<PsiElement>()
+        for (traitMethod in trait.ifEmpty { listOf(method) }) {
+            all += traitMethod
+            all += InkoTraitNavigation.implementations(traitMethod)
+                ?: return@offTheEdt TraitMethods(trait, all + method, "the methods implementing `${traitMethod.name}`")
+        }
+        TraitMethods(trait, (all + method).distinct(), null)
+    }
+
     private fun renameWithTraitMethods(method: InkoDeclaration, newName: String, allRenames: MutableMap<PsiElement, String>) {
-        val traitMethods = InkoTraitNavigation.supers(method.containingFile, method.textRange.startOffset).filterIsInstance<InkoDeclaration>()
-        for (traitMethod in traitMethods.ifEmpty { listOf(method) }) {
-            if (traitMethod != method && InkoRenameVeto().value(traitMethod)) continue
-            allRenames[traitMethod] = newName
-            for (implementation in InkoTraitNavigation.implementations(traitMethod)) {
-                if (implementation != method && !InkoRenameVeto().value(implementation)) allRenames[implementation] = newName
-            }
+        for (other in traitMethods(method).all) {
+            if (other == method || !InkoRenameVeto().value(other)) allRenames[other] = newName
         }
     }
 
     override fun findExistingNameConflicts(element: PsiElement, newName: String, conflicts: com.intellij.util.containers.MultiMap<PsiElement, String>) {
         val method = element as? InkoDeclaration ?: return
+        val related = traitMethods(method)
+        related.unanswered?.let { conflicts.putValue(method, "Cuttlebone has no answer for $it (the project doesn't type check there), so they aren't renamed with it.") }
         // A method implementing a trait's method from outside the project, which can't be renamed with it.
-        for (traitMethod in InkoTraitNavigation.supers(method.containingFile, method.textRange.startOffset).filterIsInstance<InkoDeclaration>()) {
+        for (traitMethod in related.trait) {
             if (InkoRenameVeto().value(traitMethod)) {
                 conflicts.putValue(method, "`${method.name}` implements a trait's method from outside the project, which can't be renamed, so it would no longer implement it.")
             }

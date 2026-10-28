@@ -70,15 +70,12 @@ class InkoDefinitionIndexTest : InkoTestCase(onDisk = true) {
         assertEquals("app.test_util", symbols().named("tests").single().module)
     }
 
-    // A trait's implementations are the `impl Trait for Type` blocks naming it, in src/ and test/, by the module each
-    // imports it from: std's ToString here, and app.util's own Show.
-    fun testTraitsAndTheirImplementationsAreLinked() {
+    // A method an `impl Trait for Type` block writes is the type's, in src/ and test/ (which traits each type
+    // implements is Cuttlebone's: InkoTraitMarkersTest).
+    fun testImplBlocksMethodsAreTheirTypes() {
         myFixture.addFileToProject("src/app/util.inko", "import std.string (ToString)\n\ntrait pub Show {\n  fn pub show -> String\n}\n\n$util\nimpl Show for Helper {\n  fn pub show -> String {\n    ''\n  }\n}\n\nimpl ToString for Helper {\n  fn pub to_string -> String {\n    ''\n  }\n}\n")
         myFixture.addFileToProject("test/app/test_util.inko", "import app.util (Show)\n\ntype Fake {}\n\nimpl Show for Fake {\n  fn pub show -> String {\n    'fake'\n  }\n}\n")
 
-        assertEquals(setOf(InkoTypeRef("app.util", "Helper"), InkoTypeRef("app.test_util", "Fake")), symbols().named("Show", Kind.TRAIT).single().related.toSet())
-        assertEquals(listOf(InkoTypeRef("app.util", "Helper")), symbols().named("ToString", Kind.TRAIT).single().related)
-        assertEquals(setOf(InkoTypeRef("app.util", "Show"), InkoTypeRef("std.string", "ToString")), symbols().named("Helper", Kind.TYPE).single().related.toSet())
         assertEquals(listOf("Fake", "Helper"), symbols().named("show", Kind.INSTANCE_METHOD).mapNotNull { it.owner }.filter { it != "Show" }.sorted())
     }
 }

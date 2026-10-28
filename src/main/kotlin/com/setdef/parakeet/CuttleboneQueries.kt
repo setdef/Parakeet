@@ -262,13 +262,34 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         }
 
     /**
+     * What implements the trait, or the trait's method, whose name is at [offset], as their names: every type, or
+     * every type's method, the type database records, from one check of the whole project, complete or none (fresh
+     * only). The gutter icons' highlighting pass waits for it, and Rename changes code from it.
+     */
+    fun implementations(file: PsiFile, offset: Int, budgetMs: Long = SEARCH_BUDGET_MS): Answer<List<Location>>? =
+        query(file, offset, "textDocument/implementation", budgetMs, ::locations, waitInHighlighting = true) { server, document, position ->
+            server.textDocumentService.implementation(org.eclipse.lsp4j.ImplementationParams(document, position))
+        }
+
+    /**
+     * Where what's at [offset] is declared: for a type's method implementing a trait's, the trait's method; for
+     * anything else, its definition. A stale answer only where [stale] (Rename changes code from it). The gutter
+     * icons' highlighting pass waits for it.
+     */
+    fun declaration(file: PsiFile, offset: Int, budgetMs: Long = SEARCH_BUDGET_MS, stale: Boolean = false): Answer<List<Location>>? =
+        query(file, offset, "textDocument/declaration", budgetMs, ::locations, waitInHighlighting = true, stale = stale) { server, document, position ->
+            server.textDocumentService.declaration(org.eclipse.lsp4j.DeclarationParams(document, position))
+        }
+
+    /**
      * The traits the type whose name is at [offset] implements, or the traits the trait there requires, as their
-     * names: from the type database, checking the whole project, complete or none. Only Type Hierarchy shows it.
+     * names: from the type database, checking the whole project, complete or none. Type Hierarchy, the gutter icons
+     * (whose highlighting pass waits for it) and Generate show it.
      */
     fun supertypes(file: PsiFile, offset: Int, budgetMs: Long = SEARCH_BUDGET_MS): Answer<List<Location>>? =
         query(file, offset, "typeHierarchy/supertypes", budgetMs, { items: List<org.eclipse.lsp4j.TypeHierarchyItem>? ->
             items?.map { Location(it.uri, it.selectionRange) }
-        }, stale = true) { server, document, position ->
+        }, waitInHighlighting = true, stale = true) { server, document, position ->
             server.textDocumentService.typeHierarchySupertypes(org.eclipse.lsp4j.TypeHierarchySupertypesParams(typeItem(document, position)))
         }
 
@@ -526,6 +547,14 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         private const val REQUEST_TIMEOUT_MS = 30_000
 
         fun getInstance(project: Project): CuttleboneQueries = project.service()
+
+        /** [compute], under a modal progress titled [title] when it's asked on the EDT, where answers can't be waited for. */
+        fun <T> offTheEdt(project: Project, title: String, compute: () -> T): T {
+            if (!ApplicationManager.getApplication().isDispatchThread) return compute()
+            return ProgressManager.getInstance().runProcessWithProgressSynchronously<T, RuntimeException>(
+                { com.intellij.openapi.application.ReadAction.compute<T, RuntimeException>(compute) }, title, true, project,
+            )
+        }
 
         private fun locations(result: Either<List<Location>, List<LocationLink>>?): List<Location>? = result?.let {
             if (it.isLeft) it.left else it.right.map { link -> Location(link.targetUri, link.targetSelectionRange) }

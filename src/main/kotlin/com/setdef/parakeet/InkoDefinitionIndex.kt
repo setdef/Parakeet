@@ -16,16 +16,15 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
-import com.setdef.parakeet.InkoDefinitionKind as Kind
 
 /**
  * The definitions each Inko project can see, read from the code ([InkoSourceDefinitions]): its own `src/` and
- * `test/`, its dependencies in `dep/`, and the standard library, unsaved text in place of a file's. A trait's
- * implementations are the `impl Trait for Type` blocks naming it. Each file is read again only when it changes.
+ * `test/`, its dependencies in `dep/`, and the standard library, unsaved text in place of a file's. Each file is
+ * read again only when it changes.
  */
 @Service(Service.Level.PROJECT)
 class InkoDefinitionIndex(private val project: Project) {
-    private class Read(val stamp: Long, val definitions: List<InkoDefinition>, val implementations: List<Pair<InkoTypeRef, InkoTypeRef>>)
+    private class Read(val stamp: Long, val definitions: List<InkoDefinition>)
 
     private val files = ConcurrentHashMap<Path, Read>()
     private val merged = ConcurrentHashMap<Path, Pair<List<Any>, InkoSymbols>>()
@@ -40,18 +39,7 @@ class InkoDefinitionIndex(private val project: Project) {
         val key = listOf(generation.get(), unsaved.mapValues { it.value.modificationStamp }, System.identityHashCode(InkoCli.getInstance(project)))
         merged[root]?.takeIf { it.first == key }?.let { return it.second }
         val sources = sources(root).ifEmpty { return null }
-        val reads = sources.flatMap { (base, paths) -> paths.mapNotNull { read(base, it, unsaved[it]) } }
-        val implementations = reads.flatMap { it.implementations }
-        val implementing = implementations.groupBy({ it.first }, { it.second })
-        val implemented = implementations.groupBy({ it.second }, { it.first })
-        val definitions = reads.flatMap { it.definitions }.map { definition ->
-            val ref = InkoTypeRef(definition.module, definition.name)
-            when (definition.kind) {
-                Kind.TRAIT -> implementing[ref]?.let { definition.copy(related = it.distinct()) } ?: definition
-                Kind.TYPE -> implemented[ref]?.let { definition.copy(related = it.distinct()) } ?: definition
-                else -> definition
-            }
-        }
+        val definitions = sources.flatMap { (base, paths) -> paths.mapNotNull { read(base, it, unsaved[it]) } }.flatMap { it.definitions }
         return InkoSymbols(definitions).also { merged[root] = key to it }
     }
 
@@ -90,13 +78,13 @@ class InkoDefinitionIndex(private val project: Project) {
             }.toMap()
         }
 
-    /** [path]'s definitions, and the `impl` blocks in it, as of its unsaved text if it has some. */
+    /** [path]'s definitions, as of its unsaved text if it has some. */
     private fun read(base: Path, path: Path, unsaved: com.intellij.openapi.editor.Document?): Read? {
         val stamp = unsaved?.let { -it.modificationStamp } ?: runCatching { Files.getLastModifiedTime(path).toMillis() * 31 + Files.size(path) }.getOrNull() ?: return null
         files[path]?.takeIf { it.stamp == stamp }?.let { return it }
         val text = unsaved?.immutableCharSequence ?: runCatching { Files.readString(path) }.getOrNull() ?: return null
         val module = base.relativize(path).joinToString(".").removeSuffix(".${Inko.EXTENSION}")
-        return Read(stamp, InkoSourceDefinitions.of(path, module, text), InkoSourceDefinitions.implementations(module, text)).also { files[path] = it }
+        return Read(stamp, InkoSourceDefinitions.of(path, module, text)).also { files[path] = it }
     }
 
     fun invalidate(path: Path) {

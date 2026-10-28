@@ -67,7 +67,7 @@ object InkoSearch {
         val stamp = PsiModificationTracker.getInstance(target.project).modificationCount
         implementations[target]?.takeIf { it.first == stamp }?.let { return it.second }
         // Only a method: a trait's implementations are types, which aren't uses of the trait.
-        val also = if (InkoCallHierarchy.isMethod(target)) InkoTraitNavigation.implementations(target) else emptyList()
+        val also = if (InkoCallHierarchy.isMethod(target)) InkoTraitNavigation.implementations(target).orEmpty() else emptyList()
         return (listOf(target) + also).distinct().also { implementations[target] = stamp to it }
     }
 

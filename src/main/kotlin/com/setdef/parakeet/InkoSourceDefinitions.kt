@@ -60,19 +60,6 @@ object InkoSourceDefinitions {
         return result
     }
 
-    /**
-     * The `impl Trait for Type` blocks in [text], the module [module], as (trait, type): each named by the module
-     * [text] imports it from, else as [module]'s own.
-     */
-    fun implementations(module: String, text: CharSequence): List<Pair<InkoTypeRef, InkoTypeRef>> {
-        val outline = InkoOutline.of(text)
-        val imports = InkoImports.parse(text)
-        fun ref(name: String) = imports.symbol(name)?.let { (from, original) -> InkoTypeRef(from, original) } ?: InkoTypeRef(module, name)
-        return outline.roots.filter { it.kind == InkoOutline.Kind.IMPL }.mapNotNull { impl ->
-            ref(outline.implTrait(impl) ?: return@mapNotNull null) to ref(outline.implTarget(impl) ?: return@mapNotNull null)
-        }
-    }
-
     private fun isStatic(text: CharSequence, node: InkoOutline.Node): Boolean =
         Regex("\\bstatic\\b").containsMatchIn(text.subSequence(node.range.startOffset, node.nameOffset))
 

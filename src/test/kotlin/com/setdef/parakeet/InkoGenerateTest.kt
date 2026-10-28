@@ -6,11 +6,13 @@ import com.intellij.testFramework.TestActionEvent
 
 /** Generate (⌘N / Alt+Insert). */
 class InkoGenerateTest : InkoTestCase(onDisk = true) {
+    private lateinit var std: java.nio.file.Path
+
     override fun setUp() {
         super.setUp()
         putTempDirInProjectContent()
         myFixture.addFileToProject("inko.pkg", "")
-        val std = FakeStd.write(java.nio.file.Path.of(myFixture.tempDirPath).parent.resolve("std-$name"), mapOf(
+        std = FakeStd.write(java.nio.file.Path.of(myFixture.tempDirPath).parent.resolve("std-$name"), mapOf(
             "std.cmp" to "trait pub Equal {\n  fn pub ==(other: ref Self) -> Bool\n}\n",
             "std.string" to "type builtin String {}\n\ntrait pub ToString {\n  fn pub to_string -> String\n}\n",
             "std.int" to "type builtin Int {}\n",
@@ -75,6 +77,20 @@ class InkoGenerateTest : InkoTestCase(onDisk = true) {
         var offered = emptyList<String>()
         InkoGenerateTraitImplAction.chooser = { traits -> offered = traits.map { it.name }; null }
         open("import std.cmp (Equal)\n\ntype Point {\n  let @x: Int<caret>\n}\n\nimpl Equal for Point {\n  fn pub ==(other: ref Point) -> Bool {\n    true\n  }\n}\n")
+        myFixture.performEditorAction("Parakeet.GenerateTraitImpl")
+        assertEquals(listOf("ToString"), offered)
+    }
+
+    // An `impl` in another module counts too: Cuttlebone's type database says which traits the type implements.
+    fun testTraitsImplementedElsewhereAreNotOffered() {
+        val text = "type Point {\n  let @x: Int<caret>\n}\n"
+        val equal = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByNioFile(std.resolve("std/cmp.inko"))!!
+        Compiler().answers("typeHierarchy/supertypes", At("src/app/point.inko", text, "Point")) {
+            listOf(org.eclipse.lsp4j.Location(equal.url, org.eclipse.lsp4j.Range(org.eclipse.lsp4j.Position(0, 10), org.eclipse.lsp4j.Position(0, 15))))
+        }.install()
+        var offered = emptyList<String>()
+        InkoGenerateTraitImplAction.chooser = { traits -> offered = traits.map { it.name }; null }
+        open(text)
         myFixture.performEditorAction("Parakeet.GenerateTraitImpl")
         assertEquals(listOf("ToString"), offered)
     }

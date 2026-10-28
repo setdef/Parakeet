@@ -4,7 +4,7 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.search.searches.DefinitionsScopedSearch
 
-/** Go to Implementation (⌥⌘B) and Go to Super Method (⌘U), from inko doc's trait data. */
+/** Go to Implementation (⌥⌘B) and Go to Super Method (⌘U), from Cuttlebone's answers (the type database's). */
 class InkoTraitNavigationTest : InkoTestCase(onDisk = true) {
     private val util = """
         |trait pub Show {
@@ -28,10 +28,21 @@ class InkoTraitNavigationTest : InkoTestCase(onDisk = true) {
         |}
         |""".trimMargin()
 
+    private fun at(marker: String, nth: Int = 0) = At("src/app/util.inko", util, marker, nth = nth)
+
+    /** Cuttlebone's answers for util.inko: what implements Show and its method, and what each implementation implements. */
+    private fun traits(implementations: List<At> = listOf(at("show -> String {"), at("show -> String {", nth = 1))) = Compiler()
+        .resolves(at("Show for Helper"), at("Show {"))
+        .resolves(at("Show for Other"), at("Show {"))
+        .answers("textDocument/implementation", at("Show {")) { listOf(at("Helper {}"), at("Other {}")).map(::location) }
+        .answers("textDocument/implementation", at("show -> String\n")) { implementations.map(::location) }
+        .answers("textDocument/declaration", at("show -> String {")) { listOf(location(at("show -> String\n"))) }
+        .answers("textDocument/declaration", at("show -> String {", nth = 1)) { listOf(location(at("show -> String\n"))) }
+        .answers("typeHierarchy/supertypes", at("Helper {}")) { listOf(location(at("Show {"))) }
+
     override fun setUp() {
         super.setUp()
-        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
-        cuttleboneCantCheckTheCode()
+        traits().install()
         myFixture.addFileToProject("src/app/util.inko", util)
         useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
         myFixture.configureFromExistingVirtualFile(myFixture.findFileInTempDir("src/app/util.inko"))
@@ -58,11 +69,13 @@ class InkoTraitNavigationTest : InkoTestCase(onDisk = true) {
 
     fun testATraitMethodsImplementationsAreTheImplMethods() = assertEquals(listOf("16:show", "8:show"), implementationsOf("show -> String\n"))
 
-    // inko-syntax's `impl Lexer for DummyLexer` and openflow's test drivers: `inko doc` documents only `src/`, so an
-    // implementation in `test/` is found from the code. Renaming the trait's method renamed every other one.
+    // inko-syntax's `impl Lexer for DummyLexer` and openflow's test drivers: an implementation in `test/` is one
+    // Cuttlebone's type database has too.
     fun testATraitMethodsImplementationsInTestsToo() {
         putTempDirInProjectContent()
-        myFixture.addFileToProject("test/app/test_util.inko", "import app.util (Show)\n\ntype Fake {}\n\nimpl Show for Fake {\n  fn pub show -> String {\n    'f'\n  }\n}\n")
+        val test = "import app.util (Show)\n\ntype Fake {}\n\nimpl Show for Fake {\n  fn pub show -> String {\n    'f'\n  }\n}\n"
+        myFixture.addFileToProject("test/app/test_util.inko", test)
+        traits(listOf(at("show -> String {"), at("show -> String {", nth = 1), At("test/app/test_util.inko", test, "show"))).install()
         val declaration = myFixture.file.findElementAt(offsetOf("show -> String\n"))!!.parent as InkoDeclaration
         val found = DefinitionsScopedSearch.search(declaration).findAll().map { "${it.containingFile.name}:${it.location()}" }.sorted()
         assertEquals(listOf("test_util.inko:6:show", "util.inko:16:show", "util.inko:8:show"), found)
@@ -106,7 +119,7 @@ class InkoTraitNavigationTest : InkoTestCase(onDisk = true) {
         putTempDirInProjectContent()
         myFixture.addFileToProject("src/main.inko", main)
         val traitMethod = At("src/app/util.inko", util, "show -> String\n")
-        Compiler()
+        traits()
             .resolves(At("src/main.inko", main, "show\n}\n\nfn"), traitMethod)
             .resolves(At("src/main.inko", main, "show\n}\n", nth = 1), At("src/app/util.inko", util, "show -> String {"))
             .resolves(At("src/main.inko", main, "Show]"), At("src/app/util.inko", util, "Show {"))

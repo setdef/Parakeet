@@ -31,6 +31,10 @@ class InkoTraitImpl(val impl: InkoOutline.Node, val trait: InkoDefinition, priva
             .distinctBy { it.name }
             .sortedBy { it.line }
 
+    /** The trait's method [name], which a method of that name in the impl implements. */
+    fun traitMethod(name: String): InkoDefinition? =
+        symbols.ownedBy(trait.name, Kind.INSTANCE_METHOD, Kind.STATIC_METHOD).firstOrNull { it.module == trait.module && it.name == name }
+
     /** A method definition for [method], with the impl's type arguments in place of the trait's parameters. */
     fun stub(method: InkoDefinition): String {
         var signature = method.signature?.takeIf { it.startsWith("fn") } ?: "fn ${method.name}"
@@ -47,8 +51,16 @@ class InkoTraitImpl(val impl: InkoOutline.Node, val trait: InkoDefinition, priva
             val impl = outline.enclosing(offset).lastOrNull { it.kind == InkoOutline.Kind.IMPL } ?: return null
             val traitName = outline.implTrait(impl) ?: return null
             val symbols = InkoDefinitionIndex.getInstance(file.project).symbols(Inko.projectRoot(path)) ?: return null
-            val trait = InkoTraitLinks.trait(symbols, InkoImports.parse(text), traitName) ?: return null
+            val trait = trait(symbols, InkoImports.parse(text), traitName) ?: return null
             return InkoTraitImpl(impl, trait, substitutions(trait, impl), symbols)
+        }
+
+        /** The trait [name] refers to: the one imported under that name, or any trait so named. */
+        private fun trait(symbols: InkoSymbols, imports: InkoImports, name: String): InkoDefinition? {
+            imports.symbol(name)?.let { (module, original) ->
+                symbols.named(original, Kind.TRAIT).firstOrNull { it.module == module }?.let { return it }
+            }
+            return symbols.named(name, Kind.TRAIT).firstOrNull()
         }
 
         // `trait Equal[T]` and `impl Equal[Int] for X` give T → Int.

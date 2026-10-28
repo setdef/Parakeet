@@ -17,36 +17,26 @@ import com.intellij.util.Processor
 /** Go to Implementation and Go to Super Method, from the same trait links as the gutter icons. */
 object InkoTraitNavigation {
     /**
-     * Implementations of the trait or trait method [declaration] names. Looked up
-     * in every Inko project's index, so a standard-library trait like `ToString`
-     * finds the project's own implementations.
+     * What implements the trait or trait method [declaration] declares: Cuttlebone's answer, from the type
+     * database of the projects that can use it (a standard-library trait like `ToString` finds the project's
+     * implementations), complete or none. Null without its answer.
      */
-    fun implementations(declaration: InkoDeclaration): List<PsiElement> {
-        val file = declaration.containingFile ?: return emptyList()
-        val path = Inko.pathOf(file.virtualFile) ?: return emptyList()
-        val index = InkoDefinitionIndex.getInstance(file.project)
-        val roots = InkoProjectRoots.find(file.project).ifEmpty { listOf(Inko.projectRoot(path)) }
-        val token = declaration.firstChild ?: return emptyList()
-        return (roots.mapNotNull { index.symbols(it) }
-            .mapNotNull { InkoTraitLinks.of(token, it) }
-            .filter { it.toImplementations }
-            .flatMap { it.targets }
-            .distinct()
-            .mapNotNull { InkoResolver.toPsi(file, it) })
-            .distinct()
+    fun implementations(declaration: InkoDeclaration): List<PsiElement>? {
+        val queries = CuttleboneQueries.getInstance(declaration.project)
+        val answer = queries.implementations(declaration.containingFile, declaration.textRange.startOffset)?.takeIf { !it.editing } ?: return null
+        return answer.value.orEmpty().mapNotNull(queries::target).distinct()
     }
 
     /**
-     * What the declaration around [offset] implements: an impl method's trait
-     * method, an impl's trait, or the traits a type implements.
+     * What the declaration around [offset] implements: an impl method's trait method, an impl's trait, or the
+     * traits a type implements. Fresh answers only where [fresh] (Rename changes code from them).
      */
-    fun supers(file: PsiFile, offset: Int): List<PsiElement> {
+    fun supers(file: PsiFile, offset: Int, fresh: Boolean = false): List<PsiElement> {
         val outline = file.inkoOutline
         val node = outline.enclosing(offset).lastOrNull { it.kind != InkoOutline.Kind.FIELD } ?: return emptyList()
         if (node.kind !in setOf(InkoOutline.Kind.METHOD, InkoOutline.Kind.IMPL, InkoOutline.Kind.TYPE)) return emptyList()
         val token = file.findElementAt(node.nameOffset) ?: return emptyList()
-        val link = InkoTraitLinks.of(token)?.takeIf { !it.toImplementations } ?: return emptyList()
-        return link.targets.mapNotNull { InkoResolver.toPsi(file, it) }.distinct()
+        return InkoTraitLinks.of(token, fresh)?.takeIf { !it.toImplementations }?.targets.orEmpty()
     }
 }
 
@@ -54,7 +44,7 @@ object InkoTraitNavigation {
 class InkoImplementationsSearch : QueryExecutorBase<PsiElement, DefinitionsScopedSearch.SearchParameters>(true) {
     override fun processQuery(parameters: DefinitionsScopedSearch.SearchParameters, consumer: Processor<in PsiElement>) {
         val declaration = parameters.element as? InkoDeclaration ?: return
-        for (implementation in InkoTraitNavigation.implementations(declaration)) {
+        for (implementation in InkoTraitNavigation.implementations(declaration).orEmpty()) {
             if (!consumer.process(implementation)) return
         }
     }
@@ -65,7 +55,7 @@ class InkoGotoSuperHandler : CodeInsightActionHandler {
     override fun startInWriteAction(): Boolean = false
 
     override fun invoke(project: Project, editor: Editor, file: PsiFile) {
-        val targets = InkoTraitNavigation.supers(file, editor.caretModel.offset)
+        val targets = CuttleboneQueries.offTheEdt(project, "Finding Traits") { InkoTraitNavigation.supers(file, editor.caretModel.offset) }
         when {
             targets.isEmpty() -> if (!ApplicationManager.getApplication().isUnitTestMode) {
                 HintManager.getInstance().showErrorHint(editor, "No trait or trait method to go to")

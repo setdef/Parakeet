@@ -143,8 +143,11 @@ object InkoTraitImpls {
         val symbols = InkoDefinitionIndex.getInstance(file.project).symbols(root) ?: return emptyList()
         val module = symbols.moduleOf(path) ?: Inko.moduleName(path)
         val outline = InkoOutline.of(file.text)
+        // The `impl`s here, and the traits Cuttlebone's type database says it implements (in other modules too).
+        val declared = outline.roots.firstOrNull { it.kind == InkoOutline.Kind.TYPE && it.label == type }
+        val queries = CuttleboneQueries.getInstance(file.project)
         val implemented = outline.roots.filter { it.kind == InkoOutline.Kind.IMPL && outline.implTarget(it) == type }.mapNotNull(outline::implTrait).toSet() +
-            symbols.named(type, Kind.TYPE).filter { it.module == module }.flatMap { it.related }.map { it.name }
+            CuttleboneQueries.offTheEdt(file.project, "Finding Traits") { declared?.let { queries.supertypes(file, it.nameOffset)?.value }.orEmpty().mapNotNull(queries::target).map { it.text } }
         return symbols.ofKind(Kind.TRAIT)
             .filter { (it.public || it.module == module) && it.name !in implemented }
             .filter { !it.file.startsWith(root.resolve("test")) }

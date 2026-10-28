@@ -151,13 +151,12 @@ compiler, so it always agrees with your installed Inko version.
   unsaved text in place of the file, then runs `inko check` there, so imports in
   both directions and dependencies resolve.
 - **Go to definition, quick documentation, completion,
-  parameter info and hints, and trait gutter icons** use the definitions
+  parameter info and hints, and Implement Methods** use the definitions
   Parakeet reads from the code: the project's `src/` and `test/`, its
   dependencies in `dep/`, and the standard library (`inko print std`), with
   unsaved text in place of a file's, each file read again when it changes.
   Nothing is compiled for it, so it follows unsaved edits and code that
-  doesn't compile. A trait's implementations are the `impl Trait for Type`
-  blocks naming it, by the module each file imports it from.
+  doesn't compile.
 - **Cuttlebone** answers with the compiler's own types and definitions; see
   [Cuttlebone](#cuttlebone) for which features ask it. Parakeet requires
   it: without it, what needs the compiler's types (go to definition of
@@ -257,8 +256,16 @@ compiler, so it always agrees with your installed Inko version.
 - **Implement and Override Methods** stub a trait's required methods (those
   without a body) or default ones, with bodies that call
   `panic('not implemented')` (in Inko's prelude), which compiles for any
-  return type. **Go to Implementation and Super Method** follow the same
-  trait links as the gutter icons.
+  return type. **Go to Implementation and Super Method** are Cuttlebone's:
+  `textDocument/implementation` (what implements a trait or its method, from
+  the type database), `textDocument/declaration` (the trait's method a type's
+  method implements), and a type's traits from its type hierarchy. **The trait
+  gutter icons** pointing down to implementations are Cuttlebone's too; those
+  pointing up from an `impl` come from its header and the trait's declaration,
+  as Implement Methods reads them (a request per method on every highlighting
+  pass would be too many), and a type has no icon (⌘U finds its traits).
+  **Generate → Implement Trait** leaves out the traits Cuttlebone says the type
+  implements, in other modules too.
 - **Style-guide inspections** follow
   [Inko's style guide](https://docs.inko-lang.org/manual/latest/references/style/)
   where `inko fmt` doesn't. Removing an argument name is only offered where it
@@ -402,6 +409,7 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
 | Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
 | Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
+| Go to Implementation and Super Method, trait gutter icons to implementations, a trait method's implementations in Find Usages and Rename | `textDocument/implementation` and `textDocument/declaration`, and a type's supertypes, which Parakeet asks for (IntelliJ 2025.3's LSP support has none); Rename takes fresh answers only | none; Rename lists it as a conflict |
 | Completion after `.` | `textDocument/completion` on the real buffer | Parakeet's reading |
 | Parameter info | `textDocument/signatureHelp`: the resolved method's signature, with the receiver's type arguments, and the argument's parameter (named ones too). For a type's constructor (`Point(x: 1)`), which it has none for, the type's fields | Parakeet's reading |
 | Parameter-name and type hints | `textDocument/inlayHint`, once for the whole file | none: hints only inform |

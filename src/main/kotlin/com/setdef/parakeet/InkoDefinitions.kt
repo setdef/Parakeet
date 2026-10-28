@@ -19,16 +19,11 @@ data class InkoDefinition(
     val column: Int,
     val signature: String? = null,
     val documentation: String = "",
-    /** For a trait, the types implementing it; for a type, the traits it implements. */
-    val related: List<InkoTypeRef> = emptyList(),
     /** For a trait's method, whether implementations must define it (it has no default body). */
     val required: Boolean = false,
     /** Whether it's `pub`, so other modules can import or call it. */
     val public: Boolean = true,
 )
-
-/** A type or trait named by module, e.g. `Show` in `app.util`. */
-data class InkoTypeRef(val module: String, val name: String)
 
 /** Every definition in a project (and its dependencies and the standard library), by name and module. */
 class InkoSymbols(definitions: List<InkoDefinition>) {

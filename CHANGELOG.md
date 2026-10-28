@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-28
+
 ### Changed
 
 - Code folding is Cuttlebone's (`textDocument/foldingRange`), so it also folds a call's arguments, arrays and other brackets over several lines, and folds as before in code that doesn't parse. Folds now show `...` as their placeholder.

@@ -409,9 +409,6 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | Find Usages, Rename, usage counts, and the refactorings built on them | `textDocument/references`, once per search, for the whole project; a trait's method with its implementations' | each candidate's `textDocument/definition`, a file's at once; Find Usages alone adds Parakeet's reading, as possible usages, and Rename lists them as conflicts |
 | Call Hierarchy | `callHierarchy/incomingCalls` (from one check of the whole project, by the compiler's ids) and `outgoingCalls`, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | a stale answer for callees; none for callers |
 | Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
-| Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
-| Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
-| Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
 | Go to Implementation and Super Method, trait gutter icons to implementations, a trait method's implementations in Find Usages and Rename | `textDocument/implementation` and `textDocument/declaration`, and a type's supertypes, which Parakeet asks for (IntelliJ 2025.3's LSP support has none); Rename takes fresh answers only | none; Rename lists it as a conflict |
 | Moving files and directories, and renaming directories | `workspace/willRenameFiles`, asked before the move and made after it (IntelliJ 2025.3's LSP support has none) | none: a conflict says so |
 | Errors and warnings, their quick fixes, Inspect Code, Optimize Imports' unused imports | `textDocument/diagnostic`: the same as `inko check`, from a check of the documents as they are | Cuttlebone's: it checks the code as it is |
@@ -584,6 +581,7 @@ Audits and session reports, oldest first:
 - [Find Usages and the refactorings on real-world code](docs/history/SESSION-real-world-refactorings.md)
 - [0.13.1, and stale answers](docs/history/SESSION-0.13.1-and-stale-answers.md)
 - [Slimming Parakeet](docs/history/SESSION-slimming.md)
+- [Slimming Parakeet, part 2: Cuttlebone 0.14.0](docs/history/SESSION-slimming-2.md)
 
 ## Icon
 

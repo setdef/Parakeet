@@ -377,25 +377,42 @@ counts): `shutdown`, a stop rather than a kill, and no server left.
 
 ## The final check
 
-`scripts/check.sh --full` against Cuttlebone 0.14.0 passed on 9bebec9's code
-with this report's files in place (the tree this commit makes), in 959 s, at
-load averages of about 10 to 40 (the other agents had gone quiet): the tests
-(unit, integration and guardrails), the typing replay (128 and 85 requests
-in std's `json.inko`, under 0.7 a keystroke; about 0.4 before this work, the
-rest being the editor's diagnostics pulls in place of `inko check`), the
-plugin build, the real-world projects (`PARAKEET_FIXTURES` naming the
-checkouts beside this repository), and the Plugin Verifier against 2025.3
-and 2026.2.3.
+Three runs of `scripts/check.sh --full` against Cuttlebone 0.14.0, at load
+averages of about 10 to 100:
 
-Of the real-world projects, three skipped themselves, as the test does for a
-project that doesn't type check with the installed Inko: clogs and shost
+1. **On 9bebec9's code with this report in place** (the tree 3ffd685 made):
+   passed, in 959 s: the tests, the typing replay (128 and 85 requests in
+   std's `json.inko`, under 0.7 a keystroke; about 0.4 before this work, the
+   rest being the editor's diagnostics pulls in place of `inko check`), the
+   plugin build, the real-world projects, and the Plugin Verifier against
+   2025.3 and 2026.2.3.
+2. **On the merge of release/0.14 (9b51502), the final code**: everything
+   but one real-world sweep site. In kvi, "Safe Delete at `ReaderWriter`:
+   refused, but changed the code", the change being `out` renamed to
+   `out_renamed` in `test/kvi/test_server.inko`; earlier in the same sweep,
+   "Rename at `out` (test/kvi/test_server.inko:191): changed nothing". So
+   that rename landed after the sweep looked, and the next site was blamed.
+   kvi's sweep passed rerun alone.
+3. **The same commit again**: everything but one site in inko-builder:
+   "Rename at `GT` (src/builder/xml.inko:8): threw
+   java.lang.NullPointerException" in the sweep's own `declarationAt`, which
+   found no declaration where the site was.
+
+Both are shapes the last session saw once each and couldn't explain, before
+this work (yorickpeterse.com's "Rename at `request`: refused, but changed
+the code", and inko-builder's `declarationAt` finding no declaration). Both
+look like an earlier site's change still arriving, or not undone, when the
+next site runs. They aren't timing limits, so they count: **the final commit
+doesn't reliably pass `--full`**, and I haven't found the cause. A lead for
+whoever does: the sweep's check that a site "changed nothing" runs before a
+rename of a local has finished; `PARAKEET_PROTOCOL` keeps what Cuttlebone
+was sent and the sources as they changed, per project.
+
+In every run, three projects skipped themselves, as the test does for one
+that doesn't type check with the installed Inko: clogs and shost
 (`std.sandbox` isn't in 0.21.1) and code-formatting-in-inko (`Format`
 undefined). Their checkouts here aren't on the commits
-ci/real-world-projects.txt pins. The other nine passed both the projects'
-test and the refactorings' sweep.
-
-This commit's own hook ran the normal check; a report can't hold its own
-result.
+ci/real-world-projects.txt pins. The other nine ran.
 
 ## Hand-testing checklist
 

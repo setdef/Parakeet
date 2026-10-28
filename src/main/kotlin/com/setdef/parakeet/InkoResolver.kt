@@ -44,13 +44,8 @@ class InkoReference(element: InkoName) :
         return element.rename(if (!element.text.endsWith("=")) name.removeSuffix("=") else name)
     }
 
-    // A moved module file changes its module path: an import names it anew; `util.helper` (by its last name) stays.
-    override fun bindToElement(target: PsiElement): PsiElement {
-        val file = target as? InkoFile ?: return element
-        val module = Inko.pathOf(file.virtualFile)?.let(Inko::moduleName) ?: return element
-        InkoModuleImports.rewrite(element, module)
-        return element
-    }
+    // A moved module file's imports are rewritten from Cuttlebone's edits (InkoFileMoves), not one reference at a time.
+    override fun bindToElement(target: PsiElement): PsiElement = element
 }
 
 /**

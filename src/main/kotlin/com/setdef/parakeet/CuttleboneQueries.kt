@@ -80,8 +80,8 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         val stale: Boolean get() = status?.stale == true
     }
 
-    /** One question, to one server process (a restarted one is asked again). */
-    private data class Key(val server: Int, val method: String, val uri: String, val offset: Int)
+    /** One question, to one server process (a restarted one is asked again); [variant] tells apart what a position doesn't. */
+    private data class Key(val server: Int, val method: String, val uri: String, val offset: Int, val variant: String = "")
 
     private val cache = ConcurrentHashMap<Key, Pending>()
     private val cachedAt = AtomicLong(-1)
@@ -301,6 +301,19 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
             server.textDocumentService.typeHierarchySubtypes(org.eclipse.lsp4j.TypeHierarchySubtypesParams(typeItem(document, position)))
         }
 
+    /**
+     * The edits that keep the imports of the modules in [from] (a file, or every module in a directory) working once
+     * it's at [to]: each import's path, and each use by the module's own name, by URI. Asked before the move, from one
+     * check of the whole project, complete or none (fresh only). [file] is an Inko file that moves. Cuttlebone answers
+     * only where a module's name changes.
+     */
+    fun fileRenames(file: PsiFile, from: java.nio.file.Path, to: java.nio.file.Path, budgetMs: Long = SEARCH_BUDGET_MS): Answer<Map<String, List<org.eclipse.lsp4j.TextEdit>>>? {
+        val rename = org.eclipse.lsp4j.FileRename(from.toUri().toString(), to.toUri().toString())
+        return query(file, 0, FILE_RENAMES, budgetMs, { edit: org.eclipse.lsp4j.WorkspaceEdit? -> edit?.changes.orEmpty() }, variant = rename.toString()) { server, _, _ ->
+            server.workspaceService.willRenameFiles(org.eclipse.lsp4j.RenameFilesParams(listOf(rename)))
+        }
+    }
+
     fun typeDefinition(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<List<Location>>? =
         query(file, offset, "textDocument/typeDefinition", budgetMs, ::locations) { server, document, position ->
             server.textDocumentService.typeDefinition(TypeDefinitionParams(document, position))
@@ -379,9 +392,10 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         waitInHighlighting: Boolean = false,
         stale: Boolean = false,
         onEdt: Boolean = false,
+        variant: String = "",
         send: (LanguageServer, TextDocumentIdentifier, Position) -> CompletableFuture<R>,
     ): Answer<T>? {
-        val pending = start(file, offset, method, convert, send) ?: return null
+        val pending = start(file, offset, method, convert, variant, send) ?: return null
         @Suppress("UNCHECKED_CAST")
         val answer = await(pending, budgetMs, wait = mayWait(waitInHighlighting, onEdt)) as Answer<T>?
         // Parakeet opts in to status notifications: without a `fresh` one (or a `stale` one, where it counts), there's
@@ -398,6 +412,7 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         offset: Int,
         method: String,
         convert: (R?) -> T?,
+        variant: String = "",
         send: (LanguageServer, TextDocumentIdentifier, Position) -> CompletableFuture<R>,
     ): Pending? {
         val virtualFile = file.originalFile.virtualFile ?: return null
@@ -423,7 +438,7 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         // Answers hold until any PSI in the project changes (an edit here, or in a module this one imports).
         val stamp = PsiModificationTracker.getInstance(project).modificationCount
         if (cachedAt.getAndSet(stamp) != stamp) cache.clear()
-        val key = Key(System.identityHashCode(server), method, identifier.uri, offset)
+        val key = Key(System.identityHashCode(server), method, identifier.uri, offset, variant)
         cache[key]?.let { if (!it.answer.isCancelled && !it.indicator.isCanceled) return it }
         val pending = Pending(CompletableFuture(), EmptyProgressIndicator(), edits.get())
         cache.putIfAbsent(key, pending)?.let { if (!it.indicator.isCanceled) return it else cache[key] = pending }
@@ -442,7 +457,11 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
                         send(lsp, identifier, position).also { future ->
                             // Runs on lsp4j's reader thread as the response arrives, right after its status.
                             // A side chain: the request's own future must reach IntelliJ, which cancels it.
-                            status = future.thenApply { service.statuses.remove(method to identifier.uri) }
+                            status = future.thenApply {
+                                service.statuses.remove(method to identifier.uri)
+                                    // A file rename's names the first module that moves, in Cuttlebone's order.
+                                    ?: service.statuses.keys.firstOrNull { it.first == method && method == FILE_RENAMES }?.let(service.statuses::remove)
+                            }
                         }
                     }
                 }, pending.indicator)
@@ -521,6 +540,8 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
 
     companion object {
         private val LOG = logger<CuttleboneQueries>()
+        const val FILE_RENAMES = "workspace/willRenameFiles"
+
         /** The reasons Cuttlebone gives for no answer in code being edited ([Answer.editing]). */
         val EDITING = setOf("noHir", "declarationErrors", "untyped")
 

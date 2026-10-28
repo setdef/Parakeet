@@ -216,8 +216,11 @@ compiler, so it always agrees with your installed Inko version.
   alone and lists them as conflicts first. **Usage counts,
   Safe Delete, Change Signature, Inline Method, Move and Introduce Parameter**
   build on the same search (usage counts stop at 99+), and like Rename use
-  fresh answers only. **Moving files** rewrites the import paths of the
-  modules that move.
+  fresh answers only. **Moving files and directories, and renaming
+  directories,** make Cuttlebone's edits (`workspace/willRenameFiles`, asked
+  before the move, from one check of the whole project) to every import of
+  the modules that move, and to their uses by their own name; without its
+  answer, the move lists that as a conflict.
 - **Type Hierarchy** is Cuttlebone's, from the type database: the traits a type
   implements, the traits a trait requires, and what requires or implements it.
 - **Dependencies need syncing** when `dep/hash` isn't the BLAKE3 hash of
@@ -410,6 +413,7 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
 | Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
 | Go to Implementation and Super Method, trait gutter icons to implementations, a trait method's implementations in Find Usages and Rename | `textDocument/implementation` and `textDocument/declaration`, and a type's supertypes, which Parakeet asks for (IntelliJ 2025.3's LSP support has none); Rename takes fresh answers only | none; Rename lists it as a conflict |
+| Moving files and directories, and renaming directories | `workspace/willRenameFiles`, asked before the move and made after it (IntelliJ 2025.3's LSP support has none) | none: a conflict says so |
 | Completion after `.` | `textDocument/completion` on the real buffer | Parakeet's reading |
 | Parameter info | `textDocument/signatureHelp`: the resolved method's signature, with the receiver's type arguments, and the argument's parameter (named ones too). For a type's constructor (`Point(x: 1)`), which it has none for, the type's fields | Parakeet's reading |
 | Parameter-name and type hints | `textDocument/inlayHint`, once for the whole file | none: hints only inform |

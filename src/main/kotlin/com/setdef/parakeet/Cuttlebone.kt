@@ -305,11 +305,13 @@ class CuttleboneDescriptor(project: Project) : ProjectWideLspServerDescriptor(pr
         addProperty("diagnostics", false)
     }
 
-    // UTF-16 positions, which are IntelliJ's offsets.
+    // UTF-16 positions, which are IntelliJ's offsets. Parakeet asks for the edits a file rename needs (InkoFileMoves).
     override val clientCapabilities: ClientCapabilities
         get() = super.clientCapabilities.apply {
             val general = general ?: GeneralClientCapabilities().also { general = it }
             general.positionEncodings = listOf("utf-16")
+            val workspace = workspace ?: org.eclipse.lsp4j.WorkspaceClientCapabilities().also { workspace = it }
+            workspace.fileOperations = (workspace.fileOperations ?: org.eclipse.lsp4j.FileOperationsWorkspaceCapabilities()).apply { willRename = true }
         }
 
     override fun createLsp4jClient(handler: LspServerNotificationsHandler): Lsp4jClient =

@@ -79,6 +79,37 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
         CuttleboneQueries.getInstance(project).stub(testRootDisposable, answer)
 
     /**
+     * Every quick fix the open file's highlights have, as Alt+Enter on each offers them. Cuttlebone's are lazy
+     * (InkoQuickFixes): IntelliJ computes them in the background after highlighting, for what's on screen, which a
+     * test's highlighting doesn't, so their computers are run here as IntelliJ runs them, off the EDT in a read action.
+     */
+    protected fun allQuickFixes(): List<com.intellij.codeInsight.intention.IntentionAction> {
+        val infos = myFixture.doHighlighting()
+        val fixes = java.util.Collections.synchronizedList(mutableListOf<com.intellij.codeInsight.intention.IntentionAction>())
+        for (info in infos) info.findRegisteredQuickFix<Any> { descriptor, _ -> fixes += descriptor.action; null }
+        val registrar = object : com.intellij.codeInsight.daemon.QuickFixActionRegistrar {
+            override fun register(action: com.intellij.codeInsight.intention.IntentionAction) { fixes += action }
+            override fun register(fixRange: com.intellij.openapi.util.TextRange, action: com.intellij.codeInsight.intention.IntentionAction, key: com.intellij.codeInsight.daemon.HighlightDisplayKey?) { fixes += action }
+        }
+        val computed = com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+            for (info in infos) for (computer in lazyQuickFixes(info)) com.intellij.openapi.application.ReadAction.run<RuntimeException> { computer.accept(registrar) }
+        }
+        com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("the lazy quick fixes", { computed.isDone }, TimingLimits.seconds(120))
+        computed.get()
+        return fixes.toList()
+    }
+
+    /** [info]'s lazy quick fixes' computers, which IntelliJ keeps to itself (HighlightInfo's offset store). */
+    private fun lazyQuickFixes(info: com.intellij.codeInsight.daemon.impl.HighlightInfo): List<java.util.function.Consumer<in com.intellij.codeInsight.daemon.QuickFixActionRegistrar>> {
+        val store = com.intellij.codeInsight.daemon.impl.HighlightInfo::class.java.getDeclaredField("offsetStore").apply { isAccessible = true }.get(info) ?: return emptyList()
+        val descriptions = store.javaClass.getDeclaredMethod("lazyQuickFixes").apply { isAccessible = true }.invoke(store) as List<*>
+        return descriptions.filterNotNull().map { description ->
+            @Suppress("UNCHECKED_CAST")
+            description.javaClass.getDeclaredMethod("fixesComputer").apply { isAccessible = true }.invoke(description) as java.util.function.Consumer<in com.intellij.codeInsight.daemon.QuickFixActionRegistrar>
+        }
+    }
+
+    /**
      * Cuttlebone's pulled diagnostics (textDocument/diagnostic): [diagnose]'s, from each file's path and text as it
      * is, as the compiler would report them. Every other question has no answer.
      */

@@ -170,21 +170,3 @@ open class InkoTraitMethodsHandler(private val required: Boolean) : LanguageCode
 class InkoImplementMethodsHandler : InkoTraitMethodsHandler(required = true)
 
 class InkoOverrideMethodsHandler : InkoTraitMethodsHandler(required = false)
-
-/** For the compiler's "the method 'x' must be implemented for 'Y'": run Implement Methods on that impl. */
-class InkoImplementMethodsFix(private val offset: Int) : IntentionAction {
-    override fun getText(): String = "Implement missing methods"
-
-    override fun getFamilyName(): String = text
-
-    override fun isAvailable(project: Project, editor: Editor?, file: PsiFile?): Boolean =
-        editor != null && file is InkoFile && InkoTraitImpl.at(file, offset)?.missing(required = true)?.isNotEmpty() == true
-
-    override fun startInWriteAction(): Boolean = false
-
-    override fun invoke(project: Project, editor: Editor?, file: PsiFile?) {
-        if (editor == null || file == null) return
-        editor.caretModel.moveToOffset(offset)
-        InkoImplementMethodsHandler().invoke(project, editor, file)
-    }
-}

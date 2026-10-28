@@ -211,7 +211,7 @@ private class InkoCompletions(private val file: PsiFile) {
                     PsiDocumentManager.getInstance(context.project).commitDocument(context.document)
                 }
                 // Below names in scope; the project's own modules first, then dependencies, then std.
-                PrioritizedLookupElement.withPriority(item, -1.0 - InkoImportFix.origin(root, definition.file))
+                PrioritizedLookupElement.withPriority(item, -1.0 - InkoImportEdits.origin(root, definition.file))
             }
             .toList()
     }

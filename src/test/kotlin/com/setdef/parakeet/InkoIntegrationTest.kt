@@ -480,28 +480,36 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
 
     fun testQuickFixesUseTheCompilersDiagnostics() {
         if (!openChecked("src/app/util.inko", "import std.stdio (Stdout, Stderr)\n\nfn pub helper {\n  Stdout.new\n}\n")) return
-        myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Remove unused import 'Stderr'" })
+        myFixture.launchAction(allQuickFixes().single { it.text == "Remove Stderr from the import" })
         myFixture.checkResult("import std.stdio (Stdout)\n\nfn pub helper {\n  Stdout.new\n}\n")
+    }
+
+    // Cuttlebone checks each fix, and offers it where it leaves fewer of its error and no new one: here the other
+    // method's undefined name stays, and the import is still offered.
+    fun testQuickFixesInAFileWithOtherErrors() {
+        myFixture.addFileToProject("src/app/util.inko", "fn pub helper -> Int {\n  1\n}\n")
+        val text = "fn pub run -> Int {\n  helper\n}\n\nfn pub other -> Int {\n  nope\n}\n"
+        if (!openChecked("src/main.inko", text)) return
+        assertEquals(listOf("the symbol 'helper' is undefined", "the symbol 'nope' is undefined"), problems().map { it.description })
+        myFixture.launchAction(allQuickFixes().single { it.text == "Import helper from app.util" })
+        assertEquals("import app.util (helper)\n\n$text", myFixture.editor.document.text)
     }
 
     fun testQuickFixForAMissingField() {
         if (!openChecked("src/app/util.inko", "type pub Point {\n  let @x: Int\n  let @y: Int\n}\n\nfn pub point -> Point {\n  Point(x: 1)\n}\n")) return
-        myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Add field 'y'" })
-        myFixture.checkResult("type pub Point {\n  let @x: Int\n  let @y: Int\n}\n\nfn pub point -> Point {\n  Point(x: 1, y: <caret>)\n}\n")
+        myFixture.launchAction(allQuickFixes().single { it.text == "Add y: 0" })
+        assertEquals("type pub Point {\n  let @x: Int\n  let @y: Int\n}\n\nfn pub point -> Point {\n  Point(x: 1, y: 0)\n}\n", myFixture.editor.document.text)
     }
 
-    // A project of its own: the fix above leaves `y: ` to fill in, which doesn't parse, and a module that doesn't
-    // parse stops the compiler before it checks the others, so Cuttlebone (as `inko check` of the project) would
-    // report nothing here. Parakeet's own `inko check` of one file did (SESSION-slimming-2.md, what was lost).
     fun testQuickFixForUnreachableCode() {
         if (!openChecked("src/app/early.inko", "fn pub early -> Int {\n  return 1\n  let a = 2\n  a + 3\n}\n")) return
-        myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Remove unreachable code" })
-        myFixture.checkResult("fn pub early -> Int {\n  return 1\n}\n")
+        myFixture.launchAction(allQuickFixes().single { it.text == "Remove the unreachable code" })
+        assertEquals("fn pub early -> Int {\n  return 1\n}\n", myFixture.editor.document.text)
     }
 
     fun testImplementsTheCompilersMissingMethods() {
         if (!openChecked("src/app/shape.inko", "trait pub Shape {\n  fn pub area -> Int\n}\n\ntype pub Box {}\n\nimpl Shape for Box {}\n")) return
-        myFixture.launchAction(myFixture.getAllQuickFixes().first { it.text == "Implement missing methods" })
+        myFixture.launchAction(allQuickFixes().single { it.text == "Implement area" })
         assertTrue(myFixture.editor.document.text, "  fn pub area -> Int {\n    panic('not implemented')\n  }" in myFixture.editor.document.text)
     }
 

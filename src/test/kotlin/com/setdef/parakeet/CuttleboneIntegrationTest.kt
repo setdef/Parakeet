@@ -207,12 +207,12 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     // Errors as you type are Cuttlebone's pull (textDocument/diagnostic), the same as `inko check`'s, from the unsaved
-    // text, with the quick fixes keyed on the compiler's IDs.
+    // text, with Cuttlebone's quick fixes (textDocument/codeAction).
     fun testErrorsAsYouTypeAreCuttlebones() {
         open("import std.stdio (Stdout)\n\nfn pub run -> Int {\n  1\n}\n")
         fun problems() = myFixture.doHighlighting().filter { it.severity >= com.intellij.lang.annotation.HighlightSeverity.WARNING }.map { it.description }
         assertEquals(listOf("the symbol 'Stdout' is unused"), problems())
-        assertTrue(myFixture.getAllQuickFixes().any { it.text == "Remove unused import 'Stdout'" })
+        assertTrue(allQuickFixes().map { it.text }.toString(), allQuickFixes().any { it.text == "Remove the unused import" })
         myFixture.editor.caretModel.moveToOffset(myFixture.editor.document.text.indexOf("1\n}"))
         myFixture.type("nope + ")
         // As `inko check` reports it: with an error in the method, the unused import isn't (checked by hand).

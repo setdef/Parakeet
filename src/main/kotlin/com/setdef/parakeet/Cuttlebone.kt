@@ -304,13 +304,17 @@ class CuttleboneDescriptor(project: Project) : ProjectWideLspServerDescriptor(pr
     }
 
     // UTF-16 positions, which are IntelliJ's offsets. Parakeet pulls diagnostics (InkoProjectCheck, InkoCheckAnnotator),
-    // so Cuttlebone pushes none, and asks for the edits a file rename needs (InkoFileMoves).
+    // so Cuttlebone pushes none, asks for their quick fixes, and for the edits a file rename needs (InkoFileMoves).
     override val clientCapabilities: ClientCapabilities
         get() = super.clientCapabilities.apply {
             val general = general ?: GeneralClientCapabilities().also { general = it }
             general.positionEncodings = listOf("utf-16")
             val text = textDocument ?: org.eclipse.lsp4j.TextDocumentClientCapabilities().also { textDocument = it }
             text.diagnostic = org.eclipse.lsp4j.DiagnosticCapabilities()
+            // Cuttlebone offers quick fixes only to a client that takes them as literals (InkoQuickFixes asks for them).
+            text.codeAction = org.eclipse.lsp4j.CodeActionCapabilities(
+                org.eclipse.lsp4j.CodeActionLiteralSupportCapabilities(org.eclipse.lsp4j.CodeActionKindCapabilities(listOf(org.eclipse.lsp4j.CodeActionKind.QuickFix))), false,
+            ).apply { isPreferredSupport = true }
             val workspace = workspace ?: org.eclipse.lsp4j.WorkspaceClientCapabilities().also { workspace = it }
             workspace.fileOperations = (workspace.fileOperations ?: org.eclipse.lsp4j.FileOperationsWorkspaceCapabilities()).apply { willRename = true }
         }
@@ -367,7 +371,7 @@ abstract class CuttleboneCustomization : LspCustomization() {
     override val foldingRangeCustomizer: LspFoldingRangeCustomizer get() = LspFoldingRangeDisabled
     // Workspace symbols' kinds, as IntelliJ shows them.
     override val symbolKindCustomizer: LspSymbolKindCustomizer get() = LspSymbolKindCustomizer()
-    // Parakeet's quick fixes and intentions.
+    // Parakeet asks for Cuttlebone's quick fixes itself, for the errors it shows (InkoQuickFixes); the intentions are its own.
     override val codeActionsCustomizer: LspCodeActionsCustomizer get() = LspCodeActionsDisabled
     override val commandsCustomizer: LspCommandsCustomizer get() = LspCommandsDisabled
     // Cuttlebone's formatting is exactly `inko fmt`'s, from the upstream formatter, on the unsaved text: it formats

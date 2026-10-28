@@ -253,10 +253,12 @@ compiler, so it always agrees with your installed Inko version.
   written, else as the compiler has it (Cuttlebone's fresh hover at the
   local's name, as for "Specify type explicitly"), and leaves placeholders
   for types it can't work out, which `inko check` points out if left behind.
-- **Quick fixes** act on the diagnostic IDs `inko check` reports
-  (`invalid-symbol`, `unused-symbol`, `unused-result`, `missing-field`,
-  `invalid-implementation`, `missing-trait`, `unreachable`); auto-import finds
-  candidates in those definitions.
+- **Quick fixes** are Cuttlebone's (`textDocument/codeAction`), for the
+  diagnostic IDs it fixes (`invalid-symbol`, `unused-symbol`, `unused-result`,
+  `invalid-assign`, `missing-field`, `invalid-implementation`, `missing-trait`,
+  `unreachable`): each one checked by Cuttlebone before it's offered, so it
+  leaves fewer of its error and adds none, also in a file with other errors.
+  They're asked for after highlighting, for the diagnostics on screen.
 - **Implement and Override Methods** stub a trait's required methods (those
   without a body) or default ones, with bodies that call
   `panic('not implemented')` (in Inko's prelude), which compiles for any
@@ -411,7 +413,8 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
 | Go to Implementation and Super Method, trait gutter icons to implementations, a trait method's implementations in Find Usages and Rename | `textDocument/implementation` and `textDocument/declaration`, and a type's supertypes, which Parakeet asks for (IntelliJ 2025.3's LSP support has none); Rename takes fresh answers only | none; Rename lists it as a conflict |
 | Moving files and directories, and renaming directories | `workspace/willRenameFiles`, asked before the move and made after it (IntelliJ 2025.3's LSP support has none) | none: a conflict says so |
-| Errors and warnings, their quick fixes, Inspect Code, Optimize Imports' unused imports | `textDocument/diagnostic`: the same as `inko check`, from a check of the documents as they are | Cuttlebone's: it checks the code as it is |
+| Errors and warnings, Inspect Code, Optimize Imports' unused imports | `textDocument/diagnostic`: the same as `inko check`, from a check of the documents as they are | Cuttlebone's: it checks the code as it is |
+| Quick fixes | `textDocument/codeAction`: each fix checked with its edits applied, which Parakeet asks for itself, for the errors it shows | Cuttlebone's: a fix is offered where it leaves fewer of its error and adds none |
 | Errors across the whole project (the Project view, Problems) | `workspace/diagnostic`, a long poll | Cuttlebone's |
 | Completion after `.` | `textDocument/completion` on the real buffer | Parakeet's reading |
 | Parameter info | `textDocument/signatureHelp`: the resolved method's signature, with the receiver's type arguments, and the argument's parameter (named ones too). For a type's constructor (`Point(x: 1)`), which it has none for, the type's fields | Parakeet's reading |

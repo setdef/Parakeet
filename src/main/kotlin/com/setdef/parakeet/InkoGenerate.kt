@@ -152,7 +152,7 @@ object InkoTraitImpls {
             .filter { (it.public || it.module == module) && it.name !in implemented }
             .filter { !it.file.startsWith(root.resolve("test")) }
             .distinctBy { it.module to it.name }
-            .sortedWith(compareBy({ InkoImportFix.origin(root, it.file) }, { it.name }, { it.module }))
+            .sortedWith(compareBy({ InkoImportEdits.origin(root, it.file) }, { it.name }, { it.module }))
     }
 
     /** Imports [trait] if needed, adds `impl Trait for Type {}` after the type, and fills in its required methods. */

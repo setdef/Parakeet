@@ -1,76 +1,86 @@
 package com.setdef.parakeet
 
-/** Quick fixes for the compiler's diagnostics (shaped like the real compiler's), as Cuttlebone's pull gives them. */
+import org.eclipse.lsp4j.CodeAction
+import org.eclipse.lsp4j.Position
+import org.eclipse.lsp4j.Range
+import org.eclipse.lsp4j.TextEdit
+import org.eclipse.lsp4j.WorkspaceEdit
+
+/**
+ * Quick fixes are Cuttlebone's (`textDocument/codeAction`): asked for the diagnostic at the caret, offered by its
+ * title, and made as its edits say, in whichever file. Stubbed here; CuttleboneIntegrationTest has the real ones.
+ */
 class InkoQuickFixesTest : InkoTestCase(onDisk = true) {
-    /** Diagnostics to report: (id, text to cover, message). Each covers the first occurrence of its text. */
-    private var reported: List<Triple<String, String, String>> = emptyList()
+    private val text = "import std.stdio (Stdout, Stderr)\n\nfn a {\n  Stdout.new\n}\n"
+    private val unused = InkoCheckTest.covering(text, "Stderr", "unused-symbol", "the symbol 'Stderr' is unused", warning = true)!!
+    private var actions: List<CodeAction> = emptyList()
+    private val asked = mutableListOf<String>()
 
     override fun setUp() {
         super.setUp()
-        pullDiagnostics { _, text -> reported.mapNotNull { (id, needle, message) -> InkoCheckTest.covering(text, needle, id, message, warning = true) } }
+        stubCuttlebone { method, file, offset ->
+            when (method) {
+                "textDocument/diagnostic" -> CuttleboneQueries.Answer(listOf(unused), null)
+                "textDocument/codeAction" -> {
+                    asked += "${file.name}:$offset"
+                    CuttleboneQueries.Answer(actions, CuttleboneStatus(method, file.url, "fresh", null, 1.0))
+                }
+                else -> null
+            }
+        }
     }
 
-    private fun fix(text: String, fix: String, vararg diagnostics: Triple<String, String, String>) {
-        reported = diagnostics.toList()
-        myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/main.inko", text).virtualFile)
-        myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == fix })
+    private fun action(title: String, diagnostic: org.eclipse.lsp4j.Diagnostic, vararg edits: Pair<String, TextEdit>) = CodeAction(title).apply {
+        diagnostics = listOf(diagnostic)
+        edit = WorkspaceEdit(edits.groupBy({ myFixture.findFileInTempDir(it.first)!!.url }, { it.second }))
     }
 
-    private fun unused(name: String, covering: String = name) = Triple("unused-symbol", covering, "the symbol '$name' is unused")
+    private fun edit(line: Int, start: Int, end: Int, newText: String) = TextEdit(Range(Position(line, start), Position(line, end)), newText)
 
-    fun testRemovesOneUnusedSymbol() {
-        fix("import std.stdio (Stdout, Stderr)\n\nfn a {}\n", "Remove unused import 'Stderr'", unused("Stderr"))
-        myFixture.checkResult("import std.stdio (Stdout)\n\nfn a {}\n")
+    private fun open() = myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject("src/main.inko", text).virtualFile)
+
+    fun testOffersCuttlebonesFixAndMakesItsEdits() {
+        open()
+        actions = listOf(action("Remove Stderr from the import", unused, "src/main.inko" to edit(0, 24, 32, "")))
+        myFixture.launchAction(allQuickFixes().single { it.text == "Remove Stderr from the import" })
+        myFixture.checkResult("import std.stdio (Stdout)\n\nfn a {\n  Stdout.new\n}\n")
+        assertEquals("asked about the diagnostic's start", listOf("main.inko:${text.indexOf("Stderr")}"), asked.distinct())
     }
 
-    fun testRemovesTheImportWithItsLastSymbol() {
-        fix("import std.stdio (Stderr)\nimport std.fmt\n\nfn a {}\n", "Remove unused import 'Stderr'", unused("Stderr"))
-        myFixture.checkResult("import std.fmt\n\nfn a {}\n")
+    fun testMakesEditsInOtherFiles() {
+        myFixture.addFileToProject("src/other.inko", "let VALUE = 1\n")
+        open()
+        actions = listOf(action("Make it so", unused, "src/main.inko" to edit(0, 24, 32, ""), "src/other.inko" to edit(0, 4, 4, "mut ")))
+        myFixture.launchAction(allQuickFixes().single { it.text == "Make it so" })
+        myFixture.checkResult("import std.stdio (Stdout)\n\nfn a {\n  Stdout.new\n}\n")
+        assertEquals("let mut VALUE = 1\n", com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getDocument(myFixture.findFileInTempDir("src/other.inko")!!)!!.text)
     }
 
-    fun testRemovesAnUnusedModuleImport() {
-        fix("import std.stdio (Stdout)\nimport std.fmt\n\nfn a {}\n", "Remove unused import 'fmt'", unused("fmt", covering = "import std.fmt"))
-        myFixture.checkResult("import std.stdio (Stdout)\n\nfn a {}\n")
+    fun testOnlyTheDiagnosticsOwnFixes() {
+        open()
+        val other = InkoCheckTest.covering(text, "Stdout", "unused-symbol", "the symbol 'Stdout' is unused", warning = true)!!
+        actions = listOf(action("Remove Stderr from the import", unused, "src/main.inko" to edit(0, 24, 32, "")), action("Someone else's", other, "src/main.inko" to edit(0, 0, 0, "")))
+        assertEquals(listOf("Remove Stderr from the import"), allQuickFixes().map { it.text }.filter { it == "Remove Stderr from the import" || it == "Someone else's" })
     }
 
-    fun testKeepsAliasesOfTheRemainingSymbols() {
-        fix("import app.util (Show as Display, Helper)\n\nfn a {}\n", "Remove unused import 'Helper'", unused("Helper"))
-        myFixture.checkResult("import app.util (Show as Display)\n\nfn a {}\n")
+    fun testNotOfferedOnceTheFileChanges() {
+        open()
+        actions = listOf(action("Remove Stderr from the import", unused, "src/main.inko" to edit(0, 24, 32, "")))
+        val fix = allQuickFixes().single { it.text == "Remove Stderr from the import" }
+        com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) { myFixture.editor.document.insertString(text.length, "\n") }
+        assertFalse(fix.isAvailable(project, myFixture.editor, myFixture.file))
     }
 
-    fun testPrefixesAnUnusedLocalWithAnUnderscore() {
-        fix("fn a {\n  let unused = 1\n}\n", "Rename to _unused", unused("unused"))
-        myFixture.checkResult("fn a {\n  let _unused = 1\n}\n")
-    }
-
-    fun testDiscardsAnUnusedResult() {
-        fix(
-            "fn a {\n  Stdout.new.print('x')\n}\n", "Discard the result with let _ =",
-            Triple("unused-result", "Stdout.new.print('x')", "the result of this expression is unused"),
-        )
-        myFixture.checkResult("fn a {\n  let _ = Stdout.new.print('x')\n}\n")
-    }
-
-    // Ranges and messages as the real compiler reports them (see InkoIntegrationTest).
-    fun testAddsAMissingField() {
-        fix("fn main {\n  let p = Point(x: 1)\n}\n", "Add field 'y'", Triple("missing-field", "Point(x: 1)", "the field 'y' must be assigned a value"))
-        myFixture.checkResult("fn main {\n  let p = Point(x: 1, y: <caret>)\n}\n")
-    }
-
-    fun testAddsAMissingFieldToEmptyParentheses() {
-        fix("fn main {\n  let p = Point()\n}\n", "Add field 'x'", Triple("missing-field", "Point()", "the field 'x' must be assigned a value"))
-        myFixture.checkResult("fn main {\n  let p = Point(x: <caret>)\n}\n")
-    }
-
-    fun testRemovesEverythingAfterAReturn() {
-        // The compiler flags only the first unreachable statement.
-        fix("fn early -> Int {\n  return 1\n  let a = 2\n  a + 3\n}\n", "Remove unreachable code", Triple("unreachable", "let a = 2", "this code is unreachable"))
-        myFixture.checkResult("fn early -> Int {\n  return 1\n}\n")
-    }
-
-    fun testRemovesAnUnreachableMatchArm() {
-        val text = "fn pick(value: Option[Int]) -> Int {\n  match value {\n    case _ -> 0\n    case Some(v) -> v\n  }\n}\n"
-        fix(text, "Remove unreachable code", Triple("unreachable", "case Some(v) -> v", "this code is unreachable"))
-        myFixture.checkResult("fn pick(value: Option[Int]) -> Int {\n  match value {\n    case _ -> 0\n  }\n}\n")
+    fun testNotAskedForADiagnosticCuttleboneHasNoFixFor() {
+        stubCuttlebone { method, file, _ ->
+            when (method) {
+                "textDocument/diagnostic" -> CuttleboneQueries.Answer(listOf(InkoCheckTest.covering(text, "Stderr", "invalid-type", "the type is wrong")!!), null)
+                "textDocument/codeAction" -> { asked += file.name; null }
+                else -> null
+            }
+        }
+        open()
+        allQuickFixes()
+        assertEquals(emptyList<String>(), asked)
     }
 }

@@ -325,6 +325,24 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
             server.textDocumentService.diagnostic(org.eclipse.lsp4j.DocumentDiagnosticParams(document))
         }
 
+    /**
+     * Cuttlebone's quick fixes for its diagnostics in [range] of [file], each checked before it's offered: its edits,
+     * applied to a copy of the documents, leave fewer of its diagnostic and no error that wasn't there (docs/lsp.md,
+     * "textDocument/codeAction"). Fresh only, as they change code. Asked for the diagnostics on screen after
+     * highlighting ([InkoQuickFixes]), which waits for it: a full check, and one for each fix.
+     */
+    fun codeActions(file: PsiFile, range: com.intellij.openapi.util.TextRange, budgetMs: Long = SEARCH_BUDGET_MS): Answer<List<org.eclipse.lsp4j.CodeAction>>? {
+        val document = file.viewProvider.document ?: return null
+        if (range.endOffset > document.textLength) return null
+        val end = position(document, range.endOffset)
+        return query(file, range.startOffset, "textDocument/codeAction", budgetMs, { actions: List<org.eclipse.lsp4j.jsonrpc.messages.Either<org.eclipse.lsp4j.Command, org.eclipse.lsp4j.CodeAction>>? ->
+            actions?.mapNotNull { if (it.isRight) it.right else null }
+        }, waitInHighlighting = true, variant = "${range.endOffset}") { server, identifier, start ->
+            server.textDocumentService.codeAction(org.eclipse.lsp4j.CodeActionParams(identifier, Range(start, end),
+                org.eclipse.lsp4j.CodeActionContext(emptyList(), listOf(org.eclipse.lsp4j.CodeActionKind.QuickFix))))
+        }
+    }
+
     fun typeDefinition(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<List<Location>>? =
         query(file, offset, "textDocument/typeDefinition", budgetMs, ::locations) { server, document, position ->
             server.textDocumentService.typeDefinition(TypeDefinitionParams(document, position))

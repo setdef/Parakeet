@@ -21,7 +21,8 @@ class InkoCheckAnnotator : ExternalAnnotator<PsiFile, List<InkoDiagnostic>>() {
         for (diagnostic in diagnostics) {
             val severity = if (diagnostic.isWarning) HighlightSeverity.WARNING else HighlightSeverity.ERROR
             val annotation = holder.newAnnotation(severity, diagnostic.message).range(diagnostic.range)
-            InkoQuickFixes.forDiagnostic(file, diagnostic, diagnostic.range).forEach { annotation.withFix(it) }
+            // Asked of Cuttlebone after highlighting, for what's on screen (InkoQuickFixes), not by every pass.
+            if (InkoQuickFixes.fixable(diagnostic)) annotation.withLazyQuickFix { registrar -> InkoQuickFixes.register(file, diagnostic, registrar) }
             annotation.create()
         }
     }

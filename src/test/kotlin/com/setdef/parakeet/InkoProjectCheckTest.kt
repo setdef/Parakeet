@@ -7,14 +7,13 @@ import com.intellij.problems.WolfTheProblemSolver
 import com.intellij.testFramework.InspectionTestUtil
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.createGlobalContextForTool
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.runBlocking
-import java.nio.file.Path
 
-/** Project-wide errors, with `inko check`'s output supplied by a fake. */
+/** Project-wide errors, from Cuttlebone's pulls (CuttleboneIntegrationTest has the real one's). */
 class InkoProjectCheckTest : InkoTestCase(onDisk = true) {
-    private fun diagnostic(file: String, line: Int, columns: IntRange, message: String, level: String = "error") =
-        """{"id": "x", "level": "$level", "file": "$file", "lines": [$line, $line], "columns": [${columns.first}, ${columns.last}], "message": "$message"}"""
+    private val diagnostics = mapOf(
+        "src/app/broken.inko" to listOf(InkoCheckTest.diagnostic(1, 2, 6, "the symbol 'nope' is undefined", "invalid-symbol")),
+        "src/app/warned.inko" to listOf(InkoCheckTest.diagnostic(0, 18, 24, "the symbol 'Stdout' is unused", "unused-symbol", warning = true)),
+    )
 
     override fun setUp() {
         super.setUp()
@@ -23,62 +22,68 @@ class InkoProjectCheckTest : InkoTestCase(onDisk = true) {
         myFixture.addFileToProject("src/app/broken.inko", "fn pub broken -> Int {\n  nope\n}\n")
         myFixture.addFileToProject("src/app/fine.inko", "fn pub fine -> Int {\n  1\n}\n")
         myFixture.addFileToProject("src/app/warned.inko", "import std.stdio (Stdout)\n\nfn pub warned -> Int {\n  1\n}\n")
-        useFakeInko(FakeInkoCli { call ->
-            if (call.args.take(3) != listOf("check", "--format", "json") || call.args.size != 3) return@FakeInkoCli FakeInkoCli.ok(stderr = "[]")
-            val mirror = call.workingDirectory!!
-            FakeInkoCli.failed(
-                "[${diagnostic(mirror.resolve("src/app/broken.inko").toString(), 2, 3..6, "the symbol 'nope' is undefined")}," +
-                    "${diagnostic(mirror.resolve("src/app/warned.inko").toString(), 1, 19..24, "the symbol 'Stdout' is unused", "warning")}," +
-                    "${diagnostic("/std/string.inko", 1, 1..1, "not ours")}]",
-            )
-        })
+        stubCuttlebone { method, file, _ ->
+            val pulled = diagnostics.entries.firstOrNull { file.path.endsWith("/${it.key}") }?.value.orEmpty()
+            CuttleboneQueries.Answer(pulled.takeIf { method == "textDocument/diagnostic" }, null)
+        }
     }
 
-    private val root: Path get() = Path.of(myFixture.tempDirPath)
+    /** The files marked in this test's project (the light test project, and its services, outlive each test). */
+    private fun InkoProjectCheck.marked() = problemFiles().filter { it.path.startsWith(myFixture.tempDirPath) }.toSet()
 
-    fun testChecksTheWholeProjectAndKeepsItsOwnModules() {
-        val result = InkoProjectCheck.getInstance(project).check(root)!!
-        assertEquals(setOf(root.resolve("src/app/broken.inko"), root.resolve("src/app/warned.inko")), result.diagnostics.keys)
-    }
+    /** A workspace pull's report: [files]' diagnostics, in full. */
+    private fun report(files: Map<String, List<org.eclipse.lsp4j.Diagnostic>>) = org.eclipse.lsp4j.WorkspaceDiagnosticReport(files.map { (path, items) ->
+        org.eclipse.lsp4j.WorkspaceDocumentDiagnosticReport(org.eclipse.lsp4j.WorkspaceFullDocumentDiagnosticReport(items, myFixture.findFileInTempDir(path).url, null).apply { resultId = path })
+    })
 
     // Light tests replace the IDE's problem-file service with a mock, so this checks what's reported to it.
     fun testMarksFilesWithErrorsAsProblems() {
         val check = InkoProjectCheck.getInstance(project)
-        check.report(root, check.check(root)!!)
+        check.update(report(diagnostics))
         // Warnings aren't problems, and clean files aren't either.
-        assertEquals(setOf(myFixture.findFileInTempDir("src/app/broken.inko")), check.problemFiles(root))
+        assertEquals(setOf(myFixture.findFileInTempDir("src/app/broken.inko")), check.marked())
 
         // Once it's fixed, the mark goes.
-        check.report(root, InkoProjectCheck.Result(emptyMap(), 0))
-        assertEmpty(check.problemFiles(root))
+        check.update(report(mapOf("src/app/broken.inko" to emptyList())))
+        assertEmpty(check.marked())
     }
 
-    // The background check a save or a project opening schedules, against the IDE's real problem-file service,
-    // which (from 2025.3) asserts it's called off the EDT.
-    fun testScheduledChecksReportToTheRealProblemSolverOffTheEdt() {
+    // A report that says a file is unchanged leaves its mark as it was.
+    fun testAnUnchangedReportKeepsTheMark() {
+        val check = InkoProjectCheck.getInstance(project)
+        check.update(report(diagnostics))
+        val broken = myFixture.findFileInTempDir("src/app/broken.inko")
+        check.update(org.eclipse.lsp4j.WorkspaceDiagnosticReport(listOf(
+            org.eclipse.lsp4j.WorkspaceDocumentDiagnosticReport(org.eclipse.lsp4j.WorkspaceUnchangedDocumentDiagnosticReport("src/app/broken.inko", broken.url, null)),
+        )))
+        assertEquals(setOf(broken), check.marked())
+    }
+
+    // Against the IDE's real problem-file service, which (from 2025.3) asserts it's called off the EDT, as pulls are.
+    fun testReportsToTheRealProblemSolverOffTheEdt() {
         val mock = WolfTheProblemSolver.getInstance(project) as MockWolfTheProblemSolver
         mock.setDelegate(WolfTheProblemSolverImpl.createTestInstance(project))
         try {
             val check = InkoProjectCheck.getInstance(project)
             val broken = myFixture.findFileInTempDir("src/app/broken.inko")
-            check.launch(root, immediately = true).awaitDispatchingEvents()
-            assertEquals(setOf(broken), check.problemFiles(root))
+            offTheEdt { check.update(report(diagnostics)) }
+            assertEquals(setOf(broken), check.marked())
             assertTrue("the Project view and the Problems tool window mark it", mock.isProblemFile(broken))
 
             // Fixed: the mark is cleared the same way.
-            useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
-            check.launch(root, immediately = true).awaitDispatchingEvents()
-            assertEmpty(check.problemFiles(root))
+            offTheEdt { check.update(report(mapOf("src/app/broken.inko" to emptyList()))) }
+            assertEmpty(check.marked())
             assertFalse(mock.isProblemFile(broken))
         } finally {
             mock.resetDelegate()
         }
     }
 
-    /** Waits for the job, running what it hands the EDT (where the test runs) meanwhile. */
-    private fun Job.awaitDispatchingEvents() {
-        PlatformTestUtil.waitWithEventsDispatching("the project check didn't finish", { isCompleted }, TimingLimits.seconds(30))
-        runBlocking { join() }
+    /** Runs [action] on a pooled thread, running what it hands the EDT (where the test runs) meanwhile. */
+    private fun offTheEdt(action: () -> Unit) {
+        val future = com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread(action)
+        PlatformTestUtil.waitWithEventsDispatching("the report didn't finish", { future.isDone }, TimingLimits.seconds(30))
+        future.get()
     }
 
     fun testInspectCodeReportsEveryModulesDiagnostics() {

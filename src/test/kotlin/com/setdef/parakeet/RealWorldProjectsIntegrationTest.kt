@@ -40,10 +40,11 @@ class RealWorldProjectsIntegrationTest : RealWorldTestCase() {
         val root = open(owner, name) ?: return
         val problems = mutableListOf<String>()
 
-        wholeProject(root, problems)
         val files = sample(root)
         assertFalse("$name has no Inko files with member calls in src/", files.isEmpty())
         for (file in files) inFile(name, root, file, problems)
+        // Once a file has opened, and Cuttlebone with it.
+        wholeProject(root, problems)
 
         assertTrue("$name logged errors:\n${errors.joinToString("\n\n")}", errors.isEmpty())
         assertTrue("$name:\n${problems.joinToString("\n")}", problems.isEmpty())
@@ -51,15 +52,20 @@ class RealWorldProjectsIntegrationTest : RealWorldTestCase() {
 
     /** What runs for the whole project when it opens and after saves, on the threads it runs on in the IDE. */
     private fun wholeProject(root: Path, problems: MutableList<String>) {
-        // The project-wide check, reported to the IDE's real problem-file service (light tests have a mock).
+        // The project-wide errors (Cuttlebone's workspace pull, from a pooled thread), reported to the IDE's real
+        // problem-file service (light tests have a mock).
         val wolf = WolfTheProblemSolver.getInstance(project) as MockWolfTheProblemSolver
         wolf.setDelegate(WolfTheProblemSolverImpl.createTestInstance(project))
         try {
-            val job = InkoProjectCheck.getInstance(project).launch(root, immediately = true)
-            PlatformTestUtil.waitWithEventsDispatching("the project check didn't finish", { job.isCompleted }, TimingLimits.seconds(600))
-            runBlocking { job.join() }
-            val marked = InkoProjectCheck.getInstance(project).problemFiles(root)
-            if (marked.isNotEmpty()) problems += "the project check found errors in ${marked.map { it.name }}, where inko check found none"
+            val check = InkoProjectCheck.getInstance(project)
+            val server = CuttleboneService.getInstance(project).server()
+            if (server == null) problems += "Cuttlebone isn't running, for the whole project's errors" else {
+                val pulled = ApplicationManager.getApplication().executeOnPooledThread { runBlocking { check.pull(server) } }
+                PlatformTestUtil.waitWithEventsDispatching("the workspace pull didn't finish", { pulled.isDone }, TimingLimits.seconds(600))
+                pulled.get()
+            }
+            val marked = check.problemFiles().filter { Inko.pathOf(it)?.startsWith(root) == true }
+            if (marked.isNotEmpty()) problems += "the project's errors are in ${marked.map { it.name }}, where inko check found none"
         } finally {
             wolf.resetDelegate()
         }

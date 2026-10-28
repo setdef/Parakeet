@@ -206,6 +206,54 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf("Debug", "Show", "ToString"), names(declaration(traits, "Thing"), supertypes = true).sorted())
     }
 
+    // Errors as you type are Cuttlebone's pull (textDocument/diagnostic), the same as `inko check`'s, from the unsaved
+    // text, with the quick fixes keyed on the compiler's IDs.
+    fun testErrorsAsYouTypeAreCuttlebones() {
+        open("import std.stdio (Stdout)\n\nfn pub run -> Int {\n  1\n}\n")
+        fun problems() = myFixture.doHighlighting().filter { it.severity >= com.intellij.lang.annotation.HighlightSeverity.WARNING }.map { it.description }
+        assertEquals(listOf("the symbol 'Stdout' is unused"), problems())
+        assertTrue(myFixture.getAllQuickFixes().any { it.text == "Remove unused import 'Stdout'" })
+        myFixture.editor.caretModel.moveToOffset(myFixture.editor.document.text.indexOf("1\n}"))
+        myFixture.type("nope + ")
+        // As `inko check` reports it: with an error in the method, the unused import isn't (checked by hand).
+        assertEquals(listOf("the symbol 'nope' is undefined"), problems())
+    }
+
+    /** Pulls the whole project's errors once, as InkoProjectCheck does, and gives the files marked in this test's project. */
+    private fun pulled(): Set<com.intellij.openapi.vfs.VirtualFile> {
+        val check = InkoProjectCheck.getInstance(project)
+        val pulled = ApplicationManager.getApplication().executeOnPooledThread { kotlinx.coroutines.runBlocking { check.pull(CuttleboneService.getInstance(project).server()!!) } }
+        PlatformTestUtil.waitWithEventsDispatching("the workspace pull", { pulled.isDone }, TimingLimits.seconds(60))
+        pulled.get()
+        return check.problemFiles().filter { it.path.startsWith(myFixture.tempDirPath) }.toSet()
+    }
+
+    // Whole-project errors are Cuttlebone's workspace pull, for modules that aren't open too: they're marked as
+    // problem files, and Inspect Code lists them.
+    fun testWholeProjectErrorsAreCuttlebones() {
+        myFixture.addFileToProject("src/app/broken.inko", "fn pub broken -> Int {\n  nope\n}\n")
+        com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().saveAllDocuments()
+        open()
+        val broken = myFixture.findFileInTempDir("src/app/broken.inko")
+        assertEquals(setOf(broken), pulled())
+        val file = com.intellij.psi.PsiManager.getInstance(project).findFile(broken)!!
+        val inspected = inBackground { InkoCompilerInspection().checkFile(file, com.intellij.codeInspection.InspectionManager.getInstance(project), false)!!.map { it.descriptionTemplate } }
+        assertEquals(listOf("the symbol 'nope' is undefined"), inspected)
+    }
+
+    // `inko check --format json` wrote this escape as `\u{1}` (not JSON), so Parakeet had its own parser for it: over
+    // LSP it's no trouble, and the other module's error shows too.
+    fun testAnInvalidEscapeDoesNotHideOtherErrors() {
+        myFixture.addFileToProject("src/app/escape.inko", "fn pub a -> String {\n  '\\\u0001'\n}\n")
+        myFixture.addFileToProject("src/app/broken.inko", "fn pub b -> Int {\n  (\n}\n")
+        com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().saveAllDocuments()
+        open()
+        assertEquals(setOf(myFixture.findFileInTempDir("src/app/escape.inko"), myFixture.findFileInTempDir("src/app/broken.inko")), pulled())
+        val escape = com.intellij.psi.PsiManager.getInstance(project).findFile(myFixture.findFileInTempDir("src/app/escape.inko"))!!
+        val inspected = inBackground { InkoCompilerInspection().checkFile(escape, com.intellij.codeInspection.InspectionManager.getInstance(project), false)!!.map { it.descriptionTemplate } }
+        assertEquals(listOf("the escape sequence '\\\u0001' is invalid"), inspected)
+    }
+
     /** What IntelliJ's LSP Go to Class or Go to Symbol ([classes]) lists for [pattern]: each item's name and location. */
     private fun goTo(classes: Boolean, pattern: String, libraries: Boolean): List<String> = inBackground {
         // Under a progress indicator, as Go to Class and Search Everywhere ask.

@@ -7,8 +7,8 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 
 /**
- * Optimize Imports (⌃⌥O / Ctrl+Alt+O): removes the imports `inko check`
- * reports as unused, then sorts the imports with `inko fmt` (which is how
+ * Optimize Imports (⌃⌥O / Ctrl+Alt+O): removes the imports the compiler
+ * reports as unused (Cuttlebone's diagnostics), then sorts the imports with `inko fmt` (which is how
  * Inko orders them). Only the import block is changed.
  */
 class InkoImportOptimizer : ImportOptimizer {
@@ -42,7 +42,6 @@ object InkoImportCleanup {
     private val UNUSED = Regex("""the symbol '([^']+)' is unused""")
 
     fun plan(file: PsiFile, text: CharSequence): Plan? {
-        val path = Inko.pathOf(file.virtualFile) ?: return null
         val statements = InkoImports.parse(text).statements
         if (statements.isEmpty()) return null
         // A scratch copy edited outside a write action, so nothing touches the real file until the plan is applied.
@@ -52,9 +51,11 @@ object InkoImportCleanup {
         val lastLine = scratch.getLineNumber(statements.last().range.endOffset)
         val end = minOf(scratch.getLineEndOffset(lastLine) + 1, scratch.textLength)
 
-        val unused = InkoCheck.run(file.project, path, text.toString())
+        // Cuttlebone's diagnostics are for the document as it is, which [text] is.
+        val unused = CuttleboneQueries.offTheEdt(file.project, "Finding Unused Imports") { CuttleboneQueries.getInstance(file.project).diagnostics(file) }?.value.orEmpty()
+            .mapNotNull { InkoDiagnostic.of(scratch, it) }
             .filter { it.id == "unused-symbol" }
-            .mapNotNull { diagnostic -> UNUSED.find(diagnostic.message)?.let { it.groupValues[1] to Inko.offsetOf(scratch, diagnostic.lineStart, diagnostic.columnStart) } }
+            .mapNotNull { diagnostic -> UNUSED.find(diagnostic.message)?.let { it.groupValues[1] to diagnostic.range.startOffset } }
             .filter { (_, offset) -> offset in start until end }
             // Back to front, so each edit leaves the earlier offsets in place.
             .sortedByDescending { it.second }

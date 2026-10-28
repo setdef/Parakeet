@@ -79,6 +79,16 @@ abstract class InkoTestCase(private val onDisk: Boolean = false, private val rea
         CuttleboneQueries.getInstance(project).stub(testRootDisposable, answer)
 
     /**
+     * Cuttlebone's pulled diagnostics (textDocument/diagnostic): [diagnose]'s, from each file's path and text as it
+     * is, as the compiler would report them. Every other question has no answer.
+     */
+    protected fun pullDiagnostics(diagnose: (path: String, text: String) -> List<org.eclipse.lsp4j.Diagnostic>) = stubCuttlebone { method, file, _ ->
+        if (method != "textDocument/diagnostic") return@stubCuttlebone null
+        val text = com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getDocument(file)!!.text
+        CuttleboneQueries.Answer(diagnose(file.path, text), null)
+    }
+
+    /**
      * Cuttlebone running, but unable to check the code because it's being edited (here, a declaration
      * has an error). That's the only state in which Parakeet reads the code itself, so the tests of that
      * reading run in it.

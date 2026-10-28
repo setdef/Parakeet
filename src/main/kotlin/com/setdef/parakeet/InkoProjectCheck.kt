@@ -5,138 +5,114 @@ import com.intellij.codeInspection.LocalInspectionTool
 import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.Condition
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.platform.lsp.api.LspServer
 import com.intellij.problems.WolfTheProblemSolver
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import java.nio.file.Path
+import org.eclipse.lsp4j.DiagnosticSeverity
+import org.eclipse.lsp4j.PreviousResultId
+import org.eclipse.lsp4j.WorkspaceDiagnosticParams
+import org.eclipse.lsp4j.WorkspaceDiagnosticReport
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Compiler errors across a whole project, not just the open files: after
- * saves (debounced) and at startup, `inko check` runs on every module of the
- * saved project, in a mirror. Files with errors are marked as problem files
- * (red in the Project view, listed in the Problems tool window), and Code |
- * Inspect Code reports every diagnostic through [InkoCompilerInspection].
+ * Compiler errors across the whole project, not just the open files: Cuttlebone's workspace pull
+ * (`workspace/diagnostic`), the same as `inko check` for every module, files not open included. Cuttlebone holds
+ * a pull until a check changes a file's report (a long poll), so it's asked again as soon as it answers. Files
+ * with errors are marked as problem files (red in the Project view, listed in the Problems tool window).
  */
 @Service(Service.Level.PROJECT)
 class InkoProjectCheck(private val project: Project, private val scope: CoroutineScope) {
-    /** A project check's diagnostics, by real file, and the VFS state it saw. */
-    class Result(val diagnostics: Map<Path, List<InkoDiagnostic>>, val modificationCount: Long)
+    /** Each file's latest report, by URI: its result id, and whether it has an error. */
+    private val reports = ConcurrentHashMap<String, Pair<String?, Boolean>>()
+    private val marked: MutableSet<VirtualFile> = ConcurrentHashMap.newKeySet()
+    @Volatile private var pulling: Job? = null
 
-    private val results = ConcurrentHashMap<Path, Result>()
-    private val pending = ConcurrentHashMap<Path, Job>()
-    private val marked = ConcurrentHashMap<Path, Set<VirtualFile>>()
-
-    /** Checks [root] in the background after [DELAY_MS] without another change (or right away when [immediately]). */
-    fun schedule(root: Path, immediately: Boolean = false) {
-        // Tests check directly, rather than leaving background work to outlive them.
-        if (ApplicationManager.getApplication().isUnitTestMode) return
-        launch(root, immediately)
-    }
-
-    /** [schedule]'s background check, which tests call themselves and wait for. */
-    internal fun launch(root: Path, immediately: Boolean): Job {
-        pending.remove(root)?.cancel()
-        return scope.launch(Dispatchers.IO) {
-            if (!immediately) delay(DELAY_MS)
-            val result = check(root) ?: return@launch
-            ensureActive()
-            report(root, result)
-        }.also { pending[root] = it }
-    }
-
-    /** The latest check's diagnostics for [file], checking [root] now if nothing has changed on disk since isn't known. */
-    fun diagnostics(root: Path, file: Path): List<InkoDiagnostic> {
-        val current = VirtualFileManager.getInstance().modificationCount
-        val result = results[root]?.takeIf { it.modificationCount == current } ?: check(root) ?: return emptyList()
-        return result.diagnostics[file].orEmpty()
-    }
-
-    /** Runs `inko check` on every module of [root] (sources and tests) and keeps the result. */
-    fun check(root: Path): Result? {
-        val cli = InkoCli.getInstance(project)
-        if (!cli.isAvailable) return null
-        val modificationCount = VirtualFileManager.getInstance().modificationCount
-        return try {
-            InkoMirror.create(root).use { mirror ->
-                val output = cli.run(listOf("check", "--format", "json"), mirror.directory, timeoutMs = TIMEOUT_MS) ?: return null
-                if (output.interrupted) return null
-                val diagnostics = InkoCheck.parse(output.stderr)
-                    .map { mirror.toReal(Path.of(it.file)) to it }
-                    // The project's own modules; not its dependencies or the standard library.
-                    .filter { (path, _) -> path.startsWith(root) && !path.startsWith(root.resolve("dep")) }
-                    .groupBy({ it.first }, { it.second })
-                Result(diagnostics, modificationCount).also { results[root] = it }
+    /** Pulls from the running Cuttlebone until the project closes ([CuttleboneService.initialized] starts it). */
+    fun start() {
+        if (ApplicationManager.getApplication().isUnitTestMode || pulling?.isActive == true) return
+        pulling = scope.launch(Dispatchers.IO) {
+            while (true) {
+                val server = CuttleboneService.getInstance(project).server()
+                try {
+                    if (server == null) delay(RETRY_MS) else pull(server)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // A check that didn't finish, or a server stopping: ask again in a moment.
+                    LOG.debug("workspace diagnostics", e)
+                    delay(RETRY_MS)
+                }
             }
-        } catch (e: Exception) {
-            LOG.warn("Couldn't check the Inko project at $root", e)
-            null
         }
     }
 
-    /** The files the last [report] for [root] marked as having errors. */
-    fun problemFiles(root: Path): Set<VirtualFile> = marked[root].orEmpty()
+    /** One pull, with the result ids of the last, so it's answered once a report changes. */
+    internal suspend fun pull(server: LspServer) {
+        val previous = reports.mapNotNull { (uri, report) -> report.first?.let { PreviousResultId(uri, it) } }
+        update(server.sendRequest { it.workspaceService.diagnostic(WorkspaceDiagnosticParams(previous)) } ?: return)
+    }
+
+    internal fun update(report: WorkspaceDiagnosticReport) {
+        for (item in report.items) {
+            if (!item.isLeft) continue // Unchanged.
+            reports[item.left.uri] = item.left.resultId to item.left.items.any { it.severity == DiagnosticSeverity.Error }
+        }
+        mark()
+    }
+
+    /** The files the last report marked as having errors. */
+    fun problemFiles(): Set<VirtualFile> = marked.toSet()
 
     /**
      * Marks files with errors as problem files, and unmarks ones that no longer have any. Off the EDT: the
      * IDE's problem-file service asserts it (from 2025.3), and takes its own read lock.
      */
-    fun report(root: Path, result: Result) {
+    private fun mark() {
         val wolf = WolfTheProblemSolver.getInstance(project)
-        val files = LocalFileSystem.getInstance()
-        val withErrors = result.diagnostics.filterValues { diagnostics -> diagnostics.any { !it.isWarning } }.keys
-            .mapNotNull { files.refreshAndFindFileByNioFile(it) }.toSet()
-        // One report at a time, as on the EDT before, so marks aren't left from an overlapping one.
+        val files = VirtualFileManager.getInstance()
+        val withErrors = reports.filterValues { it.second }.keys.mapNotNull { files.refreshAndFindFileByUrl(it) }.toSet()
+        // One report at a time, so marks aren't left from an overlapping one.
         synchronized(marked) {
-            for (file in marked[root].orEmpty() - withErrors) wolf.clearProblemsFromExternalSource(file, this)
+            for (file in marked - withErrors) wolf.clearProblemsFromExternalSource(file, this)
             for (file in withErrors) wolf.reportProblemsFromExternalSource(file, this)
-            marked[root] = withErrors
+            marked.retainAll(withErrors)
+            marked.addAll(withErrors)
         }
     }
 
     companion object {
         private val LOG = logger<InkoProjectCheck>()
-        private const val DELAY_MS = 1_000L
-        private const val TIMEOUT_MS = 120_000
+        private const val RETRY_MS = 1_000L
 
         fun getInstance(project: Project): InkoProjectCheck = project.service()
     }
 }
 
-/**
- * The compiler's errors and warnings for Code | Inspect Code, from a check of
- * the whole project. While editing, the as-you-type check already shows them,
- * so this only reports in batch runs.
- */
+/** The compiler's errors and warnings for Code | Inspect Code, from Cuttlebone's pull; the editor shows them as you type. */
 class InkoCompilerInspection : LocalInspectionTool() {
     override fun runForWholeFile(): Boolean = true
 
     override fun checkFile(file: PsiFile, manager: InspectionManager, isOnTheFly: Boolean): Array<ProblemDescriptor>? {
         if (isOnTheFly || file !is InkoFile) return null
-        val path = Inko.pathOf(file.virtualFile) ?: return null
         val document = PsiDocumentManager.getInstance(file.project).getDocument(file) ?: return null
-        val diagnostics = InkoProjectCheck.getInstance(file.project).diagnostics(Inko.projectRoot(path), path)
-        return diagnostics.mapNotNull { diagnostic ->
-            val start = Inko.offsetOf(document, diagnostic.lineStart, diagnostic.columnStart)
-            val end = maxOf(Inko.offsetOf(document, diagnostic.lineEnd, diagnostic.columnEnd + 1), minOf(start + 1, document.textLength))
-            val first = file.findElementAt(start) ?: return@mapNotNull null
-            val last = file.findElementAt(maxOf(end - 1, start)) ?: first
+        return InkoDiagnostic.of(file, document).orEmpty().mapNotNull { diagnostic ->
+            val first = file.findElementAt(diagnostic.range.startOffset) ?: return@mapNotNull null
+            val last = file.findElementAt(maxOf(diagnostic.range.endOffset - 1, diagnostic.range.startOffset)) ?: first
             manager.createProblemDescriptor(
                 first, last, diagnostic.message,
                 if (diagnostic.isWarning) ProblemHighlightType.WARNING else ProblemHighlightType.GENERIC_ERROR,
@@ -153,13 +129,4 @@ class InkoCompilerInspection : LocalInspectionTool() {
 class InkoProblemFileFilter(private val project: Project) : Condition<VirtualFile> {
     override fun value(file: VirtualFile): Boolean =
         file.fileType == InkoFileType.INSTANCE && ProjectFileIndex.getInstance(project).isInContent(file)
-}
-
-/** Starts a project-wide check of each Inko project when the IDE opens it. */
-class InkoProjectCheckOnStartup : com.intellij.openapi.startup.ProjectActivity {
-    override suspend fun execute(project: Project) {
-        if (ApplicationManager.getApplication().isUnitTestMode) return
-        val roots = readAction { InkoProjectRoots.find(project) }
-        roots.forEach { InkoProjectCheck.getInstance(project).schedule(it, immediately = true) }
-    }
 }

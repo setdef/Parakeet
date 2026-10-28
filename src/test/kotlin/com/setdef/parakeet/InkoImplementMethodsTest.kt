@@ -1,9 +1,8 @@
 package com.setdef.parakeet
 
-import java.nio.file.Files
 import java.nio.file.Path
 
-/** Implement Methods (⌃I), Override Methods (⌃O), and the quick fix, with inko doc and inko check supplied by a fake. */
+/** Implement Methods (⌃I), Override Methods (⌃O), and the quick fix, with Cuttlebone's diagnostics supplied by a stub. */
 class InkoImplementMethodsTest : InkoTestCase(onDisk = true) {
     private var reportMissing = false
     private var reportMissingTrait = false
@@ -14,21 +13,17 @@ class InkoImplementMethodsTest : InkoTestCase(onDisk = true) {
             "src/app/show.inko",
             "trait pub Show[T] {\n  fn pub show(value: T) -> String\n  fn pub name -> String\n\n  fn pub debug(value: T) -> String {\n    show(value)\n  }\n}\n",
         )
-        val doc = FakeInkoCli { FakeInkoCli.ok(stderr = "[]") }
-        useFakeInko(FakeInkoCli { call ->
-            if (call.args.first() != "check") return@FakeInkoCli doc.run(call.args, call.workingDirectory)!!
-            if (reportMissingTrait) {
+        useFakeInko(FakeInkoCli { FakeInkoCli.ok(stderr = "[]") })
+        pullDiagnostics { _, text ->
+            val lines = text.lines()
+            when {
                 // Like the compiler: an impl of a trait requiring Show[Int], which Thing lacks.
-                val copy = Path.of(call.args.last())
-                val line = Files.readAllLines(copy).indexOfFirst { it.startsWith("impl Walk") } + 1
-                return@FakeInkoCli FakeInkoCli.ok(stderr = """[{"id": "missing-trait", "level": "error", "file": "$copy", "lines": [$line, ${line + 1}], "columns": [1, 1], "message": "the trait 'Show[Int]' isn't implemented for type 'Thing'"}]""")
+                reportMissingTrait -> listOf(InkoCheckTest.diagnostic(lines.indexOfFirst { it.startsWith("impl Walk") }, 0, 1, "the trait 'Show[Int]' isn't implemented for type 'Thing'", "missing-trait"))
+                // Like the compiler: an error at the impl for each missing method.
+                reportMissing -> listOf(InkoCheckTest.diagnostic(lines.indexOfFirst { it.startsWith("impl") }, 0, 4, "the method 'show' must be implemented for 'Thing'", "invalid-implementation"))
+                else -> emptyList()
             }
-            if (!reportMissing) return@FakeInkoCli FakeInkoCli.ok(stderr = "[]")
-            // Like the compiler: an error at the impl for each missing method.
-            val copy = Path.of(call.args.last())
-            val line = Files.readAllLines(copy).indexOfFirst { it.startsWith("impl") } + 1
-            FakeInkoCli.ok(stderr = """[{"id": "invalid-implementation", "level": "error", "file": "$copy", "lines": [$line, $line], "columns": [1, 4], "message": "the method 'show' must be implemented for 'Thing'"}]""")
-        })
+        }
     }
 
     private fun run(text: String, action: String): String {

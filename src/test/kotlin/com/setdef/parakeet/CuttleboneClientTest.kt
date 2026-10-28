@@ -39,13 +39,17 @@ class CuttleboneClientTest : CuttleboneTestCase() {
         }
     }
 
-    fun testTurnsOffCuttlebonesDiagnostics() {
-        // Errors are Parakeet's (`inko check`), so Cuttlebone's full checks would be for nothing.
+    // Errors are Cuttlebone's, which Parakeet pulls (so Cuttlebone pushes none, and checks after edits for the pulls
+    // to answer), and moving files asks Cuttlebone for the edits.
+    fun testPullsDiagnosticsAndAsksForFileRenames() {
         useFake(answered())
         open("src/main.inko", text)
         runningServer(waitForOpen = false)
-        val options = received("initialize").single().getAsJsonObject("params").getAsJsonObject("initializationOptions")
-        assertFalse(options.toString(), options.get("diagnostics")?.asBoolean ?: true)
+        val params = received("initialize").single().getAsJsonObject("params")
+        assertNull("diagnostics aren't turned off", params.getAsJsonObject("initializationOptions").get("diagnostics"))
+        val capabilities = params.getAsJsonObject("capabilities")
+        assertTrue(capabilities.toString(), capabilities.getAsJsonObject("textDocument").has("diagnostic"))
+        assertTrue(capabilities.toString(), capabilities.getAsJsonObject("workspace").getAsJsonObject("fileOperations").get("willRename").asBoolean)
     }
 
     fun testAnEditReachesTheServerBeforeTheNextQuery() {

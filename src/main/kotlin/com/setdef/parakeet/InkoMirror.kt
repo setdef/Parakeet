@@ -1,6 +1,5 @@
 package com.setdef.parakeet
 
-import com.intellij.openapi.util.io.NioFiles
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -10,47 +9,23 @@ import kotlin.io.path.listDirectoryEntries
 
 /**
  * A copy of an Inko project made of symlinks to its source files, manifest, and
- * `dep` directory, so `inko` can run against it without writing into the real
- * project, optionally with one file's unsaved text swapped in.
- *
- * A temporary mirror is deleted when closed. A persistent one (for test runs)
- * lives in the IDE's system directory and keeps its `build` directory between
- * uses, so compiles stay incremental; only its links are refreshed.
+ * `dep` directory, so `inko` can run its tests without writing into the real
+ * project. It lives in the IDE's system directory and keeps its `build`
+ * directory between uses, so compiles stay incremental; only its links are refreshed.
  */
-class InkoMirror private constructor(val root: Path, val directory: Path, private val temporary: Boolean) : AutoCloseable {
-    /** Maps a path inside the mirror back to the real project (other paths are returned as-is). */
-    fun toReal(path: Path): Path = if (path.startsWith(directory)) root.resolve(directory.relativize(path)) else path
-
+class InkoMirror private constructor(val root: Path, val directory: Path) {
     fun toMirror(path: Path): Path = directory.resolve(root.relativize(path))
 
-    override fun close() {
-        if (temporary) NioFiles.deleteRecursively(directory)
-    }
-
     companion object {
-        /** What a mirror links to; refreshing a persistent mirror replaces exactly these. */
+        /** What a mirror links to; refreshing a mirror replaces exactly these. */
         private val LINKED = Inko.SOURCE_DIRECTORIES + Inko.MANIFEST + "dep"
-
-        /**
-         * A temporary mirror of [root], replacing [file] (if given) with [text].
-         */
-        fun create(root: Path, file: Path? = null, text: String? = null): InkoMirror {
-            val mirror = InkoMirror(root, Files.createTempDirectory("parakeet").toRealPath(), temporary = true)
-            try {
-                mirror.populate(file, text)
-                return mirror
-            } catch (e: Exception) {
-                mirror.close()
-                throw e
-            }
-        }
 
         /** A mirror of [root] in [directory], with its links refreshed and anything else (e.g. `build`) kept. */
         fun persistent(root: Path, directory: Path): InkoMirror {
             Files.createDirectories(directory)
-            val mirror = InkoMirror(root, directory.toRealPath(), temporary = false)
+            val mirror = InkoMirror(root, directory.toRealPath())
             LINKED.map(mirror.directory::resolve).forEach(::deleteWithoutFollowingLinks)
-            mirror.populate(null, null)
+            mirror.populate()
             return mirror
         }
 
@@ -67,7 +42,7 @@ class InkoMirror private constructor(val root: Path, val directory: Path, privat
         }
     }
 
-    private fun populate(file: Path?, text: String?) {
+    private fun populate() {
         for (dir in Inko.SOURCE_DIRECTORIES.map(root::resolve).filter(Files::isDirectory)) {
             Files.walk(dir).use { paths ->
                 paths.filter { it.isRegularFile() && it.extension == Inko.EXTENSION }.forEach(::link)
@@ -77,7 +52,6 @@ class InkoMirror private constructor(val root: Path, val directory: Path, privat
         Files.createDirectories(directory.resolve("src"))
         val manifest = root.resolve(Inko.MANIFEST).takeIf(Files::isRegularFile)?.also(::link)
         if (manifest != null) dependencies(manifest)
-        if (file != null && text != null) replace(file, text)
     }
 
     /**
@@ -100,12 +74,5 @@ class InkoMirror private constructor(val root: Path, val directory: Path, privat
         val link = toMirror(source)
         Files.createDirectories(link.parent)
         Files.createSymbolicLink(link, source)
-    }
-
-    private fun replace(file: Path, text: String) {
-        val copy = toMirror(file)
-        Files.createDirectories(copy.parent)
-        Files.deleteIfExists(copy)
-        Files.writeString(copy, text)
     }
 }

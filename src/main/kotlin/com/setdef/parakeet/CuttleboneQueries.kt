@@ -314,6 +314,17 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         }
     }
 
+    /**
+     * The compiler's errors and warnings in [file], the same as `inko check` reports, from a full check of its project
+     * with the documents exactly as they are (a document pull), never an older one. The highlighting pass waits for it.
+     */
+    fun diagnostics(file: PsiFile, budgetMs: Long = SEARCH_BUDGET_MS): Answer<List<org.eclipse.lsp4j.Diagnostic>>? =
+        query(file, 0, "textDocument/diagnostic", budgetMs, { report: org.eclipse.lsp4j.DocumentDiagnosticReport? ->
+            report?.let { if (it.isLeft) it.left.items else null }
+        }, waitInHighlighting = true, pull = true) { server, document, _ ->
+            server.textDocumentService.diagnostic(org.eclipse.lsp4j.DocumentDiagnosticParams(document))
+        }
+
     fun typeDefinition(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<List<Location>>? =
         query(file, offset, "textDocument/typeDefinition", budgetMs, ::locations) { server, document, position ->
             server.textDocumentService.typeDefinition(TypeDefinitionParams(document, position))
@@ -393,11 +404,14 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         stale: Boolean = false,
         onEdt: Boolean = false,
         variant: String = "",
+        /** A pull of diagnostics, which has no status: it's answered from a check of the documents as they are, or fails. */
+        pull: Boolean = false,
         send: (LanguageServer, TextDocumentIdentifier, Position) -> CompletableFuture<R>,
     ): Answer<T>? {
         val pending = start(file, offset, method, convert, variant, send) ?: return null
         @Suppress("UNCHECKED_CAST")
         val answer = await(pending, budgetMs, wait = mayWait(waitInHighlighting, onEdt)) as Answer<T>?
+        if (pull) return answer
         // Parakeet opts in to status notifications: without a `fresh` one (or a `stale` one, where it counts), there's
         // no usable answer. Any other status, including ones added later, is none.
         if (answer?.editing == true) return answer

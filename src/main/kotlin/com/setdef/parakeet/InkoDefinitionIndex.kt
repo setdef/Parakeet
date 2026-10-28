@@ -7,7 +7,6 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
@@ -112,11 +111,6 @@ class InkoDefinitionIndexFileListener(private val project: Project) : BulkFileLi
         val index = InkoDefinitionIndex.getInstance(project)
         val paths = events.map { it.path }
         paths.filter { it.endsWith(".${Inko.EXTENSION}") || it.endsWith("/${Inko.MANIFEST}") || it.endsWith("/dep") }.forEach { index.invalidate(Path.of(it)) }
-        // Saved changes in the project can break (or fix) other modules: check the whole project again.
-        val fileIndex = ProjectFileIndex.getInstance(project)
-        events.filter { event -> event.file?.let { it.extension == Inko.EXTENSION && fileIndex.isInContent(it) } == true }
-            .map { Inko.projectRoot(Path.of(it.path)) }.distinct()
-            .forEach { InkoProjectCheck.getInstance(project).schedule(it) }
         if (paths.any { it.endsWith("/${Inko.MANIFEST}") }) EditorNotifications.getInstance(project).updateAllNotifications()
         // A new project, or dependencies synced or removed: libraries (and exclusions) may change.
         if (paths.any { it.endsWith("/${Inko.MANIFEST}") || it.endsWith("/dep") }) {

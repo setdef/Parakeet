@@ -26,10 +26,11 @@ class InkoLibrariesTest : InkoTestCase(onDisk = true) {
             when (call.args) {
                 listOf("print", "std") -> FakeInkoCli.ok(stdout = "$std\n")
                 listOf("--version") -> FakeInkoCli.ok(stdout = "inko 0.21.1\n")
-                // Every file "fails" to check, so an unchecked file shows no errors.
-                else -> FakeInkoCli.failed("""[{"id": "x", "level": "error", "file": "${call.args.last()}", "lines": [1, 1], "columns": [1, 2], "message": "checked"}]""")
+                else -> FakeInkoCli.ok()
             }
         })
+        // Every file "fails" to check, so an unchecked file shows no errors.
+        pullDiagnostics { _, _ -> listOf(InkoCheckTest.diagnostic(0, 0, 1, "checked", "x")) }
     }
 
     private val root: Path get() = Path.of(myFixture.tempDirPath)

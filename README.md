@@ -28,15 +28,16 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - Line comment toggling (`#`), bracket matching, and auto-closing brackets and quotes
 - Two-space indentation as you type, like `inko fmt` (*Settings → Editor → Code
   Style → Inko*)
-- Compiler errors and warnings as you type, from `inko check`, with **quick
+- Compiler errors and warnings as you type, from Cuttlebone (the same as
+  `inko check`), with **quick
   fixes** (Alt+Enter): import an undefined name from the module that defines
   it, remove an unused import, rename an unused local to `_name`, discard an
   unused result with `let _ =`, add a missing field, implement missing methods
   or a missing required trait, and remove unreachable code
-- **Errors across the whole project**: after saves and when a project opens,
-  `inko check` runs on every module, so files with errors are marked in the
-  Project view and the Problems tool window even when they aren't open, and
-  *Code → Inspect Code* lists every module's errors and warnings
+- **Errors across the whole project**, as you type: Cuttlebone checks every
+  module, so files with errors are marked in the Project view and the
+  Problems tool window even when they aren't open, and *Code → Inspect Code*
+  lists every module's errors and warnings
 - **Intentions** (Alt+Enter anywhere): flip a comparison, `==`, `!=`, `and`, or
   `or`; invert an `if`; replace an `if`/`else if` chain over literals with a
   `match`, and back; add or remove argument names; and specify or remove a
@@ -146,10 +147,10 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 The plugin understands Inko through the `inko` command rather than its own
 compiler, so it always agrees with your installed Inko version.
 
-- **Errors** are checked against your unsaved text: the plugin mirrors the
-  project into a temporary directory (symlinking every source file) with your
-  unsaved text in place of the file, then runs `inko check` there, so imports in
-  both directions and dependencies resolve.
+- **Errors** are Cuttlebone's pulled diagnostics (`textDocument/diagnostic` for
+  the editor and Inspect Code, `workspace/diagnostic` for the whole project):
+  the same as `inko check` reports, from a check of the whole project with your
+  unsaved text, so imports in both directions and dependencies resolve.
 - **Go to definition, quick documentation, completion,
   parameter info and hints, and Implement Methods** use the definitions
   Parakeet reads from the code: the project's `src/` and `test/`, its
@@ -279,10 +280,9 @@ compiler, so it always agrees with your installed Inko version.
   a mirror of the project in the IDE's system directory (with its own build
   cache), so nothing is added to your project. It takes one name filter, so
   rerunning failed tests builds it once and runs it once per failed test.
-- **Errors across the whole project** come from running `inko check` with no
-  file, on a mirror of the saved project, after saves (once they pause for a
-  second) and when the project opens. Unsaved edits are checked as you type in
-  their own editor, as before.
+- **Errors across the whole project** come from Cuttlebone's workspace pull,
+  which it answers when a check (after an edit, or when it starts) changes a
+  file's errors; Parakeet asks again as soon as it has an answer.
 - **Intentions** work from the file's tokens with the same operator rules as
   the refactorings. `if` ⇄ `match` only rewrites comparisons of a name or field
   to literals (so the value is the same each time it's read), and argument
@@ -414,6 +414,8 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | Type Hierarchy | `typeHierarchy/supertypes` and `subtypes`, from the type database, which Parakeet asks for (IntelliJ 2025.3's LSP support has none) | none |
 | Go to Implementation and Super Method, trait gutter icons to implementations, a trait method's implementations in Find Usages and Rename | `textDocument/implementation` and `textDocument/declaration`, and a type's supertypes, which Parakeet asks for (IntelliJ 2025.3's LSP support has none); Rename takes fresh answers only | none; Rename lists it as a conflict |
 | Moving files and directories, and renaming directories | `workspace/willRenameFiles`, asked before the move and made after it (IntelliJ 2025.3's LSP support has none) | none: a conflict says so |
+| Errors and warnings, their quick fixes, Inspect Code, Optimize Imports' unused imports | `textDocument/diagnostic`: the same as `inko check`, from a check of the documents as they are | Cuttlebone's: it checks the code as it is |
+| Errors across the whole project (the Project view, Problems) | `workspace/diagnostic`, a long poll | Cuttlebone's |
 | Completion after `.` | `textDocument/completion` on the real buffer | Parakeet's reading |
 | Parameter info | `textDocument/signatureHelp`: the resolved method's signature, with the receiver's type arguments, and the argument's parameter (named ones too). For a type's constructor (`Point(x: 1)`), which it has none for, the type's fields | Parakeet's reading |
 | Parameter-name and type hints | `textDocument/inlayHint`, once for the whole file | none: hints only inform |
@@ -437,10 +439,10 @@ resolve, say), or has no answer for another reason (it's starting, or a
 question ran out of time), nothing is shown: Parakeet's reading stands in
 only for code being edited.
 
-Errors and warnings come from `inko check`, with or without Cuttlebone, and
-Parakeet turns off Cuttlebone's own diagnostics: IntelliJ's display of them
-would have no quick fixes, wouldn't be in Inspect Code, and wouldn't mark
-files that aren't open. Every other LSP feature IntelliJ offers is
+Errors and warnings are Cuttlebone's, which Parakeet pulls itself rather than
+through IntelliJ's display of them, which would have no quick fixes, wouldn't be
+in Inspect Code, and wouldn't mark files that aren't open; so without
+Cuttlebone there are none. Every other LSP feature IntelliJ offers is
 turned off, so nothing shows twice. Cuttlebone answers from each open file's unsaved text,
 and from saved text for the rest. A file changed with no editor open (by a
 refactoring, or by undoing one) is saved right after the change, since

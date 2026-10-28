@@ -27,41 +27,23 @@ class InkoMirrorTest : TestCase() {
         super.tearDown()
     }
 
-    fun testClosingATemporaryMirrorNeverDeletesTheProject() {
-        val directory = InkoMirror.create(root).use { mirror ->
-            // The project's packages are linked into the mirror's own dep/, never copied or moved.
-            assertTrue(Files.isSymbolicLink(mirror.directory.resolve("dep/pkg")))
-            mirror.directory
-        }
-        assertFalse(Files.exists(directory))
-        assertEquals("keep me\n", Files.readString(root.resolve("dep/pkg/precious.inko")))
-        assertEquals("fn pub a {}\n", Files.readString(root.resolve("src/app/util.inko")))
-    }
-
     fun testPersistentMirrorsRefreshLinksAndKeepTheirBuild() {
         val directory = base.resolve("persistent")
-        InkoMirror.persistent(root, directory).use { mirror ->
+        InkoMirror.persistent(root, directory).let { mirror ->
+            // The project's packages are linked into the mirror's own dep/, never copied or moved.
+            assertTrue(Files.isSymbolicLink(mirror.directory.resolve("dep/pkg")))
             Files.createDirectories(mirror.directory.resolve("build/debug"))
             Files.writeString(mirror.directory.resolve("build/debug/cache"), "cached")
         }
         Files.delete(root.resolve("src/app/util.inko"))
         Files.writeString(root.resolve("src/app/new.inko"), "")
 
-        InkoMirror.persistent(root, directory).use { mirror ->
+        InkoMirror.persistent(root, directory).let { mirror ->
             assertEquals("cached", Files.readString(mirror.directory.resolve("build/debug/cache")))
             assertFalse(Files.exists(mirror.directory.resolve("src/app/util.inko"), java.nio.file.LinkOption.NOFOLLOW_LINKS))
             assertTrue(Files.isSymbolicLink(mirror.directory.resolve("src/app/new.inko")))
         }
         assertTrue(Files.exists(directory))
         assertEquals("keep me\n", Files.readString(root.resolve("dep/pkg/precious.inko")))
-    }
-
-    fun testSwapsInUnsavedText() {
-        InkoMirror.create(root, root.resolve("src/app/util.inko"), "fn pub b {}\n").use { mirror ->
-            val copy = mirror.directory.resolve("src/app/util.inko")
-            assertFalse(Files.isSymbolicLink(copy))
-            assertEquals("fn pub b {}\n", Files.readString(copy))
-        }
-        assertEquals("fn pub a {}\n", Files.readString(root.resolve("src/app/util.inko")))
     }
 }

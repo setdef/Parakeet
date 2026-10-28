@@ -301,15 +301,16 @@ class CuttleboneDescriptor(project: Project) : ProjectWideLspServerDescriptor(pr
     override fun createInitializationOptions(): Any = JsonObject().apply {
         InkoCli.getInstance(project).commandLine(emptyList(), null)?.exePath?.let { addProperty("inko", it) }
         addProperty("statusNotifications", true)
-        // Errors and warnings are Parakeet's, from `inko check` (CuttleboneCustomization), so Cuttlebone needn't check for them.
-        addProperty("diagnostics", false)
     }
 
-    // UTF-16 positions, which are IntelliJ's offsets. Parakeet asks for the edits a file rename needs (InkoFileMoves).
+    // UTF-16 positions, which are IntelliJ's offsets. Parakeet pulls diagnostics (InkoProjectCheck, InkoCheckAnnotator),
+    // so Cuttlebone pushes none, and asks for the edits a file rename needs (InkoFileMoves).
     override val clientCapabilities: ClientCapabilities
         get() = super.clientCapabilities.apply {
             val general = general ?: GeneralClientCapabilities().also { general = it }
             general.positionEncodings = listOf("utf-16")
+            val text = textDocument ?: org.eclipse.lsp4j.TextDocumentClientCapabilities().also { textDocument = it }
+            text.diagnostic = org.eclipse.lsp4j.DiagnosticCapabilities()
             val workspace = workspace ?: org.eclipse.lsp4j.WorkspaceClientCapabilities().also { workspace = it }
             workspace.fileOperations = (workspace.fileOperations ?: org.eclipse.lsp4j.FileOperationsWorkspaceCapabilities()).apply { willRename = true }
         }
@@ -345,8 +346,8 @@ abstract class CuttleboneCustomization : LspCustomization() {
     override val completionCustomizer: LspCompletionCustomizer get() = LspCompletionDisabled
     // Find Usages is Parakeet's, on IntelliJ's PSI.
     override val findReferencesCustomizer: LspFindReferencesCustomizer get() = LspFindReferencesDisabled
-    // Errors come from `inko check`: IntelliJ's would have no quick fixes, aren't in Inspect Code, don't
-    // mark files that aren't open, and vanish without Cuttlebone. Cuttlebone's are off (createInitializationOptions).
+    // Parakeet pulls Cuttlebone's errors itself: IntelliJ's would have no quick fixes, aren't in Inspect Code, and
+    // don't mark files that aren't open.
     override val diagnosticsCustomizer: LspDiagnosticsCustomizer get() = LspDiagnosticsDisabled
     // Parakeet's hints ask Cuttlebone for the whole file, and have a switch for types and one for parameter
     // names (IntelliJ's have one for everything); parameter names fall back to the heuristic in broken code.
@@ -641,6 +642,7 @@ class CuttleboneService(private val project: Project) : com.intellij.openapi.Dis
         restarts = 0
         val info = result.serverInfo
         report(Cuttlebone.Status.Running(listOfNotNull(info?.name ?: "cuttlebone", info?.version).joinToString(" ")))
+        if (!project.isDisposed) InkoProjectCheck.getInstance(project).start()
         // A download is Parakeet's to keep up to date (by asking): an override is the user's.
         val located = located
         if (located?.source == Cuttlebone.Source.DOWNLOADED && !project.isDisposed) {

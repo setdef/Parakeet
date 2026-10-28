@@ -35,12 +35,34 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         myFixture.configureFromExistingVirtualFile(myFixture.addFileToProject(path, text).virtualFile)
     }
 
+    private var checking = false
+
+    /**
+     * Opens [path] as [text] once Cuttlebone, whose errors and warnings these are, has it; false, for the test to
+     * skip, without a cuttlebone (CI's plain integration jobs: its Cuttlebone job runs them).
+     */
+    private fun openChecked(path: String, text: String): Boolean {
+        val service = CuttleboneService.getInstance(project)
+        // Set up once a test: setting it up again restarts it. Cuttlebone serves the project's own files.
+        if (!checking) {
+            putTempDirInProjectContent()
+            if (!askingCuttlebone) return false
+            checking = true
+        }
+        open(path, text)
+        com.intellij.testFramework.PlatformTestUtil.waitWithEventsDispatching("Cuttlebone to have $path (${service.status?.message})", {
+            val server = service.server()
+            server != null && service.isSynced(server, myFixture.file.virtualFile, myFixture.editor.document)
+        }, TimingLimits.seconds(60))
+        return true
+    }
+
     private fun problems(): List<HighlightInfo> =
         myFixture.doHighlighting().filter { it.severity >= HighlightSeverity.WEAK_WARNING && it.description != null }
 
     fun testChecksUnsavedTextInAModuleOthersImport() {
         myFixture.addFileToProject("src/main.inko", "import app.util (helper)\n\ntype async Main {\n  fn async main {\n    helper\n  }\n}\n")
-        open("src/app/util.inko", "import std.stdio (Stdout)\n\nfn pub helper -> Int {\n  42\n}\n")
+        if (!openChecked("src/app/util.inko", "import std.stdio (Stdout)\n\nfn pub helper -> Int {\n  42\n}\n")) return
         assertEquals("the symbol 'Stdout' is unused", problems().single { it.severity == HighlightSeverity.WARNING }.description)
 
         myFixture.editor.caretModel.moveToOffset(myFixture.editor.document.text.indexOf("42"))
@@ -50,7 +72,7 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
 
     // Compiler columns count grapheme clusters: the error is on `nope`, not a few UTF-16 units before it.
     fun testHighlightsErrorsAfterEmojiAndCombiningAccents() {
-        open("src/app/wide.inko", "fn pub a -> Int {\n  let s = '\uD83D\uDC69\u200D\uD83D\uDC69\u200D\uD83D\uDC66 e\u0301' + nope\n  1\n}\n")
+        if (!openChecked("src/app/wide.inko", "fn pub a -> Int {\n  let s = '\uD83D\uDC69\u200D\uD83D\uDC69\u200D\uD83D\uDC66 e\u0301' + nope\n  1\n}\n")) return
         val error = problems().single { it.severity == HighlightSeverity.ERROR }
         assertEquals("nope", myFixture.editor.document.getText(com.intellij.openapi.util.TextRange(error.startOffset, error.endOffset)))
     }
@@ -185,29 +207,6 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
 
     fun testSpecifiedTypeStillCompiles() =
         intentionCompiles("fn pub area(width: Int, height: Int) -> Int {\n  let <caret>total = width * height\n  total\n}\n", "Specify type explicitly", cuttlebone = true)
-
-    fun testProjectCheckFindsErrorsInUnopenedModules() {
-        putTempDirInProjectContent()
-        myFixture.addFileToProject("src/app/fine.inko", "fn pub fine -> Int {\n  1\n}\n")
-        myFixture.addFileToProject("src/app/broken.inko", "fn pub broken -> Int {\n  nope\n}\n")
-        FileDocumentManager.getInstance().saveAllDocuments()
-        val root = Path.of(myFixture.tempDirPath)
-        val result = InkoProjectCheck.getInstance(project).check(root)!!
-        assertEquals(setOf(root.resolve("src/app/broken.inko")), result.diagnostics.keys)
-        assertEquals("the symbol 'nope' is undefined", result.diagnostics.values.single().single().message)
-    }
-
-    // inko writes `\u{1}` for the control character in this message, which isn't JSON; the other error still shows.
-    fun testAnInvalidEscapeDoesNotHideOtherErrors() {
-        putTempDirInProjectContent()
-        myFixture.addFileToProject("src/app/escape.inko", "fn pub a -> String {\n  '\\\u0001'\n}\n")
-        myFixture.addFileToProject("src/app/broken.inko", "fn pub b -> Int {\n  (\n}\n")
-        FileDocumentManager.getInstance().saveAllDocuments()
-        val root = Path.of(myFixture.tempDirPath)
-        val result = InkoProjectCheck.getInstance(project).check(root)!!
-        assertEquals(setOf(root.resolve("src/app/escape.inko"), root.resolve("src/app/broken.inko")), result.diagnostics.keys)
-        assertEquals("the escape sequence '\\\u0001' is invalid", result.diagnostics.getValue(root.resolve("src/app/escape.inko")).single().message)
-    }
 
     fun testMovedDeclarationsStillCompile() {
         // What changes code takes only the compiler's fresh answers.
@@ -480,29 +479,34 @@ class InkoIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
     }
 
     fun testQuickFixesUseTheCompilersDiagnostics() {
-        open("src/app/util.inko", "import std.stdio (Stdout, Stderr)\n\nfn pub helper {\n  Stdout.new\n}\n")
+        if (!openChecked("src/app/util.inko", "import std.stdio (Stdout, Stderr)\n\nfn pub helper {\n  Stdout.new\n}\n")) return
         myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Remove unused import 'Stderr'" })
         myFixture.checkResult("import std.stdio (Stdout)\n\nfn pub helper {\n  Stdout.new\n}\n")
     }
 
-    fun testQuickFixesForMissingFieldsAndUnreachableCode() {
-        open("src/app/util.inko", "type pub Point {\n  let @x: Int\n  let @y: Int\n}\n\nfn pub point -> Point {\n  Point(x: 1)\n}\n")
+    fun testQuickFixForAMissingField() {
+        if (!openChecked("src/app/util.inko", "type pub Point {\n  let @x: Int\n  let @y: Int\n}\n\nfn pub point -> Point {\n  Point(x: 1)\n}\n")) return
         myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Add field 'y'" })
         myFixture.checkResult("type pub Point {\n  let @x: Int\n  let @y: Int\n}\n\nfn pub point -> Point {\n  Point(x: 1, y: <caret>)\n}\n")
+    }
 
-        open("src/app/early.inko", "fn pub early -> Int {\n  return 1\n  let a = 2\n  a + 3\n}\n")
+    // A project of its own: the fix above leaves `y: ` to fill in, which doesn't parse, and a module that doesn't
+    // parse stops the compiler before it checks the others, so Cuttlebone (as `inko check` of the project) would
+    // report nothing here. Parakeet's own `inko check` of one file did (SESSION-slimming-2.md, what was lost).
+    fun testQuickFixForUnreachableCode() {
+        if (!openChecked("src/app/early.inko", "fn pub early -> Int {\n  return 1\n  let a = 2\n  a + 3\n}\n")) return
         myFixture.launchAction(myFixture.getAllQuickFixes().single { it.text == "Remove unreachable code" })
         myFixture.checkResult("fn pub early -> Int {\n  return 1\n}\n")
     }
 
     fun testImplementsTheCompilersMissingMethods() {
-        open("src/app/shape.inko", "trait pub Shape {\n  fn pub area -> Int\n}\n\ntype pub Box {}\n\nimpl Shape for Box {}\n")
+        if (!openChecked("src/app/shape.inko", "trait pub Shape {\n  fn pub area -> Int\n}\n\ntype pub Box {}\n\nimpl Shape for Box {}\n")) return
         myFixture.launchAction(myFixture.getAllQuickFixes().first { it.text == "Implement missing methods" })
         assertTrue(myFixture.editor.document.text, "  fn pub area -> Int {\n    panic('not implemented')\n  }" in myFixture.editor.document.text)
     }
 
     fun testOptimizeImportsRemovesUnusedAndSorts() {
-        open("src/app/util.inko", "import std.stdio (Stdout, Stderr)\nimport std.fmt (Format)\nimport std.array (Array)\n\nfn pub helper -> Array[Int] {\n  Stdout.new\n  []\n}\n")
+        if (!openChecked("src/app/util.inko", "import std.stdio (Stdout, Stderr)\nimport std.fmt (Format)\nimport std.array (Array)\n\nfn pub helper -> Array[Int] {\n  Stdout.new\n  []\n}\n")) return
         val runnable = InkoImportOptimizer().processFile(myFixture.file)
         WriteCommandAction.runWriteCommandAction(project, runnable)
         myFixture.checkResult("import std.array (Array)\nimport std.stdio (Stdout)\n\nfn pub helper -> Array[Int] {\n  Stdout.new\n  []\n}\n")

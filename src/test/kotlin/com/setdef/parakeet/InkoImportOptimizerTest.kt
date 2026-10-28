@@ -3,21 +3,18 @@ package com.setdef.parakeet
 import com.intellij.lang.ImportOptimizer
 import com.intellij.openapi.command.WriteCommandAction
 
-/** Optimize Imports, with `inko check` and `inko fmt` supplied by a fake. */
+/** Optimize Imports, with Cuttlebone's diagnostics supplied by a stub and `inko fmt` by a fake. */
 class InkoImportOptimizerTest : InkoTestCase(onDisk = true) {
-    /** A fake reporting [unused] symbols (name to its line, 1-based) as unused, and sorting import lines for fmt. */
-    private fun fake(vararg unused: Pair<String, Int>) = FakeInkoCli { call ->
-        when (call.args.first()) {
-            "check" -> {
-                val file = call.args.last()
-                val text = java.nio.file.Files.readString(java.nio.file.Path.of(file))
-                FakeInkoCli.failed(unused.joinToString(",", "[", "]") { (name, line) ->
-                    val column = text.lines()[line - 1].indexOf(name) + 1
-                    """{"id": "unused-symbol", "level": "warning", "file": "$file", "lines": [$line, $line], "columns": [$column, ${column + name.length - 1}], "message": "the symbol '$name' is unused"}"""
-                })
+    /** Cuttlebone's pull reporting [unused] symbols (name to its line, 1-based) as unused, and a fake sorting import lines for fmt. */
+    private fun fake(vararg unused: Pair<String, Int>): FakeInkoCli {
+        pullDiagnostics { _, text ->
+            unused.map { (name, line) ->
+                val column = text.lines()[line - 1].indexOf(name)
+                InkoCheckTest.diagnostic(line - 1, column, column + name.length, "the symbol '$name' is unused", "unused-symbol", warning = true)
             }
-            "fmt" -> FakeInkoCli.ok(stdout = call.stdin!!.lines().filter { it.isNotBlank() }.sorted().joinToString("\n") + "\n")
-            else -> FakeInkoCli.ok()
+        }
+        return FakeInkoCli { call ->
+            if (call.args.first() == "fmt") FakeInkoCli.ok(stdout = call.stdin!!.lines().filter { it.isNotBlank() }.sorted().joinToString("\n") + "\n") else FakeInkoCli.ok()
         }
     }
 

@@ -1,26 +1,13 @@
 package com.setdef.parakeet
 
-import java.nio.file.Files
-import java.nio.file.Path
-
-/** Quick fixes for inko check's warnings (shaped like the real compiler's). */
+/** Quick fixes for the compiler's diagnostics (shaped like the real compiler's), as Cuttlebone's pull gives them. */
 class InkoQuickFixesTest : InkoTestCase(onDisk = true) {
     /** Diagnostics to report: (id, text to cover, message). Each covers the first occurrence of its text. */
     private var reported: List<Triple<String, String, String>> = emptyList()
 
     override fun setUp() {
         super.setUp()
-        useFakeInko(FakeInkoCli { call ->
-            if (call.args.first() != "check") return@FakeInkoCli FakeInkoCli.ok()
-            val copy = Path.of(call.args.last())
-            val lines = Files.readAllLines(copy)
-            val diagnostics = reported.mapNotNull { (id, needle, message) ->
-                val line = lines.indexOfFirst { needle in it }.takeIf { it >= 0 } ?: return@mapNotNull null
-                val column = lines[line].indexOf(needle) + 1
-                """{"id": "$id", "level": "warning", "file": "$copy", "lines": [${line + 1}, ${line + 1}], "columns": [$column, ${column + needle.length - 1}], "message": "$message"}"""
-            }
-            FakeInkoCli.ok(stderr = "[${diagnostics.joinToString(",")}]")
-        })
+        pullDiagnostics { _, text -> reported.mapNotNull { (id, needle, message) -> InkoCheckTest.covering(text, needle, id, message, warning = true) } }
     }
 
     private fun fix(text: String, fix: String, vararg diagnostics: Triple<String, String, String>) {

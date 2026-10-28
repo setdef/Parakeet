@@ -9,8 +9,8 @@ import java.nio.file.Path
 /**
  * `inko check`, `inko build` and `inko doc` sync dependencies first whenever
  * `dep/hash` isn't the hash of `inko.pkg` (compiler/src/compiler.rs, prepare),
- * and a sync runs `git`. Checks and indexing run in a mirror of the project,
- * and must never sync there: they use the project's own `dep/` as it is.
+ * and a sync runs `git`. Indexing must never sync: it uses the project's own
+ * `dep/` as it is. (Errors are Cuttlebone's, which never syncs.)
  *
  * The real `inko` runs here with a `git` first on PATH that records each call
  * and fails, as git would offline.
@@ -46,38 +46,6 @@ class InkoDependencySyncIntegrationTest : InkoTestCase(onDisk = true, realInko =
         val src = Files.createDirectories(root.resolve("dep/${InkoBlake3.hex(url.toByteArray())}/v1/src"))
         Files.writeString(src.resolve("greet.inko"), "fn pub hello -> String {\n  'hello'\n}\n")
         Files.writeString(root.resolve("dep/hash"), InkoBlake3.hex(syncedManifest.toByteArray(StandardCharsets.UTF_8)))
-    }
-
-    private val main = "import greet (hello)\n\nfn pub a -> Int {\n  hello.size + nope\n}\n"
-
-    private fun check(): List<String> {
-        myFixture.addFileToProject("inko.pkg", Files.readString(root.resolve("inko.pkg")))
-        val file = root.resolve("src/main.inko")
-        return InkoCheck.run(project, file, main).map { it.message }
-    }
-
-    fun testChecksUseTheProjectsDependenciesWhenTheManifestChangedSinceTheLastSync() {
-        Files.writeString(root.resolve("inko.pkg"), "# edited since the sync\n$manifest")
-        installDependency(syncedManifest = manifest)
-        assertEquals(listOf("the symbol 'nope' is undefined"), check())
-        assertEquals(emptyList<String>(), gitCalls())
-    }
-
-    fun testChecksOfANeverSyncedProjectDoNotSync() {
-        Files.writeString(root.resolve("inko.pkg"), manifest)
-        val messages = check()
-        assertEquals(emptyList<String>(), gitCalls())
-        // Without the dependency, its import can't resolve; the rest is still checked.
-        assertTrue(messages.toString(), messages.any { it.contains("'greet'") })
-    }
-
-    fun testProjectChecksDoNotSync() {
-        Files.writeString(root.resolve("inko.pkg"), "# edited\n$manifest")
-        installDependency(syncedManifest = manifest)
-        myFixture.addFileToProject("src/main.inko", main)
-        val result = InkoProjectCheck.getInstance(project).check(root)!!
-        assertEquals(listOf("the symbol 'nope' is undefined"), result.diagnostics.values.flatten().map { it.message })
-        assertEquals(emptyList<String>(), gitCalls())
     }
 
     fun testIndexingDoesNotSync() {

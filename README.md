@@ -406,7 +406,7 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | "Specify type explicitly" and "Remove explicit type" | hover's fresh type, of the variable or of a value that says its type itself | not offered |
 | Go to Type Declaration | `textDocument/typeDefinition`, through IntelliJ's LSP support | nothing |
 | Go to Class and Go to Symbol | `workspace/symbol`, through IntelliJ's LSP support | Cuttlebone's: it reads declarations from the syntax |
-| Code folding | `textDocument/foldingRange`, through IntelliJ's LSP support | Cuttlebone's: it folds from the tokens |
+| Code folding | `textDocument/foldingRange`, which Parakeet's folding asks for (IntelliJ's own would restart all highlighting, `inko check` too, at each answer) | Cuttlebone's: it folds from the tokens |
 | Reformat Code | `textDocument/formatting`, through IntelliJ's LSP support | none: `inko fmt` refuses code that doesn't parse too |
 
 Where a search for what a refactoring changes has no fresh answer from

@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Code folding is Cuttlebone's (`textDocument/foldingRange`, through IntelliJ's LSP support), so it also folds a call's arguments, arrays and other brackets over several lines, and folds as before in code that doesn't parse. Folds now show `...` as their placeholder.
+- Code folding is Cuttlebone's (`textDocument/foldingRange`), so it also folds a call's arguments, arrays and other brackets over several lines, and folds as before in code that doesn't parse. Folds now show `...` as their placeholder.
 - Reformat Code (and Actions on Save) is Cuttlebone's (`textDocument/formatting`, through IntelliJ's LSP support): exactly `inko fmt`'s formatting, from Inko's own formatter, on the unsaved text, without running `inko`.
 - Go to Class and Go to Symbol are Cuttlebone's (`workspace/symbol`, through IntelliJ's LSP support): the project's, its dependencies' and the standard library's declarations, from the syntax, so a declaration not saved yet, or in a project that doesn't compile, is found too. Fields are found by Go to Symbol now.
 - Parakeet no longer runs `inko doc`. The definitions behind documentation, completion, parameter info, the trait gutter icons, Type Hierarchy, Implement Methods, Generate and auto-import are read from the code of the project, its dependencies and the standard library, so they follow unsaved edits and code that doesn't compile, with nothing built in the background; a trait's implementations are its `impl` blocks, in `test/` too. A type's methods are those it and its `impl` blocks write: a trait's default method it doesn't override is the trait's.

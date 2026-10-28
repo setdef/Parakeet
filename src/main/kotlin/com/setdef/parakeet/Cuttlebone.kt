@@ -45,7 +45,7 @@ import com.intellij.platform.lsp.api.customization.LspDocumentSymbolDisabled
 import com.intellij.platform.lsp.api.customization.LspFindReferencesCustomizer
 import com.intellij.platform.lsp.api.customization.LspFindReferencesDisabled
 import com.intellij.platform.lsp.api.customization.LspFoldingRangeCustomizer
-import com.intellij.platform.lsp.api.customization.LspFoldingRangeSupport
+import com.intellij.platform.lsp.api.customization.LspFoldingRangeDisabled
 import com.intellij.platform.lsp.api.customization.LspFormattingCustomizer
 import com.intellij.platform.lsp.api.customization.LspFormattingSupport
 import com.intellij.platform.lsp.api.customization.LspGoToDefinitionCustomizer
@@ -359,8 +359,9 @@ abstract class CuttleboneCustomization : LspCustomization() {
     override val documentSymbolCustomizer: LspDocumentSymbolCustomizer get() = LspDocumentSymbolDisabled
     // Go to Class and Go to Symbol are Cuttlebone's workspace symbols: the projects', dependencies' and std's.
     override val workspaceSymbolCustomizer: LspWorkspaceSymbolCustomizer get() = LspWorkspaceSymbolSupport()
-    // Cuttlebone's folding ranges: blocks, comment runs and imports, from the tokens, so also in code that doesn't parse.
-    override val foldingRangeCustomizer: LspFoldingRangeCustomizer get() = LspFoldingRangeSupport()
+    // Parakeet's folding asks Cuttlebone (InkoFoldingBuilder): IntelliJ's restarts all highlighting each time an
+    // answer arrives, so `inko check` would run again for the same text.
+    override val foldingRangeCustomizer: LspFoldingRangeCustomizer get() = LspFoldingRangeDisabled
     // Workspace symbols' kinds, as IntelliJ shows them.
     override val symbolKindCustomizer: LspSymbolKindCustomizer get() = LspSymbolKindCustomizer()
     // Parakeet's quick fixes and intentions.

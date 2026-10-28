@@ -222,6 +222,15 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
             (server.textDocumentService.references(ReferenceParams(document, position, ReferenceContext(true))) as CompletableFuture<List<Location>>)
         }
 
+    /**
+     * Where [file] folds, from its tokens: Cuttlebone answers at once, without a check, also in code that doesn't
+     * parse. The folding pass waits for it, as the hints pass does. Folds only show, so a stale answer counts.
+     */
+    fun foldingRanges(file: PsiFile, budgetMs: Long = HINTS_BUDGET_MS): Answer<List<org.eclipse.lsp4j.FoldingRange>>? =
+        query(file, 0, "textDocument/foldingRange", budgetMs, { ranges: List<org.eclipse.lsp4j.FoldingRange>? -> ranges }, waitInHighlighting = true, stale = true) { server, document, _ ->
+            server.textDocumentService.foldingRange(org.eclipse.lsp4j.FoldingRangeRequestParams(document))
+        }
+
     fun typeDefinition(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<List<Location>>? =
         query(file, offset, "textDocument/typeDefinition", budgetMs, ::locations) { server, document, position ->
             server.textDocumentService.typeDefinition(TypeDefinitionParams(document, position))

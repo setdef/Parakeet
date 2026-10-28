@@ -97,7 +97,7 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
 
     /**
      * The editor's folds once IntelliJ has Cuttlebone's answer ([until] holds), as first and last lines, with their
-     * placeholders. IntelliJ asks for folding ranges as it highlights, and folds from the answer it keeps.
+     * placeholders. The folding pass asks for Cuttlebone's ranges as it highlights, and folds from the answer.
      */
     private fun folds(until: (List<com.intellij.openapi.editor.FoldRegion>) -> Boolean): List<Triple<Int, Int, String>> {
         val editor = myFixture.editor
@@ -115,7 +115,7 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
             .sortedBy { it.first }
     }
 
-    // Folding is Cuttlebone's (textDocument/foldingRange, through IntelliJ's LSP support): blocks, comment runs
+    // Folding is Cuttlebone's (textDocument/foldingRange, which InkoFoldingBuilder asks for): blocks, comment runs
     // and imports, from the tokens, so it answers in code that doesn't parse, and a call's arguments over several
     // lines fold too.
     fun testFoldingIsCuttlebones() {

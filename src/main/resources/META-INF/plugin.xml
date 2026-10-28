@@ -27,7 +27,7 @@
             <li>New Inko File templates, and standard library docs on docs.inko-lang.org (Shift+F1)</li>
             <li>The standard library and dependencies under External Libraries</li>
             <li><code>inko.pkg</code> highlighting and errors, and syncing, updating, adding, and removing dependencies</li>
-            <li>Structure view and breadcrumbs, and code folding from Cuttlebone</li>
+            <li>Structure view, breadcrumbs and code folding, from Cuttlebone</li>
             <li>Live templates, postfix completion, TODO highlighting, and spell checking</li>
             <li>Run and test from the gutter, with run configurations for <code>inko run</code>, <code>test</code>, <code>build</code>, and <code>check</code>, with release builds, other targets, and static linking, and a test runner that reruns failed tests</li>
             <li>New Project wizard using <code>inko init</code></li>
@@ -65,8 +65,6 @@
         <langCodeStyleSettingsProvider implementation="com.setdef.parakeet.InkoCodeStyleSettingsProvider"/>
         <lineIndentProvider implementation="com.setdef.parakeet.InkoLineIndentProvider"/>
         <typedHandler implementation="com.setdef.parakeet.InkoClosingBracketTypedHandler"/>
-        <lang.psiStructureViewFactory language="Inko" implementationClass="com.setdef.parakeet.InkoStructureViewFactory"/>
-        <breadcrumbsInfoProvider implementation="com.setdef.parakeet.InkoBreadcrumbsProvider"/>
         <lang.foldingBuilder language="Inko" implementationClass="com.setdef.parakeet.InkoFoldingBuilder"/>
         <completion.contributor language="Inko" implementationClass="com.setdef.parakeet.InkoCompletionContributor"/>
         <typedHandler implementation="com.setdef.parakeet.InkoCompletionAutoPopup"/>

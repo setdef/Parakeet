@@ -426,6 +426,55 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertTrue(completeAt("import app.\n\nfn pub run {}\n", "import app.").contains("limits"))
     }
 
+    /** The Structure view's tree, once IntelliJ has Cuttlebone's document symbols: each element's label and children. */
+    private fun structure(): String {
+        val builder = com.intellij.lang.LanguageStructureViewBuilder.getInstance().getStructureViewBuilder(myFixture.file) as com.intellij.ide.structureView.TreeBasedStructureViewBuilder
+        fun describe(element: com.intellij.ide.structureView.StructureViewTreeElement): String {
+            val children = element.children.map { describe(it as com.intellij.ide.structureView.StructureViewTreeElement) }
+            val label = element.presentation.presentableText
+            return if (children.isEmpty()) "$label" else "$label ${children.joinToString(", ", "[", "]")}"
+        }
+        var described = ""
+        PlatformTestUtil.waitWithEventsDispatching({ "no document symbols: $described" }, {
+            val model = builder.createStructureViewModel(myFixture.editor)
+            try {
+                described = model.root.children.joinToString(", ") { describe(it as com.intellij.ide.structureView.StructureViewTreeElement) }
+            } finally {
+                com.intellij.openapi.util.Disposer.dispose(model)
+            }
+            described.isNotEmpty()
+        }, TimingLimits.seconds(60))
+        return described
+    }
+
+    // The Structure view and breadcrumbs are IntelliJ's, from Cuttlebone's document symbols.
+    fun testStructureViewIsCuttlebonesDocumentSymbols() {
+        open("type pub Helper {\n  let @count: Int\n\n  fn pub value -> Int {\n    @count\n  }\n}\n\nimpl ToString for Helper {\n  fn pub to_string -> String {\n    ''\n  }\n}\n")
+        assertEquals("Helper [count, value], impl ToString for Helper [to_string]", structure().replace("@count", "count"))
+    }
+
+    fun testBreadcrumbsAreCuttlebonesDocumentSymbols() {
+        val text = "type pub Helper {\n  fn pub value -> Int {\n    1\n  }\n}\n"
+        open(text)
+        val file = myFixture.file.virtualFile
+        val collector = com.intellij.codeInsight.breadcrumbs.FileBreadcrumbsCollector.findBreadcrumbsCollector(project, file)
+        var crumbs = emptyList<String>()
+        PlatformTestUtil.waitWithEventsDispatching({ "no breadcrumbs from ${collector.javaClass.name}: $crumbs" }, {
+            crumbs = collector.computeCrumbs(file, myFixture.editor.document, text.indexOf("1\n"), true).map { it.text }
+            crumbs.isNotEmpty()
+        }, TimingLimits.seconds(60))
+        assertEquals(listOf("Helper", "value"), crumbs)
+        // Sticky lines come from the same collector.
+        assertFalse(collector.computeStickyLineInfos(file, myFixture.editor.document, text.indexOf("1\n")).isEmpty())
+    }
+
+    // Since Cuttlebone 0.15.0, a brace a method's body opens and nothing closes leaves out that method only.
+    fun testStructureViewHoldsStillWhileABlockIsTyped() {
+        open("type pub Helper {\n  fn pub value -> Int {\n    if true {\n    1\n  }\n\n  fn pub other -> Int {\n    2\n  }\n}\n\nfn pub after {}\n")
+        val described = structure()
+        assertTrue(described, described.startsWith("Helper [") && "other" in described && "after" in described)
+    }
+
     fun testWithASyntaxErrorElsewhereCompletionIsCuttlebones() {
         // Since milestone 5, Cuttlebone completes from a repaired copy: the broken line elsewhere is blank.
         val text = main.replace("x.size(2.0)", "x.") + "\nfn broken( {\n"

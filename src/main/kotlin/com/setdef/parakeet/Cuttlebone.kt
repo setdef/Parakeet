@@ -41,7 +41,7 @@ import com.intellij.platform.lsp.api.customization.LspDocumentHighlightsDisabled
 import com.intellij.platform.lsp.api.customization.LspDocumentLinkCustomizer
 import com.intellij.platform.lsp.api.customization.LspDocumentLinkDisabled
 import com.intellij.platform.lsp.api.customization.LspDocumentSymbolCustomizer
-import com.intellij.platform.lsp.api.customization.LspDocumentSymbolDisabled
+import com.intellij.platform.lsp.api.customization.LspDocumentSymbolSupport
 import com.intellij.platform.lsp.api.customization.LspFindReferencesCustomizer
 import com.intellij.platform.lsp.api.customization.LspFindReferencesDisabled
 import com.intellij.platform.lsp.api.customization.LspFoldingRangeCustomizer
@@ -360,10 +360,11 @@ abstract class CuttleboneCustomization : LspCustomization() {
     override val signatureHelpCustomizer: LspSignatureHelpCustomizer get() = LspSignatureHelpDisabled
     // Parakeet's usage highlighting asks Cuttlebone's documentHighlight, and falls back to its own in broken code.
     override val documentHighlightsCustomizer: LspDocumentHighlightsCustomizer get() = LspDocumentHighlightsDisabled
-    // Parakeet's TextMate grammar highlights. The Structure view and breadcrumbs are Parakeet's: Cuttlebone's document
-    // symbols leave out what encloses a brace that isn't closed yet, so they'd come and go as code is typed.
+    // Parakeet's TextMate grammar highlights.
     override val semanticTokensCustomizer: LspSemanticTokensCustomizer get() = LspSemanticTokensDisabled
-    override val documentSymbolCustomizer: LspDocumentSymbolCustomizer get() = LspDocumentSymbolDisabled
+    // The Structure view and breadcrumbs are Cuttlebone's document symbols: since 0.15.0, a brace a method's body opens
+    // and nothing closes yet leaves out only that method, not the type it's in and what follows.
+    override val documentSymbolCustomizer: LspDocumentSymbolCustomizer get() = LspDocumentSymbolSupport()
     // Go to Class and Go to Symbol are Cuttlebone's workspace symbols: the projects', dependencies' and std's.
     override val workspaceSymbolCustomizer: LspWorkspaceSymbolCustomizer get() = LspWorkspaceSymbolSupport()
     // Parakeet's folding asks Cuttlebone (InkoFoldingBuilder): IntelliJ's restarts all highlighting each time an

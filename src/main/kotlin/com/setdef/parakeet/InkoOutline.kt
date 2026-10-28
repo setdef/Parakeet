@@ -5,7 +5,9 @@ import com.intellij.openapi.util.TextRange
 /**
  * The declarations in an Inko file (types, traits, impls, methods, fields,
  * constants), found from its tokens, so it follows unsaved edits without the
- * compiler. Used by the Structure view, breadcrumbs, and sticky lines.
+ * compiler. What the refactorings, intentions and inspections know of a file's
+ * declarations: which method or type an offset is in, an `impl`'s trait and type,
+ * a declaration's extent. The Structure view and breadcrumbs are Cuttlebone's.
  */
 class InkoOutline private constructor(val roots: List<Node>) {
     enum class Kind { TYPE, TRAIT, IMPL, METHOD, FIELD, CONSTANT }

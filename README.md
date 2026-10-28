@@ -85,7 +85,8 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
   symbols: the project's, its dependencies' and the standard library's,
   including what isn't saved yet
 - **Structure view**, breadcrumbs, and sticky lines for each file's
-  declarations
+  declarations, from Cuttlebone's document symbols, through IntelliJ's LSP
+  support
 - **Code folding** for blocks, argument lists, comment runs, and imports, from
   Cuttlebone (also in code that doesn't parse)
 - **Optimize Imports** (⌃⌥O / Ctrl+Alt+O): removes unused imports and sorts
@@ -307,9 +308,8 @@ compiler, so it always agrees with your installed Inko version.
   imports the moved code needs the same way **imports on paste** does: copying
   records the imported and module-level names the copied code uses, and
   pasting adds the ones the target module lacks.
-- **The Structure view, breadcrumbs, indentation, Unwrap, and postfix
-  completion** come from
-  the file's own tokens, so they follow unsaved edits and work without `inko`.
+- **Indentation, Unwrap, and postfix completion** come from the file's own
+  tokens, so they follow unsaved edits and work without `inko`.
 
 ## Requirements
 

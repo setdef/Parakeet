@@ -15,7 +15,7 @@
             <li>Inspections for Inko's style guide: naming, Bool methods ending in <code>?</code>, redundant argument names, and empty parentheses</li>
             <li>Reformat Code (and format on save) as <code>inko fmt</code> formats, from Cuttlebone</li>
             <li>Go to Class and Go to Symbol, from Cuttlebone</li>
-            <li>Go to definition, quick documentation, and completion (including names from modules not yet imported, imported as you choose them), using the definitions read from the code, plus local variables and parameters</li>
+            <li>Go to definition and quick documentation, using the definitions read from the code, plus local variables and parameters</li>
             <li>Imports added when pasting Inko code, and Expression Type where the code states the type</li>
             <li>Find Usages and Rename across the project, and highlight usages</li>
             <li>Parameter info, parameter-name hints, trait gutter icons, Go to Implementation and Super Method, Implement/Override Methods, and Generate (constructor, trait implementation)</li>
@@ -31,7 +31,7 @@
             <li>Live templates, postfix completion, TODO highlighting, and spell checking</li>
             <li>Run and test from the gutter, with run configurations for <code>inko run</code>, <code>test</code>, <code>build</code>, and <code>check</code>, with release builds, other targets, and static linking, and a test runner that reruns failed tests</li>
             <li>New Project wizard using <code>inko init</code></li>
-            <li>The compiler's own types and definitions, from Cuttlebone, a language server for Inko: go to definition, completion after <code>.</code>, parameter info and hints, type hints, usage highlighting, Find Usages, Rename and the refactorings, the type at the caret in quick documentation and Expression Type, and Go to Type Declaration</li>
+            <li>The compiler's own types and definitions, from Cuttlebone, a language server for Inko: go to definition, completion (with names from modules not yet imported, imported as you choose them, and keywords), parameter info and hints, type hints, usage highlighting, Find Usages, Rename and the refactorings, the type at the caret in quick documentation and Expression Type, and Go to Type Declaration</li>
             <li>Per-project toolchain: <code>inko</code> on PATH, ivm's default, or any ivm-installed version, with banners when Inko is missing or older than <code>inko.pkg</code> requires</li>
         </ul>
         <p>Requires the <code>inko</code> executable, found on <code>PATH</code>, in ivm's install

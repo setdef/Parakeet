@@ -114,9 +114,14 @@ I use three words for how code comes to exist. Code I wrote, I typed by hand, wi
 - **`inko.pkg`**: highlighting and errors, plus *Tools → Inko Dependencies* to
   sync, update, add, and remove dependencies, and a Sync button when
   `inko.pkg` changes
-- **Completion** for keywords, local variables, names in scope, imports,
-  members after `.` (the compiler's list), and fields after `@`, plus names from modules that aren't imported yet, adding
-  the import when you choose one
+- **Completion** is Cuttlebone's: members after `.` (the compiler's list),
+  the names in scope (locals, the type's methods, the module's own and
+  imported names, the prelude's), the public names of modules not imported
+  yet, adding the import when you choose one, keywords where the grammar
+  takes them, fields after `@`, and modules and symbols in an `import`.
+  Where Cuttlebone can't answer for the code being edited, Parakeet offers
+  the locals and parameters in scope, keywords, the file's fields, and after
+  `.` members by name
 - **Imports on paste**: pasting Inko code into another module adds the imports
   it needs (*Settings → Editor → General → Auto Import → Insert imports on
   paste*)
@@ -151,8 +156,8 @@ compiler, so it always agrees with your installed Inko version.
   the editor and Inspect Code, `workspace/diagnostic` for the whole project):
   the same as `inko check` reports, from a check of the whole project with your
   unsaved text, so imports in both directions and dependencies resolve.
-- **Go to definition, quick documentation, completion,
-  parameter info and hints, and Implement Methods** use the definitions
+- **Go to definition, quick documentation, parameter info and hints, and
+  Implement Methods** use the definitions
   Parakeet reads from the code: the project's `src/` and `test/`, its
   dependencies in `dep/`, and the standard library (`inko print std`), with
   unsaved text in place of a file's, each file read again when it changes.
@@ -161,7 +166,7 @@ compiler, so it always agrees with your installed Inko version.
 - **Cuttlebone** answers with the compiler's own types and definitions; see
   [Cuttlebone](#cuttlebone) for which features ask it. Parakeet requires
   it: without it, what needs the compiler's types (go to definition of
-  anything but a local or a module, completion after `.`, parameter info,
+  anything but a local or a module, completion, parameter info,
   hints, usage highlighting, Expression Type, Find Usages, Rename and the
   refactorings built on it) is unavailable, and Parakeet says so once when the
   project opens. Each question has a time budget (0.4 s for resolving a name, 1.5 s for
@@ -302,8 +307,6 @@ compiler, so it always agrees with your installed Inko version.
   imports the moved code needs the same way **imports on paste** does: copying
   records the imported and module-level names the copied code uses, and
   pasting adds the ones the target module lacks.
-- **Completing unimported names** only offers `pub` definitions, since Inko
-  can't import private ones, and ranks them below names already in scope.
 - **The Structure view, breadcrumbs, indentation, Unwrap, and postfix
   completion** come from
   the file's own tokens, so they follow unsaved edits and work without `inko`.
@@ -416,7 +419,7 @@ Without Cuttlebone, every feature below is unavailable. With it:
 | Errors and warnings, Inspect Code, Optimize Imports' unused imports | `textDocument/diagnostic`: the same as `inko check`, from a check of the documents as they are | Cuttlebone's: it checks the code as it is |
 | Quick fixes | `textDocument/codeAction`: each fix checked with its edits applied, which Parakeet asks for itself, for the errors it shows | Cuttlebone's: a fix is offered where it leaves fewer of its error and adds none |
 | Errors across the whole project (the Project view, Problems) | `workspace/diagnostic`, a long poll | Cuttlebone's |
-| Completion after `.` | `textDocument/completion` on the real buffer | Parakeet's reading |
+| Completion | `textDocument/completion` on the real buffer: members, names with what to import, keywords, fields, and an `import`'s modules and symbols | Parakeet's reading: locals and parameters, keywords, the file's fields, members by name |
 | Parameter info | `textDocument/signatureHelp`: the resolved method's signature, with the receiver's type arguments, and the argument's parameter (named ones too). For a type's constructor (`Point(x: 1)`), which it has none for, the type's fields | Parakeet's reading |
 | Parameter-name and type hints | `textDocument/inlayHint`, once for the whole file | none: hints only inform |
 | Highlight usages | `textDocument/documentHighlight`: the same symbol by the compiler's ids, with assignments as writes | Parakeet's reading |

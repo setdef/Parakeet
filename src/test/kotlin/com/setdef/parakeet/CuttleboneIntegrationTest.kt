@@ -394,6 +394,38 @@ class CuttleboneIntegrationTest : InkoTestCase(onDisk = true, realInko = true) {
         assertEquals(listOf("size"), myFixture.lookupElementStrings)
     }
 
+    /** Completes at [marker] (the caret goes where it ends) in src/main.inko as [text], once Cuttlebone has answered. */
+    private fun completeAt(text: String, marker: String): List<String> {
+        open(text)
+        val offset = text.indexOf(marker) + marker.length
+        myFixture.editor.caretModel.moveToOffset(offset)
+        // Completion asks in the background in the IDE; here the answer is fetched first.
+        inBackground { CuttleboneQueries.getInstance(project).completion(myFixture.file, offset) }
+        myFixture.completeBasic()
+        return myFixture.lookupElementStrings.orEmpty()
+    }
+
+    // Names are Cuttlebone's: the locals, the module's own and imported names, and the public ones of other
+    // modules, whose import is made when one is chosen; keywords too.
+    fun testCompletionOfNamesImportsTheOneChosen() {
+        myFixture.addFileToProject("src/app/limits.inko", "let pub LIMIT_HIGH = 10\nlet pub LIMIT_LOW = 1\n")
+        val items = completeAt("fn pub run(limit_given: Int) -> Int {\n  LIM\n}\n", "  LIM")
+        assertTrue(items.toString(), items.containsAll(listOf("LIMIT_HIGH", "LIMIT_LOW")))
+        myFixture.lookup!!.currentItem = myFixture.lookup!!.items.single { it.lookupString == "LIMIT_HIGH" }
+        myFixture.finishLookup('\n')
+        assertEquals("import app.limits (LIMIT_HIGH)\n\nfn pub run(limit_given: Int) -> Int {\n  LIMIT_HIGH\n}\n", myFixture.editor.document.text)
+    }
+
+    fun testCompletionOfKeywordsAndLocals() {
+        val items = completeAt("fn pub run(count: Int) -> Int {\n  let total = count\n  \n  total\n}\n", "count\n  ")
+        assertTrue(items.toString(), items.containsAll(listOf("count", "total", "let", "match", "return")))
+    }
+
+    fun testCompletionInAnImport() {
+        myFixture.addFileToProject("src/app/limits.inko", "let pub LIMIT_HIGH = 10\n")
+        assertTrue(completeAt("import app.\n\nfn pub run {}\n", "import app.").contains("limits"))
+    }
+
     fun testWithASyntaxErrorElsewhereCompletionIsCuttlebones() {
         // Since milestone 5, Cuttlebone completes from a repaired copy: the broken line elsewhere is blank.
         val text = main.replace("x.size(2.0)", "x.") + "\nfn broken( {\n"

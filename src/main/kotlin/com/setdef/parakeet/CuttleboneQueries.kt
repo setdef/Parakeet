@@ -355,7 +355,8 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         }
 
     /**
-     * Members after `.` at [offset], in the real buffer: Cuttlebone inserts its own placeholder. Fresh
+     * What can be typed at [offset], in the real buffer (Cuttlebone inserts its own placeholder): members after `.`,
+     * names in scope and those to import, keywords, fields after `@`, and an `import`'s modules and symbols. Fresh
      * answers only, since choosing one inserts it (Cuttlebone never sends a stale one).
      */
     fun completion(file: PsiFile, offset: Int, budgetMs: Long = INTERACTIVE_BUDGET_MS): Answer<List<CompletionItem>>? =

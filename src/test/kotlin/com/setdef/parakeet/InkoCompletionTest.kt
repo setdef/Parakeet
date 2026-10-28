@@ -3,13 +3,18 @@ package com.setdef.parakeet
 import com.intellij.codeInsight.CodeInsightSettings
 import com.intellij.codeInsight.lookup.LookupElementPresentation
 
-/** Completion. */
+/**
+ * Completion: how Cuttlebone's answer (`textDocument/completion`, stubbed here; CuttleboneIntegrationTest has the real
+ * one) is shown and inserted, and Parakeet's own reading of the code, which stands in only where Cuttlebone can't
+ * check the code being edited.
+ */
 class InkoCompletionTest : InkoTestCase(onDisk = true) {
     private var autocomplete = true
 
     override fun setUp() {
         super.setUp()
-        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it.
+        // Parakeet's own reading of the code, which stands in only where Cuttlebone can't check it; the tests of
+        // Cuttlebone's answer stub it.
         cuttleboneCantCheckTheCode()
         // Always show the list, even for a single match, so tests can inspect it.
         autocomplete = CodeInsightSettings.getInstance().AUTOCOMPLETE_ON_CODE_COMPLETION
@@ -34,14 +39,6 @@ class InkoCompletionTest : InkoTestCase(onDisk = true) {
         myFixture.editor.caretModel.moveToOffset(text.indexOf("<caret>"))
         myFixture.completeBasic()
         return myFixture.lookupElementStrings.orEmpty()
-    }
-
-    fun testModulePathsInImports() {
-        assertEquals(listOf("app.other", "app.util"), complete("import app.<caret>\n").sorted())
-    }
-
-    fun testSymbolsInsideImportParentheses() {
-        assertEquals(listOf("Helper", "helper", "self"), complete("import app.util (<caret>)\n").sorted())
     }
 
     fun testStaticMembersOfAType() {
@@ -91,9 +88,11 @@ class InkoCompletionTest : InkoTestCase(onDisk = true) {
         assertEquals(listOf("@count", "@name"), complete("type A {\n  let @count: Int\n  let @name: String\n\n  fn b {\n    @<caret>\n  }\n}\n").sorted())
     }
 
-    fun testKeywordsAndNamesInScope() {
-        val items = complete("import app.util (helper)\n\ntype Local {}\n\nfn a {\n  <caret>\n}\n")
-        assertTrue(items.toString(), items.containsAll(listOf("let", "match", "Local", "helper", "a")))
+    // Only what typing needs: the names in scope are Cuttlebone's.
+    fun testKeywordsAndLocals() {
+        val items = complete("import app.util (helper)\n\ntype Local {}\n\nfn a(count: Int) {\n  <caret>\n}\n")
+        assertTrue(items.toString(), items.containsAll(listOf("let", "match", "count")))
+        assertTrue(items.toString(), "Local" !in items && "helper" !in items)
     }
 
     fun testShowsWhereAndTheSignature() {
@@ -124,34 +123,49 @@ class InkoCompletionTest : InkoTestCase(onDisk = true) {
         assertEquals("foo" to "bar", member.receiver to member.prefix)
     }
 
-    fun testOffersNamesFromModulesNotYetImported() {
-        val items = complete("fn main {\n  Oth<caret>\n}\n")
-        assertTrue(items.toString(), "Other" in items)
+
+    private fun answering(vararg items: org.eclipse.lsp4j.CompletionItem) = stubCuttlebone { method, file, _ ->
+        if (method == "textDocument/completion") CuttleboneQueries.Answer(items.toList(), CuttleboneStatus(method, file.url, "fresh", null, 1.0)) else null
     }
 
-    fun testChoosingAnUnimportedNameImportsIt() {
-        complete("fn main {\n  LIMI<caret>\n}\n")
-        // A single match is inserted when the list would only hold it.
-        myFixture.lookup?.let { lookup -> lookup.currentItem = lookup.items.single { it.lookupString == "LIMIT" }; myFixture.finishLookup('\n') }
+    private fun item(label: String, kind: org.eclipse.lsp4j.CompletionItemKind, detail: String? = null, module: String? = null, sortText: String? = null) =
+        org.eclipse.lsp4j.CompletionItem(label).apply {
+            this.kind = kind
+            this.detail = detail
+            this.sortText = sortText
+            module?.let { labelDetails = org.eclipse.lsp4j.CompletionItemLabelDetails().apply { description = it } }
+        }
+
+    fun testCuttlebonesItemsWithWhereAndTheSignature() {
+        answering(item("value", org.eclipse.lsp4j.CompletionItemKind.Method, "fn pub value -> Int", "app.util"), item("valid", org.eclipse.lsp4j.CompletionItemKind.Variable, "let valid: Bool"))
+        assertEquals(listOf("valid", "value"), complete("fn a(h: Helper) {\n  h.va<caret>\n}\n").sorted())
+        val presentation = LookupElementPresentation.renderElement(myFixture.lookupElements!!.single { it.lookupString == "value" })
+        assertEquals(" -> Int", presentation.tailText)
+        assertEquals("app.util", presentation.typeText)
+    }
+
+    fun testCuttlebonesGroupsInItsOrder() {
+        answering(
+            item("Zebra", org.eclipse.lsp4j.CompletionItemKind.Class, sortText = "3Zebra"),
+            item("total", org.eclipse.lsp4j.CompletionItemKind.Variable, sortText = "0total"),
+            item("let", org.eclipse.lsp4j.CompletionItemKind.Keyword, sortText = "4let"),
+        )
+        assertEquals(listOf("total", "Zebra", "let"), complete("fn a {\n  <caret>\n}\n"))
+    }
+
+    fun testChoosingANameToImportMakesItsImport() {
+        answering(item("LIMIT", org.eclipse.lsp4j.CompletionItemKind.Constant, "let pub LIMIT = 10", "app.other").apply {
+            additionalTextEdits = listOf(org.eclipse.lsp4j.TextEdit(org.eclipse.lsp4j.Range(org.eclipse.lsp4j.Position(0, 0), org.eclipse.lsp4j.Position(0, 0)), "import app.other (LIMIT)\n\n"))
+        }, item("LIMB", org.eclipse.lsp4j.CompletionItemKind.Constant))
+        complete("fn main {\n  LIM<caret>\n}\n")
+        myFixture.lookup!!.currentItem = myFixture.lookup!!.items.single { it.lookupString == "LIMIT" }
+        myFixture.finishLookup('\n')
         assertEquals("import app.other (LIMIT)\n\nfn main {\n  LIMIT\n}\n", myFixture.editor.document.text)
     }
 
-    fun testAddsToAnExistingImportOfTheModule() {
-        complete("import app.other (Other)\n\nfn main {\n  LIMI<caret>\n}\n")
-        myFixture.lookup?.let { lookup -> lookup.currentItem = lookup.items.single { it.lookupString == "LIMIT" }; myFixture.finishLookup('\n') }
-        assertEquals("import app.other (Other, LIMIT)\n\nfn main {\n  LIMIT\n}\n", myFixture.editor.document.text)
-    }
-
-    fun testDoesNotOfferPrivateNamesFromOtherModules() {
-        assertFalse("SECRET" in complete("fn main {\n  SEC<caret>\n}\n"))
-    }
-
-    fun testNamesInScopeComeBeforeUnimportedOnes() {
-        val items = complete("import app.util (Helper)\n\nfn main {\n  <caret>\n}\n")
-        assertTrue(items.toString(), items.indexOf("Helper") < items.indexOf("Other"))
-    }
-
-    fun testOnlyOneEntryPerModuleAndName() {
-        assertEquals(1, complete("fn main {\n  Oth<caret>\n}\n").count { it == "Other" })
+    // An import's names are matched by the name being typed, not the whole path.
+    fun testAModulesNextNameInAnImport() {
+        answering(item("util", org.eclipse.lsp4j.CompletionItemKind.Module, "app.util"), item("other", org.eclipse.lsp4j.CompletionItemKind.Module, "app.other"))
+        assertEquals(listOf("util"), complete("import app.ut<caret>\n"))
     }
 }

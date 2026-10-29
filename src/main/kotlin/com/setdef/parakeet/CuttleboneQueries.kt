@@ -493,7 +493,8 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
                             // A side chain: the request's own future must reach IntelliJ, which cancels it.
                             status = future.thenApply {
                                 service.statuses.remove(method to identifier.uri)
-                                    // A file rename's names the first module that moves, in Cuttlebone's order.
+                                    // A file rename's names the first module that moves, in Cuttlebone's order (0.15.0),
+                                    // or the first file the request renames (0.16.0).
                                     ?: service.statuses.keys.firstOrNull { it.first == method && method == FILE_RENAMES }?.let(service.statuses::remove)
                             }
                         }

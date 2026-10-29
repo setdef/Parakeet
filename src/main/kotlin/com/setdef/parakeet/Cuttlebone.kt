@@ -507,7 +507,10 @@ class CuttleboneClient(handler: LspServerNotificationsHandler, private val statu
     @JsonNotification("cuttlebone/status")
     fun status(params: JsonObject) {
         val method = params.get("method")?.takeIf { it.isJsonPrimitive }?.asString ?: return
-        val uri = params.getAsJsonObject("textDocument")?.get("uri")?.asString ?: return
+        // A file rename's names its files (since Cuttlebone 0.16.0), as the request did; every other's, its document.
+        val uri = params.get("textDocument")?.takeIf { it.isJsonObject }?.asJsonObject?.get("uri")?.asString
+            ?: params.get("files")?.takeIf { it.isJsonArray }?.asJsonArray?.firstOrNull()?.takeIf { it.isJsonObject }?.asJsonObject?.get("oldUri")?.asString
+            ?: return
         val status = params.get("status")?.takeIf { it.isJsonPrimitive }?.asString ?: return
         // `reason` is absent, or null, for a fresh answer.
         val reason = params.get("reason")?.takeIf { it.isJsonObject }?.asJsonObject?.get("code")?.takeIf { it.isJsonPrimitive }?.asString

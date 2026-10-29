@@ -19,6 +19,7 @@
 ### Fixed
 
 - In IntelliJ 2026.2, which writes a saved file to disk after the save returns, Find Usages, Rename and everything else built on Cuttlebone's answers wait for what was saved to reach the disk before they ask: Cuttlebone reads the files no editor has from disk, so right after a refactoring changed such a file, it could answer for the text before the change, as if it were current.
+- In IntelliJ 2026.2, the definitions Parakeet reads from the code (for quick documentation, the resolver's imports, Implement Methods and the intentions naming arguments) wait for what was saved to reach the disk too: right after a save, they could be read from the text before it, so that a definition just saved wasn't known, until the next change. So do `inko pkg` (Tools → Inko Dependencies), which could sync or change the inko.pkg before the save, and the banner for the Inko version inko.pkg requires, which could miss a requirement just saved.
 
 ## [0.14.1] - 2026-10-28
 

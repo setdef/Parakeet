@@ -56,6 +56,25 @@ class InkoDefinitionIndexTest : InkoTestCase(onDisk = true) {
         assertEquals(5, symbols().named("Helper").single().line)
     }
 
+    // IntelliJ 2026.2 returns from a save before the disk has it, and its VFS event (which makes the index read the
+    // file again) comes first too: the index must read what was saved, not the disk's text before it.
+    fun testAChangeSavedButNotYetOnDiskIsKnown() {
+        open("src/app/util.inko", util)
+        assertNotEmpty(symbols().named("Helper"))
+        val path = root.resolve("src/app/util.inko")
+
+        holdingWritesToDisk {
+            WriteCommandAction.runWriteCommandAction(project) {
+                myFixture.editor.document.insertString(0, "fn pub broken -> Int {\n  'nope'\n}\n\n")
+            }
+            FileDocumentManager.getInstance().saveAllDocuments()
+            assertEquals("the save is held back from the disk", util, Files.readString(path))
+
+            assertEquals(Kind.MODULE_METHOD, symbols().named("broken").single().kind)
+            assertEquals(5, symbols().named("Helper").single().line)
+        }
+    }
+
     // A dependency's modules are named from its `src/`, as the compiler finds them (dep/<url>/v<major>/src), so two
     // `html`s are builder.html and markdown.html. Tests' modules are named from test/, as src/'s are from src/.
     fun testDependenciesAndTestsAreNamedAsTheCompilerNamesThem() {

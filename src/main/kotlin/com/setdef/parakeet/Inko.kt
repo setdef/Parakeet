@@ -79,9 +79,31 @@ object Inko {
 
     /** The minimum Inko version a project's `inko.pkg` requires (`require inko X`), if any. */
     fun requiredVersion(root: Path): String? {
+        awaitWritesToDisk()
         val manifest = root.resolve(MANIFEST).takeIf(Files::isRegularFile) ?: return null
         return Files.readAllLines(manifest).firstNotNullOfOrNull { REQUIRE_INKO.find(it)?.groupValues?.get(1) }
     }
 
     private val REQUIRE_INKO = Regex("""^\s*require\s+inko\s+(\S+)""")
+
+    /**
+     * Waits until what IntelliJ saved is on disk, for whatever reads it there next. IntelliJ 2026.2 returns from a
+     * save before the disk has it (`vfs.async-content-write`): the document and the VFS's cached content change at
+     * once, the VFS's event for the save comes first too, and a background task writes the file. 2025.3 writes before
+     * it returns, and has no such method: hence reflection, which also keeps the Plugin Verifier from finding an
+     * experimental API.
+     */
+    fun awaitWritesToDisk() {
+        val flush = FLUSH ?: return
+        try {
+            flush.invoke(com.intellij.openapi.vfs.newvfs.ManagingFS.getInstance())
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            LOG.warn("couldn't wait for IntelliJ's writes to disk", e.targetException)
+        }
+    }
+
+    private val FLUSH: java.lang.reflect.Method? =
+        runCatching { com.intellij.openapi.vfs.newvfs.ManagingFS::class.java.getMethod("flushPendingUpdates") }.getOrNull()
+
+    private val LOG = com.intellij.openapi.diagnostic.logger<Inko>()
 }

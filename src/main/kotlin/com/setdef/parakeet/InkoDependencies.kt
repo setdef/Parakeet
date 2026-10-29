@@ -48,6 +48,8 @@ object InkoDependencies {
         FileDocumentManager.getInstance().saveAllDocuments()
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, title, true) {
             override fun run(indicator: ProgressIndicator) {
+                // `inko pkg` reads inko.pkg from disk.
+                Inko.awaitWritesToDisk()
                 val cli = InkoCli.getInstance(project)
                 val commands = listOf(arguments) + if (thenSync && arguments != listOf("sync")) listOf(listOf("sync")) else emptyList()
                 for (command in commands) {

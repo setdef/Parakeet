@@ -33,7 +33,8 @@ class InkoDefinitionIndex(private val project: Project) {
 
     /** The definitions for the project at [root]. */
     fun symbols(root: Path): InkoSymbols? {
-        // What changed since: a file (VFS events), or unsaved text.
+        // What changed since: a file (VFS events), or unsaved text. Saved files are read from disk, once there.
+        Inko.awaitWritesToDisk()
         val unsaved = unsaved()
         val key = listOf(generation.get(), unsaved.mapValues { it.value.modificationStamp }, System.identityHashCode(InkoCli.getInstance(project)))
         merged[root]?.takeIf { it.first == key }?.let { return it.second }

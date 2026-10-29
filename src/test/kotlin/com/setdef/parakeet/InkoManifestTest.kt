@@ -90,6 +90,24 @@ class InkoManifestTest : InkoTestCase(onDisk = true) {
         assertTrue(pkg.all { it.workingDirectory == root })
     }
 
+    // IntelliJ 2026.2 returns from a save before the disk has it: `inko pkg` reads inko.pkg there, so it must wait.
+    fun testInkoPkgReadsTheManifestAsSaved() {
+        val manifest = myFixture.addFileToProject("inko.pkg", "require inko 0.21.1\n").virtualFile
+        val read = mutableListOf<String>()
+        useFakeInko(FakeInkoCli { call ->
+            if (call.args.first() == "pkg") read += Files.readString(root.resolve("inko.pkg"))
+            FakeInkoCli.ok()
+        })
+        val document = com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getDocument(manifest)!!
+        holdingWritesToDisk {
+            WriteCommandAction.runWriteCommandAction(project) { document.insertString(0, "require https://github.com/a/b 1.0.0 abc\n") }
+            com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().saveDocument(document)
+            assertEquals("the save is held back from the disk", "require inko 0.21.1\n", Files.readString(root.resolve("inko.pkg")))
+            InkoDependencies.run(project, root, "Syncing", listOf("sync"))
+        }
+        assertEquals(listOf("require https://github.com/a/b 1.0.0 abc\nrequire inko 0.21.1\n"), read)
+    }
+
     fun testActionsActOnTheProjectOfTheFileInContext() {
         val manifest = myFixture.addFileToProject("inko.pkg", "require inko 0.21.1\n").virtualFile
         val source = myFixture.addFileToProject("src/app/util.inko", "fn a {}\n").virtualFile

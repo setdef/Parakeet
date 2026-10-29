@@ -16,7 +16,10 @@ class InkoManifest(val inkoVersion: String?, val dependencies: List<InkoDependen
     data class Problem(val range: TextRange, val message: String)
 
     companion object {
-        fun read(root: Path): InkoManifest? = root.resolve(Inko.MANIFEST).takeIf(Files::isRegularFile)?.let { parse(Files.readString(it)) }
+        fun read(root: Path): InkoManifest? {
+            Inko.awaitWritesToDisk()
+            return root.resolve(Inko.MANIFEST).takeIf(Files::isRegularFile)?.let { parse(Files.readString(it)) }
+        }
 
         fun parse(text: CharSequence): InkoManifest {
             var inkoVersion: String? = null

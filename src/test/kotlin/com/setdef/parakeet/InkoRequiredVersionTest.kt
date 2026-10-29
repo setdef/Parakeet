@@ -64,6 +64,20 @@ class InkoRequiredVersionTest : InkoTestCase(onDisk = true) {
         }
     }
 
+    // IntelliJ 2026.2 returns from a save before the disk has it, and the save's VFS event (which updates the banners)
+    // comes first too: the requirement is the one saved.
+    fun testARequirementSavedButNotYetOnDiskIsKnown() {
+        val manifest = myFixture.addFileToProject("inko.pkg", "require inko 0.9.0\n").virtualFile
+        inko("0.10.0")
+        val document = com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getDocument(manifest)!!
+        holdingWritesToDisk {
+            com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) { document.setText("require inko 0.21.1\n") }
+            com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().saveDocument(document)
+            assertEquals("the save is held back from the disk", "require inko 0.9.0\n", java.nio.file.Files.readString(root.resolve("inko.pkg")))
+            assertEquals("0.21.1", InkoRequiredVersionBanner.mismatch(project, root)?.required)
+        }
+    }
+
     fun testReadsTheRequirementFromTheManifest() {
         myFixture.addFileToProject("inko.pkg", "# comment\n  require   inko   0.21.1  \n")
         assertEquals("0.21.1", Inko.requiredVersion(root))

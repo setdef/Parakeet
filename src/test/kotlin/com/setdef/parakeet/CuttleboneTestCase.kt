@@ -33,11 +33,52 @@ abstract class CuttleboneTestCase : InkoTestCase(onDisk = true) {
         })
     }
 
+    override fun tearDown() {
+        try {
+            stopFakes()
+        } catch (e: Throwable) {
+            addSuppressedException(e)
+        } finally {
+            super.tearDown()
+        }
+    }
+
+    /**
+     * Stops the project's Cuttlebone, and waits for the test's fakes to exit. IntelliJ stops its servers as the project
+     * closes without waiting for them (it waits up to 10 s for `shutdown`'s answer in the background), so a fake on a
+     * busy machine could otherwise still be writing its log as the test's directory goes.
+     */
+    private fun stopFakes() {
+        com.intellij.platform.lsp.api.LspServerManager.getInstance(project).stopServers(CuttleboneSupportProvider::class.java)
+        val directory = Path.of(myFixture.tempDirPath)
+        PlatformTestUtil.waitWithEventsDispatching(
+            { "timed out waiting for the fakes to stop: ${fakesIn(directory).map { it.info().commandLine().orElse("?") }}" },
+            { fakesIn(directory).isEmpty() },
+            TimingLimits.seconds(60),
+        )
+    }
+
+    /** Checks, as the test's directory goes, that none of its fakes is still running, writing its log there. */
+    override fun createTempDirTestFixture(): com.intellij.testFramework.fixtures.TempDirTestFixture = object : com.intellij.testFramework.fixtures.impl.TempDirTestFixtureImpl() {
+        override fun tearDown() {
+            val running = fakesIn(Path.of(tempDirPath))
+            val commands = running.map { it.info().commandLine().orElse("?") }
+            running.forEach { it.destroyForcibly() }
+            running.forEach { it.onExit().get(1, TimeUnit.MINUTES) }
+            super.tearDown()
+            if (running.isNotEmpty()) throw AssertionError("fakes still running as the test's directory went: $commands")
+        }
+    }
+
     /** Makes the fake the project's Cuttlebone. It starts when an Inko file opens. */
     protected fun useFake(script: FakeCuttlebone.Script = FakeCuttlebone.Script(log = ""), version: String = "cuttlebone 0.15.0-fake (Inko 0.21.1)") {
         val executable = FakeCuttleboneScript.write(fakeDirectory, script.copy(log = log.toString()), version)
         useCuttlebone(executable.toString())
     }
+
+    /** The processes this one started that run from [directory]: the fakes, and their `--version` scripts. */
+    private fun fakesIn(directory: Path): List<ProcessHandle> =
+        ProcessHandle.current().descendants().filter { it.isAlive && it.info().commandLine().orElse("").contains(directory.toString()) }.toList()
 
     /** Opens [path] in an editor, as the user would, which starts Cuttlebone. */
     protected fun open(path: String, text: String) {

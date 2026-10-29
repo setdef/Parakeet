@@ -36,6 +36,8 @@ object FakeCuttlebone {
         /** Answers by method and position; anything else is null with status `unavailable`. */
         val answers: List<Answer> = emptyList(),
         val statusNotifications: Boolean = true,
+        /** Take this long to answer `shutdown`, writing its log meanwhile, as a fake on a busy machine can. */
+        val shutdownMs: Long = 0,
     )
 
     /** [repaired] is sent only when set: builds before milestone 5 never send it. */
@@ -69,7 +71,15 @@ object FakeCuttlebone {
                 } else {
                     write(output, JsonObject().apply { add("id", id); add("result", gson.toJsonTree(initializeResult(script))) })
                 }
-                "shutdown" -> { shutdown = true; write(output, JsonObject().apply { add("id", id); add("result", JsonNull.INSTANCE) }) }
+                "shutdown" -> {
+                    shutdown = true
+                    val until = System.currentTimeMillis() + script.shutdownMs
+                    while (System.currentTimeMillis() < until) {
+                        runCatching { record(JsonObject().apply { addProperty("fake", "stopping") }) }
+                        Thread.sleep(5)
+                    }
+                    write(output, JsonObject().apply { add("id", id); add("result", JsonNull.INSTANCE) })
+                }
                 "exit" -> exitProcess(if (shutdown) 0 else 1)
                 "\$/cancelRequest" -> cancelled += message.getAsJsonObject("params").get("id").toString()
                 null -> {}

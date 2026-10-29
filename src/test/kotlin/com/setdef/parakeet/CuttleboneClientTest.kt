@@ -39,6 +39,15 @@ class CuttleboneClientTest : CuttleboneTestCase() {
         }
     }
 
+    // A fake on a busy machine can take a while to stop, writing its log meanwhile, and IntelliJ doesn't wait for it
+    // as the project closes: the test's directory must outlast it, or deleting the directory can fail (the test
+    // case checks, as it deletes, that none is still running).
+    fun testAFakeStillStoppingAsTheTestEndsDoesntFailIt() {
+        useFake(FakeCuttlebone.Script(log = "", shutdownMs = 3_000))
+        open("src/main.inko", text)
+        runningServer()
+    }
+
     // Errors are Cuttlebone's, which Parakeet pulls (so Cuttlebone pushes none, and checks after edits for the pulls
     // to answer), and moving files asks Cuttlebone for the edits.
     fun testPullsDiagnosticsAndAsksForFileRenames() {

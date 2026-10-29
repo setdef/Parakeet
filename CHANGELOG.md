@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-28
+
 ### Changed
 
 - Errors and warnings are Cuttlebone's (pull diagnostics: `textDocument/diagnostic` in the editor, Inspect Code and Optimize Imports, `workspace/diagnostic` for the whole project), the same as `inko check`'s, where Parakeet ran `inko check` in a mirror of the project. Files with errors are marked in the Project view and Problems as you type, not only after saves, and a compiler panic shows what the compiler found before it, where `inko check` showed nothing. Without Cuttlebone there are no errors, and while a module of the project doesn't parse (one being typed, say), the other modules show none either, as `inko check` of the project reports none for them, where Parakeet checked each file with what it imports.

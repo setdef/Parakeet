@@ -108,6 +108,7 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
                 editedAt = System.nanoTime()
                 edits.incrementAndGet()
                 cancelOutdated()
+                trace?.edited()
                 if (!com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).isFileOpen(file)) saveUnsynced()
             }
         }, this)
@@ -193,6 +194,8 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         fun kept(request: Long) {}
         /** [request]'s text changed, and it's cancelled: Cuttlebone may have answered it already. */
         fun cancelling(request: Long) {}
+        /** An edit was made, and every request still unanswered was cancelled ([cancelling]) or [kept]. */
+        fun edited() {}
     }
 
     @Volatile var trace: Trace? = null

@@ -50,12 +50,19 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
         @Volatile var waitedFor = false
         /** Parakeet cancelled it, its text having changed ([CuttleboneQueries.Trace.cancelling]). */
         @Volatile var cancelling = false
+        /** Where its trace events came in [order]: when it was sent, and answered or failed. */
+        @Volatile var sentAtStep = 0L
+        @Volatile var endedAtStep = 0L
         /** The document's stamp when the answer arrived. */
         @Volatile var stampAtEnd: Long = 0
         val answered: Boolean get() = endedAt != 0L && !cancelled && !failed
     }
 
     private val requests = ConcurrentHashMap<Long, Request>()
+    /** The trace's events, numbered as they came: a request's, and each edit Parakeet has dealt with. */
+    private val order = java.util.concurrent.atomic.AtomicLong()
+    /** Where in [order] Parakeet finished dealing with each edit ([CuttleboneQueries.Trace.edited]). */
+    private val editedAtSteps = CopyOnWriteArrayList<Long>()
     /** When each document stamp came about (the edit that made it), in nanoseconds. */
     private val changedAt = ConcurrentHashMap<Long, Long>()
     /** (when, stamp) of each daemon run that finished. */
@@ -231,14 +238,20 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
 
     private fun startTrace() {
         requests.clear()
+        editedAtSteps.clear()
         CuttleboneService.getInstance(project).sentMessages.clear()
         CuttleboneQueries.getInstance(project).trace = object : CuttleboneQueries.Trace {
             override fun sent(request: Long, method: String, document: Document) {
-                requests[request] = Request(request, method, document.modificationStamp, System.nanoTime())
+                requests[request] = Request(request, method, document.modificationStamp, System.nanoTime()).also { it.sentAtStep = order.incrementAndGet() }
+            }
+
+            override fun edited() {
+                editedAtSteps += order.incrementAndGet()
             }
 
             override fun answered(request: Long, status: CuttleboneStatus?) {
                 val r = requests[request] ?: return
+                r.endedAtStep = order.incrementAndGet()
                 r.status = status
                 r.stampAtEnd = document.modificationStamp
                 r.endedAt = System.nanoTime()
@@ -254,6 +267,7 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
 
             override fun failed(request: Long, error: Throwable) {
                 val r = requests[request] ?: return
+                r.endedAtStep = order.incrementAndGet()
                 r.cancelled = error is java.util.concurrent.CancellationException || error is com.intellij.openapi.progress.ProcessCanceledException ||
                     generateSequence(error) { it.cause }.any { it is java.util.concurrent.CancellationException }
                 r.failed = !r.cancelled
@@ -439,8 +453,14 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
          */
         fun cancelledOfChanged(): Pair<Int, Int> = changed().let { changed -> changed.count { it.cancelled } to changed.size }
 
-        /** Requests whose text changed before their answer that nothing waited for, and that Parakeet didn't cancel. */
-        fun leftRunning() = changed().filter { !it.waitedFor && !it.cancelling }
+        /**
+         * Requests still unanswered when Parakeet dealt with an edit (sent before it, answered after), that nothing
+         * waited for, and that it didn't cancel. One answered as the edit was made isn't: by the time Parakeet dealt
+         * with the edit there was nothing to cancel, though its answer came for the text after it.
+         */
+        fun leftRunning() = requests.filter { r ->
+            r.endedAtStep != 0L && editedAtSteps.any { it > r.sentAtStep && it < r.endedAtStep } && !r.waitedFor && !r.cancelling
+        }
 
         /** Answers from a check run for them (not one Cuttlebone kept). */
         fun checks(list: List<Request>) = list.count { it.answered && it.status != null && !it.status!!.cached }
@@ -482,7 +502,7 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
             perKeystroke("checks", checks(requests), MAX_CHECKS_PER_KEYSTROKE)
             // How many answers arrive after their text changed depends on how long they take: a timing limit.
             perKeystroke("answers for text that had changed", outdated(requests), TimingLimits.scaled(MAX_OUTDATED_PER_KEYSTROKE))
-            // Every request whose text changed before its answer is cancelled by Parakeet, unless something still
+            // Every request still unanswered when Parakeet deals with an edit is cancelled, unless something still
             // waits for its answer (completion, whose items are filtered as typing goes on): what Parakeet does, which
             // never depends on timing. How many end up cancelled does: a request is answered, not cancelled, when
             // Cuttlebone answers before the cancel reaches it, as it often does on a fast machine (a 40 ms check, the

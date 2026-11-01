@@ -164,7 +164,9 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
      * request then ([await]). Answers already in are kept for as long as the cache is.
      */
     private fun cancelOutdated() {
-        for (pending in unanswered) if (pending.waiters.get() == 0) cancelIfOutdated(pending)
+        for (pending in unanswered) {
+            if (pending.waiters.get() == 0) cancelIfOutdated(pending) else if (pending.outdated(edits.get())) trace?.kept(pending.request)
+        }
     }
 
     /**
@@ -173,7 +175,9 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
      * which the typing replay measured costing about what finishing the outdated checks would.
      */
     private fun cancelIfOutdated(pending: Pending) {
-        if (pending.outdated(edits.get())) pending.cancel()
+        if (!pending.outdated(edits.get())) return
+        trace?.cancelling(pending.request)
+        pending.cancel()
     }
 
     /** How many requests were sent, for tests. */
@@ -185,6 +189,10 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         fun sent(request: Long, method: String, document: Document)
         fun answered(request: Long, status: CuttleboneStatus?)
         fun failed(request: Long, error: Throwable)
+        /** [request]'s text changed, and it's left running because something still waits for its answer. */
+        fun kept(request: Long) {}
+        /** [request]'s text changed, and it's cancelled: Cuttlebone may have answered it already. */
+        fun cancelling(request: Long) {}
     }
 
     @Volatile var trace: Trace? = null
@@ -478,6 +486,7 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
         val pending = Pending(CompletableFuture(), EmptyProgressIndicator(), edits.get())
         cache.putIfAbsent(key, pending)?.let { if (!it.indicator.isCanceled) return it else cache[key] = pending }
         val request = sent.incrementAndGet()
+        pending.request = request
         unanswered += pending
         val trace = trace
         trace?.sent(request, method, document)
@@ -501,14 +510,15 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
                         }
                     }
                 }, pending.indicator)
-                unanswered -= pending
                 // Every answer is kept, whatever its status: query decides which it may use.
                 val answer = Answer(convert(result), status?.let { runCatching { it.get(1, TimeUnit.SECONDS) }.getOrNull() })
+                // Traced while it's still unanswered, so that an edit before it is one cancelOutdated saw.
                 trace?.answered(request, answer.status)
+                unanswered -= pending
                 pending.answer.complete(answer)
             } catch (e: Throwable) {
-                unanswered -= pending
                 trace?.failed(request, e)
+                unanswered -= pending
                 cache.remove(key, pending)
                 pending.answer.completeExceptionally(e)
                 if (e !is ProcessCanceledException) LOG.debug("Cuttlebone request failed", e)
@@ -521,6 +531,9 @@ class CuttleboneQueries(private val project: Project) : com.intellij.openapi.Dis
     class Pending(val answer: CompletableFuture<Answer<*>?>, val indicator: ProgressIndicator, private val edits: Long = 0) {
         /** How many are waiting for the answer right now ([await]). */
         val waiters = java.util.concurrent.atomic.AtomicInteger()
+
+        /** Its number, as [Trace] has it. */
+        @Volatile var request = 0L
 
         fun outdated(edits: Long): Boolean = edits != this.edits && !answer.isDone
 

@@ -46,6 +46,10 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
         @Volatile var status: CuttleboneStatus? = null
         @Volatile var cancelled = false
         @Volatile var failed = false
+        /** Something still waited for its answer when its text changed ([CuttleboneQueries.Trace.kept]). */
+        @Volatile var waitedFor = false
+        /** Parakeet cancelled it, its text having changed ([CuttleboneQueries.Trace.cancelling]). */
+        @Volatile var cancelling = false
         /** The document's stamp when the answer arrived. */
         @Volatile var stampAtEnd: Long = 0
         val answered: Boolean get() = endedAt != 0L && !cancelled && !failed
@@ -240,6 +244,14 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
                 r.endedAt = System.nanoTime()
             }
 
+            override fun kept(request: Long) {
+                requests[request]?.waitedFor = true
+            }
+
+            override fun cancelling(request: Long) {
+                requests[request]?.cancelling = true
+            }
+
             override fun failed(request: Long, error: Throwable) {
                 val r = requests[request] ?: return
                 r.cancelled = error is java.util.concurrent.CancellationException || error is com.intellij.openapi.progress.ProcessCanceledException ||
@@ -417,15 +429,18 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
         /** Answers that arrived for text that had changed since the request. */
         fun outdated(list: List<Request>) = list.count { it.answered && it.stampAtEnd != it.stamp }
 
+        /** The requests whose text changed before they were answered. */
+        fun changed() = requests.filter { it.endedAt != 0L && it.stampAtEnd != it.stamp }
+
         /**
          * Of the requests whose text changed before they were answered, how many were cancelled: the rest were
-         * answered for text nobody had any more, unless something still waited for them (completion, as its items
-         * are filtered by what's typed after).
+         * answered for text nobody had any more, because something still waited for them (completion, as its items
+         * are filtered by what's typed after), or because Cuttlebone had answered before the cancel reached it.
          */
-        fun cancelledOfChanged(): Pair<Int, Int> {
-            val changed = requests.filter { it.endedAt != 0L && it.stampAtEnd != it.stamp }
-            return changed.count { it.cancelled } to changed.size
-        }
+        fun cancelledOfChanged(): Pair<Int, Int> = changed().let { changed -> changed.count { it.cancelled } to changed.size }
+
+        /** Requests whose text changed before their answer that nothing waited for, and that Parakeet didn't cancel. */
+        fun leftRunning() = changed().filter { !it.waitedFor && !it.cancelling }
 
         /** Answers from a check run for them (not one Cuttlebone kept). */
         fun checks(list: List<Request>) = list.count { it.answered && it.status != null && !it.status!!.cached }
@@ -467,17 +482,14 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
             perKeystroke("checks", checks(requests), MAX_CHECKS_PER_KEYSTROKE)
             // How many answers arrive after their text changed depends on how long they take: a timing limit.
             perKeystroke("answers for text that had changed", outdated(requests), TimingLimits.scaled(MAX_OUTDATED_PER_KEYSTROKE))
-            val (cancelled, changed) = cancelledOfChanged()
-            // Cancelling at all (MIN_CHANGED_FOR_ANY_CANCELLED): what this exists to catch is cancelling stopping
-            // altogether, when none is.
-            if (changed >= MIN_CHANGED_FOR_ANY_CANCELLED) {
-                assertTrue("of the $changed requests whose text changed before their answer, none was cancelled", cancelled > 0)
-            }
-            // The share (MIN_CHANGED_FOR_SHARE): only over enough of them that the handful something still waits for,
-            // which aren't cancelled, can't decide it alone. Not a timing limit, so never scaled.
-            if (changed >= MIN_CHANGED_FOR_SHARE) {
-                assertTrue("of the $changed requests whose text changed before their answer, $cancelled were cancelled", cancelled >= changed * MIN_CANCELLED_SHARE)
-            }
+            // Every request whose text changed before its answer is cancelled by Parakeet, unless something still
+            // waits for its answer (completion, whose items are filtered as typing goes on): what Parakeet does, which
+            // never depends on timing. How many end up cancelled does: a request is answered, not cancelled, when
+            // Cuttlebone answers before the cancel reaches it, as it often does on a fast machine (a 40 ms check, the
+            // next keystroke 40 ms after the request), which made a share of them a check of Cuttlebone's speed.
+            val left = leftRunning()
+            assertTrue("of the ${changed().size} requests whose text changed before their answer, ${left.size} that nothing waited for " +
+                "were left running: ${left.map { "${it.id} ${it.method}" }}", left.isEmpty())
 
             val hints = latencies("textDocument/inlayHint")
             // Whether hints arrive before a pause ends is a timing limit too.
@@ -504,7 +516,7 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
                     val status = r.status
                     "request\t${ms(r.sentAt)}\t${r.stamp}\t${r.id}\t${r.method}\t${ms(r.endedAt)}\t${r.stampAtEnd}\t" +
                         (if (r.cancelled) "cancelled" else if (r.failed) "failed" else status?.status.orEmpty()) +
-                        "\t${status?.reason.orEmpty()}\t${status?.cached ?: ""}\t${status?.elapsedMs ?: ""}"
+                        "\t${status?.reason.orEmpty()}\t${status?.cached ?: ""}\t${status?.elapsedMs ?: ""}\t${if (r.waitedFor) "waited for" else ""}\t${if (r.cancelling) "cancelling" else ""}"
                 }
             Files.write(path.resolve("$label.tsv".replace('/', '_')).also { Files.createDirectories(it.parent) }, lines)
         }
@@ -515,7 +527,8 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
                 "$accepted completions accepted, parameter info $parameterInfos times, ${stamps.size} versions, ${settled.size} paused at, $fixups fixups")
             val (cancelled, changed) = cancelledOfChanged()
             println("REPLAY $label: ${requests.size} requests, $cancelsSent \$/cancelRequest sent, ${outdated(requests)} answers for changed text " +
-                "($cancelled of $changed whose text changed cancelled), ${checks(requests)} checks (${"%.0f".format(checkMs(requests))} ms)")
+                "($cancelled of $changed whose text changed cancelled; Parakeet cancelled ${changed().count { it.cancelling }}, " +
+                "${changed().count { it.waitedFor }} were waited for, ${leftRunning().size} left running), ${checks(requests)} checks (${"%.0f".format(checkMs(requests))} ms)")
             println("REPLAY | feature | sent | cancelled | answered | for changed text | checks | check ms | latency at pauses: answered, median, p90, max (ms) | keystroke to current answer: median, p90, max (ms) | asked to current answer: median, max (ms) |")
             for ((feature, method) in FEATURES) {
                 val list = of(method)
@@ -543,20 +556,6 @@ class CuttleboneTypingReplayIntegrationTest : InkoTestCase(onDisk = true, realIn
         const val MAX_REQUESTS_PER_KEYSTROKE = 0.7
         const val MAX_CHECKS_PER_KEYSTROKE = 0.5
         const val MAX_OUTDATED_PER_KEYSTROKE = 0.08
-        // Of the requests whose text changed before their answer, 78 to 89% were cancelled after the fixes (the rest
-        // had something still waiting for them); before them, and with the fixes but no cancelling, none.
-        //
-        // How many of them something still waits for (completion, an action), and so aren't cancelled, hardly
-        // depends on how many there are: over 20 replays of std's json.inko (18 here at load averages of 170 to 420
-        // on 10 cores, with 16 to 49 such requests each, and a macos-15 runner's two, with 22 and 10), 0 to 7 weren't
-        // cancelled. A faster machine has fewer requests whose text changed, but about as many waited for: of the
-        // runner's 10, 6 were, so the 4 cancelled made the share 40%. So the share means something only once there
-        // are well over twice the most that were waited for (7): at least 20. With cancelling turned off
-        // (CuttleboneQueries.cancelIfOutdated doing nothing), every one is left, 37 and 39 of them in the two
-        // replays, none cancelled: at least one of 5 or more must be.
-        const val MIN_CANCELLED_SHARE = 0.5
-        const val MIN_CHANGED_FOR_SHARE = 20
-        const val MIN_CHANGED_FOR_ANY_CANCELLED = 5
         const val MAX_HINTS_AT_PAUSE_MS = 1200L
         const val MAX_USAGES_AT_PAUSE_MS = 1200L
         const val MAX_COMPLETION_MS = 800L

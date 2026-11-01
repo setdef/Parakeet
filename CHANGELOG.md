@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## [0.15.0] - 2026-10-28
+## [0.15.1] - 2026-11-01
+
+The first release of these changes. 0.15.0 was tagged but never published: its release run failed on the typing replay's check of cancelled requests, which counted how many Cuttlebone answered before Parakeet's cancel reached it; it now checks that Parakeet cancels each one.
 
 ### Changed
 

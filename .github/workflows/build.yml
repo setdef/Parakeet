@@ -52,7 +52,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           # Unpacked IDEs (about 1.5 GB each) are rebuilt from the cached IDE downloads in
           # under a minute, so caching them too only crowds GitHub's 10 GB budget.
@@ -80,7 +80,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           # Only "Build and unit tests" (and one macOS job) write Gradle caches; the
           # others restore them, since setup-gradle shares cached dependencies across
@@ -114,7 +114,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           # macOS needs its own (macOS) IDE download cached, so one macOS job writes it.
           cache-read-only: ${{ !(matrix.os == 'macos-15' && matrix.inko == 'latest') }}
@@ -177,7 +177,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-read-only: true
           # Unpacked IDEs (about 1.5 GB each) are rebuilt from the cached IDE downloads in
